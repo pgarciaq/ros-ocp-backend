@@ -6229,6 +6229,144 @@
         "deprecated": true
       }
     },
+    "/recommendations/openshift/hcp/fleet-capacity": {
+      "get": {
+        "tags": [
+          "Optimizations"
+        ],
+        "summary": "Get HCP fleet-capacity latest snapshots",
+        "x-plugin-required": "hcp",
+        "description": "Latest W4 fleet-capacity snapshot per authorized cluster (requires the hcp plugin). Without a cluster filter, returns exactly one row per cluster (the card-list discovery surface); filter[cluster_uuid] (or the equivalent filter[cluster] / bare cluster_uuid spellings) narrows to exactly that cluster. Rows carry the five native published-sizing scenarios (request, low_qps, average_qps, medium_qps, high_qps) with serve-time headroom (null when occupancy, worker placement, or average QPS is unknown; withheld when pressure is affirmed), optional same-scenario MCE reference gauges (null = absent, never zero), sample age, HC/placement completeness, pressure state, and source versions. Warnings: stale (age over 2x the row's own max(collection_interval_minutes, upload_cycle_minutes)), below_version_floor (known ocp_version under 4.17 - data still served, never suppressed), pressured (headroom withheld), pressure_unknown, mce_may_be_stale (MCE references frozen across the freshness window while native inputs moved). Unauthorized or unknown clusters are non-disclosing: 200 with empty data.",
+        "operationId": "getHCPCapacityLatest",
+        "parameters": [
+          {
+            "name": "cluster_uuid",
+            "in": "query",
+            "description": "Optional: narrow to one management cluster (bare spelling).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false
+          },
+          {
+            "name": "filter[cluster_uuid]",
+            "in": "query",
+            "description": "Optional: narrow to one management cluster.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false
+          },
+          {
+            "name": "filter[cluster]",
+            "in": "query",
+            "description": "Optional: cluster filter spelling alias; resolves identically to filter[cluster_uuid].",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HCPCapacityList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, e.g. invalid cluster_uuid"
+          },
+          "401": {
+            "description": "User is not authorized"
+          },
+          "503": {
+            "description": "Service unavailable"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/hcp/fleet-capacity/history": {
+      "get": {
+        "tags": [
+          "Optimizations"
+        ],
+        "summary": "Get HCP fleet-capacity history for one cluster",
+        "x-plugin-required": "hcp",
+        "description": "Ordered (newest-first) W4 fleet-capacity snapshots for a single management cluster (requires the hcp plugin). The single-cluster filter is required: history is a per-cluster trend (GPU time-slicing / VM history pattern). Rows have the same shape as the latest endpoint; the mce_may_be_stale caution is a latest-snapshot property and is omitted here. Same non-disclosing authorization: unauthorized or unknown clusters return 200 with empty data.",
+        "operationId": "getHCPCapacityHistory",
+        "parameters": [
+          {
+            "name": "filter[cluster_uuid]",
+            "in": "query",
+            "description": "Required: the management cluster whose trend to read.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          },
+          {
+            "name": "filter[cluster]",
+            "in": "query",
+            "description": "Cluster filter spelling alias; resolves identically to filter[cluster_uuid].",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (default 20).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "required": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Page offset.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HCPCapacityList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request: missing or invalid cluster filter, or invalid pagination"
+          },
+          "401": {
+            "description": "User is not authorized"
+          },
+          "503": {
+            "description": "Service unavailable"
+          }
+        }
+      }
+    },
     "/recommendations/openshift/hcp": {
       "get": {
         "tags": [
@@ -10209,6 +10347,256 @@
             "items": {
               "$ref": "#/components/schemas/PVCRecommendation"
             }
+          }
+        }
+      },
+      "HCPCapacityList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HCPCapacityRow"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "integer"
+              }
+            }
+          },
+          "links": {
+            "type": "object",
+            "properties": {
+              "first": {
+                "type": "string"
+              },
+              "previous": {
+                "type": "string"
+              },
+              "next": {
+                "type": "string"
+              },
+              "last": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "data",
+          "meta",
+          "links"
+        ]
+      },
+      "HCPCapacityRow": {
+        "type": "object",
+        "description": "One W4 fleet-capacity snapshot. Nullable fields keep absence explicit: null is the unknown/absent signal, never zero.",
+        "properties": {
+          "cluster_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "mce_sampled_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "native_model_version": {
+            "type": "string"
+          },
+          "source_versions": {
+            "type": "object",
+            "properties": {
+              "operator": {
+                "type": "string"
+              },
+              "ocp": {
+                "type": "string"
+              },
+              "mce": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          },
+          "collection_interval_minutes": {
+            "type": "integer"
+          },
+          "upload_cycle_minutes": {
+            "type": "integer"
+          },
+          "sample_age_seconds": {
+            "type": "integer"
+          },
+          "inventory_complete": {
+            "type": "boolean"
+          },
+          "worker_placement_known": {
+            "type": "boolean"
+          },
+          "current_hc_count": {
+            "type": "integer"
+          },
+          "ready_hcp_count": {
+            "type": "integer"
+          },
+          "average_ready_hcp_qps": {
+            "type": "number",
+            "nullable": true
+          },
+          "ready_hcp_qps_known": {
+            "type": "boolean"
+          },
+          "hosted_availability_basis": {
+            "type": "string",
+            "enum": [
+              "highly_available",
+              "mixed",
+              "single_replica",
+              "unknown",
+              ""
+            ]
+          },
+          "pressure_state": {
+            "type": "string",
+            "enum": [
+              "pressured",
+              "unknown"
+            ]
+          },
+          "eligible_workers": {
+            "type": "object",
+            "properties": {
+              "cpu_allocatable_millicores": {
+                "type": "integer"
+              },
+              "memory_allocatable_bytes": {
+                "type": "integer"
+              },
+              "max_pods": {
+                "type": "integer"
+              }
+            }
+          },
+          "scenarios": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HCPCapacityScenario"
+            }
+          },
+          "mce_references": {
+            "type": "object",
+            "description": "Same-scenario MCE reference gauges; null = absent, never zero.",
+            "properties": {
+              "request": {
+                "type": "integer",
+                "nullable": true
+              },
+              "low_qps": {
+                "type": "integer",
+                "nullable": true
+              },
+              "average_qps": {
+                "type": "integer",
+                "nullable": true
+              },
+              "medium_qps": {
+                "type": "integer",
+                "nullable": true
+              },
+              "high_qps": {
+                "type": "integer",
+                "nullable": true
+              }
+            }
+          },
+          "warnings": {
+            "type": "object",
+            "properties": {
+              "stale": {
+                "type": "boolean"
+              },
+              "below_version_floor": {
+                "type": "boolean"
+              },
+              "pressured": {
+                "type": "boolean"
+              },
+              "pressure_unknown": {
+                "type": "boolean"
+              },
+              "mce_may_be_stale": {
+                "type": "boolean",
+                "nullable": true
+              }
+            }
+          }
+        },
+        "required": [
+          "cluster_uuid",
+          "observed_at",
+          "native_model_version",
+          "source_versions",
+          "collection_interval_minutes",
+          "upload_cycle_minutes",
+          "sample_age_seconds",
+          "inventory_complete",
+          "worker_placement_known",
+          "current_hc_count",
+          "ready_hcp_count",
+          "ready_hcp_qps_known",
+          "hosted_availability_basis",
+          "pressure_state",
+          "eligible_workers",
+          "scenarios",
+          "mce_references"
+        ]
+      },
+      "HCPCapacityScenario": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "request",
+              "low_qps",
+              "average_qps",
+              "medium_qps",
+              "high_qps"
+            ]
+          },
+          "max_hcs": {
+            "type": "integer"
+          },
+          "limiting_resource": {
+            "type": "string",
+            "description": "Empty when the scenario has no estimate (unknown placement or unknown average QPS)."
+          },
+          "headroom": {
+            "type": "integer",
+            "nullable": true,
+            "description": "max_hcs - current_hc_count; null when unknown or withheld under affirmed pressure. Signed: negative is over-capacity."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "illustrative_only"
+            ]
           }
         }
       },

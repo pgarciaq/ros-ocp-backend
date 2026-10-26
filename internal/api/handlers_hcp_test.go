@@ -829,6 +829,10 @@ func TestHCPDisabledPlugin_Routes404(t *testing.T) {
 	for _, path := range []string{
 		"/api/cost-management/v1/recommendations/openshift/hcp",
 		"/api/cost-management/v1/recommendations/openshift/hcp/some-id",
+		// W4 fleet-capacity paths (#392): the /hcp/* wildcard guard covers
+		// them when the plugin is off — no new guard lines.
+		"/api/cost-management/v1/recommendations/openshift/hcp/fleet-capacity",
+		"/api/cost-management/v1/recommendations/openshift/hcp/fleet-capacity/history",
 	} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		rec := httptest.NewRecorder()

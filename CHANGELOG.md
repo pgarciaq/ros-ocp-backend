@@ -21,6 +21,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **HCP fleet-capacity advisory API ([#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392)):**
+  two new GET endpoints (hcp plugin required) serving the W4 native
+  published-sizing advisory for management-cluster fleets.
+  `GET /recommendations/openshift/hcp/fleet-capacity` returns the latest
+  snapshot per authorized cluster — with no cluster filter, one row per
+  cluster (the UI card-list discovery surface); `filter[cluster_uuid]`
+  (and the equivalent `filter[cluster]` / bare `cluster_uuid` spellings)
+  narrows to that cluster.
+  `GET /recommendations/openshift/hcp/fleet-capacity/history` returns
+  newest-first snapshots for one cluster — the single-cluster filter is
+  required (history is a per-cluster trend), with `limit`/`offset`
+  pagination. Rows carry the five native scenarios (`request`, `low_qps`,
+  `average_qps`, `medium_qps`, `high_qps`) with serve-time headroom (null
+  when occupancy, worker placement, or average QPS is unknown; withheld
+  when pressure is affirmed), optional same-scenario MCE reference gauges
+  (null = absent, never zero), sample age, HC/placement completeness,
+  pressure state, source versions, and warnings: `stale` (age over 2× the
+  row's own max cadence), `below_version_floor` (known `ocp_version`
+  under 4.17 — data still served, never suppressed), `pressured` /
+  `pressure_unknown`, and `mce_may_be_stale` (MCE references frozen
+  across the freshness window while native inputs moved). Authorization
+  is org identity plus cluster RBAC before any read; unauthorized or
+  unknown clusters are non-disclosing (200 with empty data). Responses
+  are `Cache-Control: no-store`.
+
 - **HCP row `management` flag ([#695](https://github.com/pgarciaq/ros-ocp-backend/issues/695)):**
   HCP list and detail rows now carry `management: true|false` — a topology
   fact sourced read-side from `clusters.cluster_topology = 'management'` (the

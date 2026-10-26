@@ -86,6 +86,11 @@ func (p *HCPPlugin) RegisterRoutes(g *echo.Group) {
 		return
 	}
 	g.GET("/recommendations/openshift/hcp", rosapi.GetHCPRecommendationSetList)
+	// W4 fleet-capacity advisory (#392). Static segments win over
+	// :recommendation-id in echo's router; registering first keeps that
+	// explicit.
+	g.GET("/recommendations/openshift/hcp/fleet-capacity", rosapi.GetHCPCapacityLatest)
+	g.GET("/recommendations/openshift/hcp/fleet-capacity/history", rosapi.GetHCPCapacityHistory)
 	g.GET("/recommendations/openshift/hcp/:recommendation-id", rosapi.GetHCPRecommendationSet)
 }
 

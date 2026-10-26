@@ -216,6 +216,7 @@ func openAPIOptionalPropertyFields() map[string]struct{} {
 		"memory_savings":               {},
 		"category":                     {},
 		"id":                           {},
+		"mce_may_be_stale":             {},
 	}
 }
 
@@ -1630,4 +1631,54 @@ func TestOpenAPI_AllRoutesHaveSpecEntry(t *testing.T) {
 	}
 	sort.Strings(undocumented)
 	assert.Empty(t, undocumented, "registered routes missing from OpenAPI spec")
+}
+
+// TestOpenAPI_HCPCapacityLatest_ResponseFields pins the W4 fleet-capacity
+// latest endpoint (#392): spec paths present with x-plugin-required, and
+// served rows carry every spec-defined property.
+func TestOpenAPI_HCPCapacityLatest_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-hcp-cap-latest"
+	hcpCapCleanup(t, orgID)
+	t.Cleanup(func() { hcpCapCleanup(t, orgID) })
+	seedHCPCapCluster(t, orgID, testutil.TestClusterUUID)
+	seedHCPCapRow(t, orgID, testutil.TestClusterUUID, time.Now().UTC().Add(-30*time.Minute).Format(time.RFC3339))
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, fmt.Sprintf("%s/recommendations/openshift/hcp/fleet-capacity?filter[cluster_uuid]=%s",
+		apiV1Prefix, testutil.TestClusterUUID))
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	listSchema := getResponseSchema(spec, "/recommendations/openshift/hcp/fleet-capacity")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), listSchema)
+	assertResponseDataItemsHaveSpecProperties(t, rec.Body.Bytes(), spec.componentSchema("HCPCapacityRow"))
+}
+
+// TestOpenAPI_HCPCapacityHistory_ResponseFields pins the W4 history
+// endpoint's spec paths and row schema (#392).
+func TestOpenAPI_HCPCapacityHistory_ResponseFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	spec := loadOpenAPISpec(t)
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-openapi-hcp-cap-hist"
+	hcpCapCleanup(t, orgID)
+	t.Cleanup(func() { hcpCapCleanup(t, orgID) })
+	seedHCPCapCluster(t, orgID, testutil.TestClusterUUID)
+	seedHCPCapRow(t, orgID, testutil.TestClusterUUID, time.Now().UTC().Add(-30*time.Minute).Format(time.RFC3339))
+	seedHCPCapRow(t, orgID, testutil.TestClusterUUID, time.Now().UTC().Add(-90*time.Minute).Format(time.RFC3339))
+	e := setupContractTestEcho(t, pool, orgID)
+
+	rec := makeContractRequest(t, e, fmt.Sprintf("%s/recommendations/openshift/hcp/fleet-capacity/history?filter[cluster_uuid]=%s&limit=10&offset=0",
+		apiV1Prefix, testutil.TestClusterUUID))
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	listSchema := getResponseSchema(spec, "/recommendations/openshift/hcp/fleet-capacity/history")
+	assertResponseHasSpecProperties(t, rec.Body.Bytes(), listSchema)
+	assertResponseDataItemsHaveSpecProperties(t, rec.Body.Bytes(), spec.componentSchema("HCPCapacityRow"))
 }

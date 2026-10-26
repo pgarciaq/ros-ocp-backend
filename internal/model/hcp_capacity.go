@@ -10,9 +10,13 @@ import (
 )
 
 // W4 fleet-capacity history queries (#392). pgx-based (not gorm) for
-// direct testability over the test pool; the Task 5 handlers wire
-// database.GetPool() plus cluster RBAC. org_id scoping here is the tenant
-// boundary; user-permission RBAC lands with the API surface.
+// direct testability over the test pool; the API handlers wire
+// database.GetPool() plus cluster RBAC (filterClustersByRBAC over
+// getClustersForOrg — the established pool-surface authorization, same
+// permission semantics as rbac.AddRBACFilter's cluster grants; the gorm
+// helper itself is table-qualified to recommendation_sets and would
+// false-negative capacity-only clusters). org_id scoping here is the
+// tenant boundary.
 
 // HCPCapacitySnapshot is one stored history row. Nullable inputs scan as
 // pointers: NULL is the absence signal (unknown QPS, absent MCE
@@ -20,6 +24,7 @@ import (
 // serve time from the stored maxima, current count, completeness flags,
 // and availability basis — not persisted.
 type HCPCapacitySnapshot struct {
+	ClusterUUID                string
 	ObservedAt                 time.Time
 	MCESampledAt               *time.Time
 	OperatorVersion            string
@@ -57,8 +62,8 @@ type HCPCapacitySnapshot struct {
 }
 
 // hcpCapacityColumnList is the SELECT list — the order is the Scan order
-// in scanHCPCapacity.
-const hcpCapacityColumnList = `observed_at, mce_sampled_at, operator_version, ocp_version, mce_version,
+// in scanHCPCapacityInto.
+const hcpCapacityColumnList = `cluster_uuid, observed_at, mce_sampled_at, operator_version, ocp_version, mce_version,
 	native_model_version, collection_interval_minutes, upload_cycle_minutes,
 	inventory_complete, current_hc_count, ready_hcp_count,
 	average_ready_hcp_qps, ready_hcp_qps_known, hosted_availability_basis,
@@ -72,10 +77,11 @@ const hcpCapacityColumnList = `observed_at, mce_sampled_at, operator_version, oc
 	medium_qps_max_hcs, medium_qps_limiting_resource,
 	high_qps_max_hcs, high_qps_limiting_resource`
 
-func scanHCPCapacity(row pgx.Row) (*HCPCapacitySnapshot, error) {
-	s := &HCPCapacitySnapshot{}
-	err := row.Scan(
-		&s.ObservedAt, &s.MCESampledAt, &s.OperatorVersion, &s.OCPVersion, &s.MCEVersion,
+// scanHCPCapacityInto fills one snapshot; pgx.Row and pgx.Rows both
+// satisfy this Scan shape.
+func scanHCPCapacityInto(row interface{ Scan(dest ...any) error }, s *HCPCapacitySnapshot) error {
+	return row.Scan(
+		&s.ClusterUUID, &s.ObservedAt, &s.MCESampledAt, &s.OperatorVersion, &s.OCPVersion, &s.MCEVersion,
 		&s.NativeModelVersion, &s.CollectionIntervalMinutes, &s.UploadCycleMinutes,
 		&s.InventoryComplete, &s.CurrentHCCount, &s.ReadyHCPCount,
 		&s.AverageReadyHCPQPS, &s.ReadyHCPQPSKnown, &s.HostedAvailabilityBasis,
@@ -89,6 +95,16 @@ func scanHCPCapacity(row pgx.Row) (*HCPCapacitySnapshot, error) {
 		&s.MediumQPSMaxHCs, &s.MediumQPSLimitingResource,
 		&s.HighQPSMaxHCs, &s.HighQPSLimitingResource,
 	)
+}
+
+// GetLatestHCPCapacity returns the newest snapshot for one org+cluster, or
+// nil when none exists (never another org's row — org_id is in the key).
+func GetLatestHCPCapacity(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) (*HCPCapacitySnapshot, error) {
+	s := &HCPCapacitySnapshot{}
+	err := scanHCPCapacityInto(pool.QueryRow(ctx,
+		`SELECT `+hcpCapacityColumnList+` FROM hcp_capacity_history
+		WHERE org_id = $1 AND cluster_uuid = $2
+		ORDER BY observed_at DESC LIMIT 1`, orgID, clusterUUID), s)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -98,13 +114,52 @@ func scanHCPCapacity(row pgx.Row) (*HCPCapacitySnapshot, error) {
 	return s, nil
 }
 
-// GetLatestHCPCapacity returns the newest snapshot for one org+cluster, or
-// nil when none exists (never another org's row — org_id is in the key).
-func GetLatestHCPCapacity(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) (*HCPCapacitySnapshot, error) {
-	return scanHCPCapacity(pool.QueryRow(ctx,
+// ListLatestHCPCapacity returns the newest snapshot per cluster for the
+// given clusters — exactly one row per cluster (DISTINCT ON with the
+// observed_at DESC ordering; the (org_id, cluster_uuid, observed_at) key
+// makes same-cluster ties impossible, so same-timestamp collisions across
+// clusters cannot fan out or collapse).
+func ListLatestHCPCapacity(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string) ([]HCPCapacitySnapshot, error) {
+	rows, err := pool.Query(ctx,
+		`SELECT DISTINCT ON (cluster_uuid) `+hcpCapacityColumnList+` FROM hcp_capacity_history
+		WHERE org_id = $1 AND cluster_uuid::text = ANY($2)
+		ORDER BY cluster_uuid, observed_at DESC`, orgID, clusterUUIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []HCPCapacitySnapshot{}
+	for rows.Next() {
+		s := &HCPCapacitySnapshot{}
+		if err := scanHCPCapacityInto(rows, s); err != nil {
+			return nil, err
+		}
+		out = append(out, *s)
+	}
+	return out, rows.Err()
+}
+
+// GetHCPCapacitySince returns ascending snapshots at or after `since` for
+// one org+cluster — the freshness-window read behind the MCE-may-be-stale
+// caution.
+func GetHCPCapacitySince(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, since time.Time) ([]HCPCapacitySnapshot, error) {
+	rows, err := pool.Query(ctx,
 		`SELECT `+hcpCapacityColumnList+` FROM hcp_capacity_history
-		WHERE org_id = $1 AND cluster_uuid = $2
-		ORDER BY observed_at DESC LIMIT 1`, orgID, clusterUUID))
+		WHERE org_id = $1 AND cluster_uuid = $2 AND observed_at >= $3
+		ORDER BY observed_at ASC`, orgID, clusterUUID, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []HCPCapacitySnapshot{}
+	for rows.Next() {
+		s := &HCPCapacitySnapshot{}
+		if err := scanHCPCapacityInto(rows, s); err != nil {
+			return nil, err
+		}
+		out = append(out, *s)
+	}
+	return out, rows.Err()
 }
 
 // GetHCPCapacityHistory returns newest-first history rows for one
@@ -127,21 +182,7 @@ func GetHCPCapacityHistory(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 	out := []HCPCapacitySnapshot{}
 	for rows.Next() {
 		s := &HCPCapacitySnapshot{}
-		if err := rows.Scan(
-			&s.ObservedAt, &s.MCESampledAt, &s.OperatorVersion, &s.OCPVersion, &s.MCEVersion,
-			&s.NativeModelVersion, &s.CollectionIntervalMinutes, &s.UploadCycleMinutes,
-			&s.InventoryComplete, &s.CurrentHCCount, &s.ReadyHCPCount,
-			&s.AverageReadyHCPQPS, &s.ReadyHCPQPSKnown, &s.HostedAvailabilityBasis,
-			&s.EligibleCPUMillicores, &s.EligibleMemoryBytes,
-			&s.EligibleMaxPods, &s.WorkerPlacementKnown, &s.PressureState,
-			&s.MCERequestMaxHCs, &s.MCELowQPSMaxHCs, &s.MCEAverageQPSMaxHCs,
-			&s.MCEMediumQPSMaxHCs, &s.MCEHighQPSMaxHCs,
-			&s.RequestMaxHCs, &s.RequestLimitingResource,
-			&s.LowQPSMaxHCs, &s.LowQPSLimitingResource,
-			&s.AverageQPSMaxHCs, &s.AverageQPSLimitingResource,
-			&s.MediumQPSMaxHCs, &s.MediumQPSLimitingResource,
-			&s.HighQPSMaxHCs, &s.HighQPSLimitingResource,
-		); err != nil {
+		if err := scanHCPCapacityInto(rows, s); err != nil {
 			return nil, 0, err
 		}
 		out = append(out, *s)
