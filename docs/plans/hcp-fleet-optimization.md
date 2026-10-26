@@ -1,6 +1,6 @@
 # HCP / Fleet Control-Plane Optimization — Design Plan and Roadmap
 
-**Status (reconciled 2026-10-25):** W0–W2 shipped; W3's usage and NodePool-zero core is implemented, with aged-HC evidence active and optional cost follow-ups remaining. W4's design is approved and implementation is underway (ADR-0334 amended); W5 remains deferred pending its gates; W6–W8 remain backlog.<br>
+**Status (reconciled 2026-10-25):** W0–W2 shipped; W3's usage and NodePool-zero core is implemented, with aged-HC evidence active and optional cost follow-ups remaining. W4 is implemented (fleet-capacity advisory: operator snapshot, ingestion/history, API, UI; #392) pending integration release (ADR-0334 amended); W5 remains deferred pending its gates; W6–W8 remain backlog.<br>
 **Planned feature (public):** [hosted-control-plane-fleet-optimization.md](../docs-site/planned-features/hosted-control-plane-fleet-optimization.md)  
 **Epic:** [#384](https://github.com/pgarciaq/ros-ocp-backend/issues/384)
 
