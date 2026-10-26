@@ -221,7 +221,7 @@ func buildHCPCapacityRow(s model.HCPCapacitySnapshot, now time.Time, mceMayBeSta
 			Status:           status,
 		}
 		if col.limit != "" && s.InventoryComplete && s.WorkerPlacementKnown && !pressured &&
-			!(col.name == hcpcapacity.ScenarioAverageQPS && !s.ReadyHCPQPSKnown) {
+			(col.name != hcpcapacity.ScenarioAverageQPS || s.ReadyHCPQPSKnown) {
 			h := col.max - s.CurrentHCCount
 			sc.Headroom = &h
 		}

@@ -96,11 +96,11 @@ func seedHCPCapRow(t *testing.T, orgID, clusterUUID, observedAt string) {
 	require.NoError(t, err)
 }
 
-func hcpCapUpdate(t *testing.T, orgID, clusterUUID, observedAt, setSQL string, args ...interface{}) {
+func hcpCapUpdate(t *testing.T, orgID, clusterUUID, observedAt, setSQL string) {
 	t.Helper()
 	_, err := database.GetPool().Exec(context.Background(),
 		`UPDATE hcp_capacity_history SET `+setSQL+` WHERE org_id = $1 AND cluster_uuid = $2 AND observed_at = $3`,
-		append([]interface{}{orgID, clusterUUID, observedAt}, args...)...)
+		orgID, clusterUUID, observedAt)
 	require.NoError(t, err)
 }
 
