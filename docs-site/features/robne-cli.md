@@ -1,6 +1,6 @@
 # robne CLI — Standalone Offline/Batch Recommendations
 
-> **Last verified:** 2026-10-05
+> **Last verified:** 2026-10-26
 
 !!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, 2b stdout, 2c other-entity rec upsert, other-entity digest INSERT, other-entity Path A SELECT, snapshot stdout, business hours, Phase 3 `diff` / container `explain`, other-entity `explain`, and `robne version` shipped"
     Parent issue: [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99).
@@ -73,7 +73,7 @@ The JSON/CSV row is a portable artifact for `robne diff` and goldens. Explanatio
 
 To see **why** a number is that number, run `robne explain` on the **same** `--input` / `--now` / `--config` as `recommend`. `explain` re-runs the engine and prints one recommendation’s identity, recommended numbers, and snake_case explanation factors (`data_days`, percentiles, OOM bump, floors, slopes, and the matching fields for other entity types). It does not read a recommend JSON file — that file has no explanation fields.
 
-**One entity type per run.** `--plugins` is exactly one name. Omit it for container. Two or more names is an error. YAML `plugins:` does not select the type. GPU: `--container` selects MIG; `--node` without `--container` selects timeslicing. `--schedule business_hours` is container, namespace, node, gpu, and vm ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)). PVC/quota/cluster_quota/snapshot error. Product APIs keep thin detail nests ([#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484)). Inapplicable flags are errors.
+**One entity type per run.** `--plugins` is exactly one name. Omit it for container. Two or more names is an error. YAML `plugins:` does not select the type. GPU: `--container` selects MIG; `--node` without `--container` selects timeslicing. `--schedule business_hours` is container, namespace, node, gpu, and vm ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)). PVC/quota/cluster_quota/snapshot error. HCP capacity explain (planned [#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)) also rejects `--schedule business_hours`. Product APIs keep thin detail nests ([#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484)). Inapplicable flags are errors.
 
 | `--plugins` | Required | Optional |
 |---|---|---|
@@ -87,6 +87,7 @@ To see **why** a number is that number, run `robne explain` on the **same** `--i
 | `quota` | `--namespace` `--quota-name` | `--recommendation-type` if not unique |
 | `cluster_quota` | `--cluster-quota-name` | `--recommendation-type` if not unique |
 | `snapshot` | `--namespace` `--snapshot-name` | — |
+| `hcp` (planned [#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)) | `--scenario` (`request` `low_qps` `average_qps` `medium_qps` `high_qps`) | `--observed-at` (default latest) |
 
 ```bash
 # 1. What to apply (list)
@@ -110,7 +111,17 @@ robne explain --input ./ocp_ros_usage.csv --plugins gpu \
   --namespace app --workload api --container api --term short
 robne explain --input ./ocp_ros_usage.csv --plugins gpu \
   --node gpu-1 --gpu-model "NVIDIA A100-SXM4-80GB" --term short
+
+# HCP fleet capacity (planned in #700 — not yet shipped)
+robne explain --input ./metrics.tar.gz --plugins hcp \
+  --scenario average_qps --observed-at 2026-10-25T14:00:00Z
 ```
+
+### HCP capacity input: identity and series (planned in #700)
+
+- **One cluster per input.** Every file in one directory/tarball belongs to one cluster; all capacity CSVs merge into one series.
+- **Identity:** manifest `cluster_id`, else YAML `cluster_uuid`, else `"unknown"`. YAML overrides; manifest-vs-YAML disagreement is a hard error; manifest-vs-row mismatch warns on stderr (hand-copied payload tripwire).
+- **Series:** files in sorted filename order, stable sort newest-first, dedup by `observed_at` keeping the last occurrence. Duplicates arise only from overlapping inputs or a recollected KMO window with changed values (KMO dedups by row string); last-wins matches backend last-write-wins. Latest = first row, independent of `--now` (age surfaces via the staleness warning).
 
 ---
 

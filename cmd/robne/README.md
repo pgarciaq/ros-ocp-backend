@@ -28,6 +28,9 @@ make robne
   --namespace kube-system --term short --engine cost
 ./bin/robne explain --input ./ocp_ros_usage.csv --plugins gpu --no-user-config \
   --namespace app --workload api --container api --term short
+# HCP fleet capacity (planned in #700 — not yet shipped):
+# ./bin/robne explain --input ./metrics.tar.gz --plugins hcp \
+#   --scenario average_qps --observed-at 2026-10-25T14:00:00Z
 ```
 
 | File | Copy to |

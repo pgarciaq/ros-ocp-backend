@@ -335,7 +335,7 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0333](0333-unused-hostedcluster-lifecycle-w3.md) | Unused HostedCluster (“zombie”) FinOps (W3) | HCP / Fleet | — | Accepted |
 | [0334](0334-fleet-admission-headroom-w4.md) | Fleet admission headroom — N more HostedClusters (W4); amended: ROS-native published-sizing engine with separately labeled MCE reference, effective-cadence freshness, history-backed advisory | HCP / Fleet | — | Amended |
 | [0335](0335-api-tax-operator-webhook-w5.md) | Operator / webhook API tax recommendations (W5) | HCP / Fleet | — | Accepted |
-| [0336](0336-robne-json-entity-sibling-arrays.md) | robne JSON envelope uses per-entity sibling arrays (container, namespace, node, GPU, PVC, VM, quota, cluster_quota) | CLI / API | 2b | Accepted |
+| [0336](0336-robne-json-entity-sibling-arrays.md) | robne JSON envelope uses per-entity sibling arrays (container, namespace, node, GPU, PVC, VM, quota, cluster_quota) | CLI / API | 2b | Amended |
 | [0337](0337-compat-bridge-until-consumers-migrate.md) | compat bridge — synthesize Kruize-shaped serving until consumers migrate (option 2 now, option 3 at cadence) | Kruize decommission | — | Accepted |
 | [0338](0338-column-descriptors-over-extractor-closures.md) | Column descriptors over extractor closures on the recommendation hot path | Container / Engine | — | Accepted |
 | [0339](0339-w3-idle-leg-workload-cpu-primary.md) | W3 idle leg — workload+CPU primary, API informational (amends 0333) | HCP / Fleet | — | Accepted |
@@ -344,3 +344,4 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0342](0342-label-wins-over-namespace-exclusion.md) | Explicit opt-in label wins over kube/openshift namespace exclusion (implements #694) | Collection | — | Accepted |
 | [0343](0343-management-overhead-scope.md) | Management-overhead scope — `filter[scope]=management` = topology class + not-HCP namespace (implements #694); amended with the `management`/`incomplete` row-fact pairing (#695) | Serving | — | Accepted |
 | [0344](0344-empty-request-unset-sentinel.md) | Empty CSV request cells parse as the unset-zero sentinel — request-less containers ingest and get usage-derived recommendations (implements #697) | Ingestion / Engine | — | Accepted |
+| [0345](0345-robne-offline-input-identity-and-capacity-series.md) | robne offline input identity and capacity series assembly (manifest csvID slot, last-wins dedup; implements #700 input contract) | CLI | #700 | Proposed |

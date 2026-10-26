@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted; amended 2026-10-26 (see Amendment)
 
 ## Phase
 
@@ -48,3 +48,34 @@ CLI-owned DTOs (`containerOut`, `namespaceOut`, `nodeOut`, `gpuOut` / `gpuTimesl
 - [CLI spec §5](../plans/robne-cli-spec.md)
 - [#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470), [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472), [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478)
 - [ADR-0305](0305-robne-cli-standalone-binary.md)
+- [#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700),
+  [design](../superpowers/specs/2026-10-26-robne-hcp-capacity-design.md)
+
+## Amendment (2026-10-26: #700 pre-release naming window — design; lands with the build)
+
+The rules below supersede the corresponding implementation rules
+recorded above; the original text is preserved unchanged for history.
+
+- **Envelope v12 + `hcp_recommendations`:** `--plugins hcp` (HCP
+  fleet-capacity advisory, #700) emits sibling `hcp_recommendations`;
+  any run with the capacity sibling present is version **12**,
+  including BH+capacity (BH readings stay nested under their own
+  keys). (BH v10/v11 were established in the CLI spec and never
+  recorded here — pre-existing drift, out of scope.)
+- **Root key rename (pre-release break):** `recommendations` →
+  `container_recommendations`. This explicitly supersedes "Keep
+  `recommendations` as the container-only array" and "Container-only
+  runs stay `version` **1**…". Justification: robne has no releases and
+  no external JSON consumers (verified: no fork releases, no robne
+  usage in the IQE fork, cheatsheet, or koku-ui), so the rename lands
+  in place with no version bump; goldens rewritten; one-line
+  pre-release-break migration note in spec + public docs.
+- **Sibling-key stability rule (going forward):** sibling keys are
+  stable snake_case and never renamed for spelling — the
+  `*_recommendations` suffix is a type marker (payload vs envelope
+  metadata), carries plurality, and keeps `business_hours*` rec keys
+  distinct from the BH config block. Post-#700 mapping is mechanical
+  `<entity>_recommendations` with one documented exception:
+  `cluster-quota` → `cluster_quota_recommendations` (plugin renamed
+  per owner direction; the key stays quotable in `jq` — a tag rename
+  would turn working pipelines into silent nulls).
