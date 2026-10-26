@@ -1,6 +1,6 @@
 # Hosted Control Plane Recommendations
 
-> **Last verified:** 2026-10-20
+> **Last verified:** 2026-10-26
 
 !!! success "Status: Shipped"
     Per-hosted-cluster rightsizing for OpenShift HyperShift control planes:
@@ -13,6 +13,7 @@
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift/hcp` (list),
     `GET .../hcp/{recommendation-id}` (detail)  
+    **Fleet-capacity advisory (implemented; pending integration release):** `GET .../hcp/fleet-capacity` (latest per cluster), `GET .../hcp/fleet-capacity/history?filter[cluster_uuid]=…` (per-cluster trend)
     **Configurable:** Yes (correlator policy via `/settings/hcp-correlation`)  
     **Engines:** cost, performance (both returned on every response)
 
@@ -98,14 +99,43 @@ opt-in; the operator has no default include list — see
 include list and the deliberate exclusions are in the
 [data-collection policy](../configuration.md#management-overhead-namespace-label-list-management-clusters).
 
+## Fleet-capacity advisory (W4; implemented, pending integration release)
+
+How many more hosted control planes could the management cluster's eligible
+worker set host? Two endpoints answer with the native published-sizing model
+(`native_model_version`), with MCE capacity gauges as an optional,
+separately-labeled reference:
+
+- **`GET /recommendations/openshift/hcp/fleet-capacity`** — the latest
+  snapshot **per authorized management cluster** (the card-list discovery
+  surface); `filter[cluster_uuid]` narrows to one cluster.
+- **`GET .../fleet-capacity/history?filter[cluster_uuid]=…`** — the
+  newest-first per-cluster trend (the cluster filter is required), with
+  `limit`/`offset` pagination.
+
+Each row carries five scenarios (`request`, `low_qps`, `average_qps`,
+`medium_qps`, `high_qps`) with limiting-resource attribution and serve-time
+headroom — **null** when occupancy, worker placement, or average QPS is
+unknown, and **withheld** when node pressure is affirmed (an over-committed
+cluster must not advertise an exact `+N`). An empty `limiting_resource`
+means the scenario has no estimate; absent MCE gauges are null, never zero.
+Explicit warnings: `stale` (age over 2× the row's own max cadence),
+`below_version_floor` (known OCP under 4.17 — data still served),
+`pressured`, `pressure_unknown`, `mce_may_be_stale`, and
+`shared_infrastructure` (compact topology: control-plane nodes double as
+workers, so estimates may overstate dedicated capacity). Unauthorized or
+unknown clusters are non-disclosing (200 with empty data). Design record:
+[ADR-0334](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0334-fleet-admission-headroom-w4.md)
+(amended); status and roadmap on the
+[planned-features page](../planned-features/hosted-control-plane-fleet-optimization.md).
+
 ## Correlator policy settings
 
 Thin cross-plane policy via **`GET/PUT/DELETE /settings/hcp-correlation`**.
 PUT replaces the whole domain (all fields required); values take effect on
 the next hourly run (at most one cycle of delay, no recalculation):
 
-| Setting | Default | Env var (locks value) |
-|---------|---------|----------------------|
+| Setting | Default | Env var (locks value) ||---------|---------|----------------------|
 | `h_p99_threshold_s` | 0.30 | `ROS_HCP_H_P99_THRESHOLD_S` |
 | `h_baseline_multiple` | 3 | `ROS_HCP_H_BASELINE_MULTIPLE` |
 | `c_cpu_pct` | 80 | `ROS_HCP_C_CPU_PCT` |
