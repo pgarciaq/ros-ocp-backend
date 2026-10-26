@@ -3,8 +3,10 @@ package model
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -44,6 +46,7 @@ type HCPCapacitySnapshot struct {
 	EligibleMaxPods            int64
 	WorkerPlacementKnown       bool
 	PressureState              string
+	SharedInfrastructure       bool
 	MCERequestMaxHCs           *int64
 	MCELowQPSMaxHCs            *int64
 	MCEAverageQPSMaxHCs        *int64
@@ -68,7 +71,7 @@ const hcpCapacityColumnList = `cluster_uuid, observed_at, mce_sampled_at, operat
 	inventory_complete, current_hc_count, ready_hcp_count,
 	average_ready_hcp_qps, ready_hcp_qps_known, hosted_availability_basis,
 	eligible_worker_cpu_allocatable_millicores, eligible_worker_memory_allocatable_bytes,
-	eligible_worker_max_pods, worker_placement_known, pressure_state,
+	eligible_worker_max_pods, worker_placement_known, pressure_state, shared_infrastructure,
 	mce_request_max_hcs, mce_low_qps_max_hcs, mce_average_qps_max_hcs,
 	mce_medium_qps_max_hcs, mce_high_qps_max_hcs,
 	request_max_hcs, request_limiting_resource,
@@ -86,7 +89,7 @@ func scanHCPCapacityInto(row interface{ Scan(dest ...any) error }, s *HCPCapacit
 		&s.InventoryComplete, &s.CurrentHCCount, &s.ReadyHCPCount,
 		&s.AverageReadyHCPQPS, &s.ReadyHCPQPSKnown, &s.HostedAvailabilityBasis,
 		&s.EligibleCPUMillicores, &s.EligibleMemoryBytes,
-		&s.EligibleMaxPods, &s.WorkerPlacementKnown, &s.PressureState,
+		&s.EligibleMaxPods, &s.WorkerPlacementKnown, &s.PressureState, &s.SharedInfrastructure,
 		&s.MCERequestMaxHCs, &s.MCELowQPSMaxHCs, &s.MCEAverageQPSMaxHCs,
 		&s.MCEMediumQPSMaxHCs, &s.MCEHighQPSMaxHCs,
 		&s.RequestMaxHCs, &s.RequestLimitingResource,
@@ -118,12 +121,22 @@ func GetLatestHCPCapacity(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 // given clusters — exactly one row per cluster (DISTINCT ON with the
 // observed_at DESC ordering; the (org_id, cluster_uuid, observed_at) key
 // makes same-cluster ties impossible, so same-timestamp collisions across
-// clusters cannot fan out or collapse).
+// clusters cannot fan out or collapse). The bind is uuid[] (not a text
+// cast) so the (org_id, cluster_uuid, observed_at DESC) index
+// discriminates clusters.
 func ListLatestHCPCapacity(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string) ([]HCPCapacitySnapshot, error) {
+	ids := make([]uuid.UUID, 0, len(clusterUUIDs))
+	for _, s := range clusterUUIDs {
+		id, err := uuid.Parse(s)
+		if err != nil {
+			return nil, fmt.Errorf("hcp-capacity: invalid cluster uuid %q: %w", s, err)
+		}
+		ids = append(ids, id)
+	}
 	rows, err := pool.Query(ctx,
 		`SELECT DISTINCT ON (cluster_uuid) `+hcpCapacityColumnList+` FROM hcp_capacity_history
-		WHERE org_id = $1 AND cluster_uuid::text = ANY($2)
-		ORDER BY cluster_uuid, observed_at DESC`, orgID, clusterUUIDs)
+		WHERE org_id = $1 AND cluster_uuid = ANY($2)
+		ORDER BY cluster_uuid, observed_at DESC`, orgID, ids)
 	if err != nil {
 		return nil, err
 	}

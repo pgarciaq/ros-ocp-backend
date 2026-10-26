@@ -66,11 +66,12 @@ type hcpCapacityScenarioResponse struct {
 }
 
 type hcpCapacityWarnings struct {
-	Stale             bool  `json:"stale"`
-	BelowVersionFloor bool  `json:"below_version_floor"`
-	Pressured         bool  `json:"pressured"`
-	PressureUnknown   bool  `json:"pressure_unknown"`
-	MCEMayBeStale     *bool `json:"mce_may_be_stale,omitempty"`
+	Stale                bool  `json:"stale"`
+	BelowVersionFloor    bool  `json:"below_version_floor"`
+	Pressured            bool  `json:"pressured"`
+	PressureUnknown      bool  `json:"pressure_unknown"`
+	MCEMayBeStale        *bool `json:"mce_may_be_stale,omitempty"`
+	SharedInfrastructure bool  `json:"shared_infrastructure"`
 }
 
 type hcpCapacityRowResponse struct {
@@ -188,11 +189,12 @@ func buildHCPCapacityRow(s model.HCPCapacitySnapshot, now time.Time, mceMayBeSta
 			hcpcapacity.ScenarioHighQPS:    s.MCEHighQPSMaxHCs,
 		},
 		Warnings: hcpCapacityWarnings{
-			Stale:             age > hcpCapacityFreshnessWindow(s),
-			BelowVersionFloor: hcpCapacityBelowFloor(s.OCPVersion),
-			Pressured:         pressured,
-			PressureUnknown:   s.PressureState == "unknown",
-			MCEMayBeStale:     mceMayBeStale,
+			Stale:                age > hcpCapacityFreshnessWindow(s),
+			BelowVersionFloor:    hcpCapacityBelowFloor(s.OCPVersion),
+			Pressured:            pressured,
+			PressureUnknown:      s.PressureState == "unknown",
+			MCEMayBeStale:        mceMayBeStale,
+			SharedInfrastructure: s.SharedInfrastructure,
 		},
 	}
 	if s.MCESampledAt != nil {

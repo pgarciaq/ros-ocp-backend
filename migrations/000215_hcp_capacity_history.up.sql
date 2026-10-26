@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS hcp_capacity_history (
     eligible_worker_max_pods BIGINT NOT NULL,
     worker_placement_known BOOLEAN NOT NULL,
     pressure_state TEXT NOT NULL,
+    -- ADR-0334 §3.2.5: management control-plane nodes doubling as workers
+    -- (compact topology) — the shared-infrastructure caveat.
+    shared_infrastructure BOOLEAN NOT NULL DEFAULT false,
     mce_request_max_hcs BIGINT,
     mce_low_qps_max_hcs BIGINT,
     mce_average_qps_max_hcs BIGINT,

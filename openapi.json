@@ -10542,6 +10542,10 @@
               "mce_may_be_stale": {
                 "type": "boolean",
                 "nullable": true
+              },
+              "shared_infrastructure": {
+                "type": "boolean",
+                "description": "Compact topology: management control-plane nodes double as workers (OCP sizing-guide 3.2.5 caveat) - estimates may overstate dedicated capacity."
               }
             }
           }

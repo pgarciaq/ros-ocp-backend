@@ -21,7 +21,7 @@ func seedHCPCapacityRow(t *testing.T, pool *pgxpool.Pool, orgID, observedAt stri
 			inventory_complete, current_hc_count, ready_hcp_count,
 			average_ready_hcp_qps, ready_hcp_qps_known, hosted_availability_basis,
 			eligible_worker_cpu_allocatable_millicores, eligible_worker_memory_allocatable_bytes,
-			eligible_worker_max_pods, worker_placement_known, pressure_state,
+			eligible_worker_max_pods, worker_placement_known, pressure_state, shared_infrastructure,
 			mce_request_max_hcs, mce_low_qps_max_hcs, mce_average_qps_max_hcs,
 			mce_medium_qps_max_hcs, mce_high_qps_max_hcs,
 			request_max_hcs, request_limiting_resource,
@@ -31,7 +31,7 @@ func seedHCPCapacityRow(t *testing.T, pool *pgxpool.Pool, orgID, observedAt stri
 			high_qps_max_hcs, high_qps_limiting_resource
 		) VALUES ($1, $2, $3, 'deadbeef', '4.22.17', '', 'hcp-published-sizing-v1', 60, 360,
 			true, 4, 2, 300, true, 'highly_available',
-			64000, 137438953472, 1500, true, 'unknown',
+			64000, 137438953472, 1500, true, 'unknown', false,
 			8, NULL, 8, 4, 2,
 			7, 'memory_request', 7, 'memory_request', 7, 'memory_request',
 			5, 'cpu_usage', 3, 'cpu_usage')`,

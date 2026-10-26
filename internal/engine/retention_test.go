@@ -40,6 +40,37 @@ func TestRunRetentionSweep_DropsOldHistoryPartitions(t *testing.T) {
 	}
 }
 
+// TestRunRetentionSweep_DropsOldHCPCapacityPartitions pins the #392
+// retention contract: hcp_capacity_history is swept by the core
+// historyRetainedTables mechanism at the 90-day history cutoff — a 4-month
+// partition (inside the 6-month general retention, outside 90 days) must
+// drop. During the #701 RetentionProvider trait refactor, removing this
+// table from historyRetainedTables would leave it growing unbounded
+// (~720 rows/cluster/month) with no failing test — this is that test.
+func TestRunRetentionSweep_DropsOldHCPCapacityPartitions(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	old := time.Now().UTC().AddDate(0, -4, 0)
+	monthStart := time.Date(old.Year(), old.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0)
+	partName := fmt.Sprintf("hcp_capacity_history_%s", monthStart.Format("200601"))
+	sql := fmt.Sprintf(
+		`CREATE TABLE IF NOT EXISTS %s PARTITION OF hcp_capacity_history FOR VALUES FROM ('%s') TO ('%s')`,
+		partName, monthStart.Format("2006-01-02"), monthEnd.Format("2006-01-02"),
+	)
+	_, err := pool.Exec(ctx, sql)
+	require.NoError(t, err)
+
+	require.NoError(t, RunRetentionSweep(ctx, pool, 6))
+
+	partitions, err := listPartitions(ctx, pool, "hcp_capacity_history")
+	require.NoError(t, err)
+	for _, p := range partitions {
+		assert.NotEqual(t, partName, p, "4-month-old hcp_capacity_history partition should have been dropped (90-day history sweep, not the 6-month general cutoff)")
+	}
+}
+
 func TestRunRetentionSweep_DropsOldGPUDigestPartitions(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

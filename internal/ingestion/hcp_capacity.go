@@ -20,19 +20,27 @@ import (
 
 // W4 fleet-capacity snapshot ingestion (#392, ADR-0334 amendment).
 //
-// The 24-column header is the operator-side contract (KMO
+// The 25-column header is the operator-side contract (KMO
 // TestHCPCapacityRow_Contract pins the same list); the model version is
 // validated against librobne/hcp.ModelVersion at parse so the operator
-// and the math cannot silently drift. Malformed or invalid rows skip with
-// counters — never zero-filled, never a file abort (SLO contract: a
-// poisoned capacity snapshot must not gate container recommendations via
-// manifest completeness). Scenarios are computed at ingest via
-// librobne/hcp and persisted; headroom and status are derived at serve
-// time from the stored maxima, current count, and completeness flags.
+// and the math cannot silently drift. Row-level problems (bad values,
+// future skew, cadence out of bounds) skip with counters — never
+// zero-filled. A header mismatch or a CSV syntax error aborts the parse
+// and returns an error, but the dispatch contract keeps that non-fatal:
+// the caller marks Done (not Failed), so a poisoned capacity file cannot
+// gate container recommendations via manifest completeness (SLO
+// contract). Scenarios are computed at ingest via librobne/hcp and
+// persisted; headroom and status are derived at serve time from the
+// stored maxima, current count, and completeness flags.
 
 // hcpCapacitySkewTolerance bounds the operator-supplied observed_at: a
 // future-dated row cannot keep `latest` permanently fresh.
 const hcpCapacitySkewTolerance = 5 * time.Minute
+
+// hcpCapacityMaxCadenceMinutes bounds the cadence fields the serve-side
+// staleness clock (2× max cadence) depends on: a zero or absurd value
+// would make the window degenerate and mark every row permanently stale.
+const hcpCapacityMaxCadenceMinutes = 60 * 24 * 60 // 60 days
 
 var hcpCapacityHeader = []string{
 	"observed_at", "mce_sampled_at", "operator_version", "ocp_version", "mce_version",
@@ -43,6 +51,10 @@ var hcpCapacityHeader = []string{
 	"eligible_worker_max_pods", "worker_placement_known", "pressure_state",
 	"mce_request_max_hcs", "mce_low_qps_max_hcs", "mce_average_qps_max_hcs",
 	"mce_medium_qps_max_hcs", "mce_high_qps_max_hcs",
+	// Appended (contract position 25): compact/shared-infrastructure
+	// topology — management control-plane nodes doubling as workers
+	// (ADR-0334 §3.2.5 caveat).
+	"shared_infrastructure",
 }
 
 // HCPCapacityRow is one parsed snapshot row. cluster_uuid is deliberately
@@ -67,6 +79,7 @@ type HCPCapacityRow struct {
 	EligibleMaxPods           int64
 	WorkerPlacementKnown      bool
 	PressureState             string
+	SharedInfrastructure      bool
 	MCERequestMaxHCs          *int64
 	MCELowQPSMaxHCs           *int64
 	MCEAverageQPSMaxHCs       *int64
@@ -129,6 +142,13 @@ func parseHCPCapacityRecord(rec []string, now time.Time) (HCPCapacityRow, bool) 
 	if r.UploadCycleMinutes, err = strconv.ParseInt(rec[7], 10, 64); err != nil {
 		return r, false
 	}
+	// Cadence bounds: the serve-side staleness window is 2× max(cadence);
+	// zero or absurd values would degenerate it (every row permanently
+	// stale, or a negative window after Duration overflow).
+	if r.CollectionIntervalMinutes <= 0 || r.CollectionIntervalMinutes > hcpCapacityMaxCadenceMinutes ||
+		r.UploadCycleMinutes <= 0 || r.UploadCycleMinutes > hcpCapacityMaxCadenceMinutes {
+		return r, false
+	}
 	if r.InventoryComplete, err = parseStrictBool(rec[8]); err != nil {
 		return r, false
 	}
@@ -172,6 +192,9 @@ func parseHCPCapacityRecord(rec []string, now time.Time) (HCPCapacityRow, bool) 
 	case "pressured", "unknown":
 		r.PressureState = rec[18]
 	default:
+		return r, false
+	}
+	if r.SharedInfrastructure, err = parseStrictBool(rec[24]); err != nil {
 		return r, false
 	}
 	if r.MCERequestMaxHCs, err = parseOptionalInt64(rec[19]); err != nil {
@@ -281,8 +304,9 @@ func upsertHCPCapacityRow(ctx context.Context, pool *pgxpool.Pool, r HCPCapacity
 			low_qps_max_hcs, low_qps_limiting_resource,
 			average_qps_max_hcs, average_qps_limiting_resource,
 			medium_qps_max_hcs, medium_qps_limiting_resource,
-			high_qps_max_hcs, high_qps_limiting_resource
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36)
+			high_qps_max_hcs, high_qps_limiting_resource,
+			shared_infrastructure
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37)
 		ON CONFLICT (org_id, cluster_uuid, observed_at) DO UPDATE SET
 			mce_sampled_at = EXCLUDED.mce_sampled_at,
 			operator_version = EXCLUDED.operator_version,
@@ -316,7 +340,8 @@ func upsertHCPCapacityRow(ctx context.Context, pool *pgxpool.Pool, r HCPCapacity
 			medium_qps_max_hcs = EXCLUDED.medium_qps_max_hcs,
 			medium_qps_limiting_resource = EXCLUDED.medium_qps_limiting_resource,
 			high_qps_max_hcs = EXCLUDED.high_qps_max_hcs,
-			high_qps_limiting_resource = EXCLUDED.high_qps_limiting_resource`
+			high_qps_limiting_resource = EXCLUDED.high_qps_limiting_resource,
+			shared_infrastructure = EXCLUDED.shared_infrastructure`
 
 	// Scenario order matches the stable librobne contract; lookup is by
 	// name so a reordered result cannot scramble columns silently.
@@ -339,6 +364,7 @@ func upsertHCPCapacityRow(ctx context.Context, pool *pgxpool.Pool, r HCPCapacity
 		req.maxHCs, req.limit, low.maxHCs, low.limit,
 		avg.maxHCs, avg.limit, med.maxHCs, med.limit,
 		high.maxHCs, high.limit,
+		r.SharedInfrastructure,
 	)
 	if err != nil {
 		return fmt.Errorf("hcp-capacity: upserting snapshot %s/%s/%s: %w", orgID, clusterUUID, r.ObservedAt.Format(time.RFC3339), err)

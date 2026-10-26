@@ -12,7 +12,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
-// The 24-column header is the operator-side contract (KMO
+// The 25-column header is the operator-side contract (KMO
 // TestHCPCapacityRow_Contract pins the same list); changes coordinate both
 // sides plus the shared fixture.
 const hcpCapacityTestHeader = "observed_at,mce_sampled_at,operator_version,ocp_version,mce_version," +
@@ -22,7 +22,7 @@ const hcpCapacityTestHeader = "observed_at,mce_sampled_at,operator_version,ocp_v
 	"eligible_worker_cpu_allocatable_millicores,eligible_worker_memory_allocatable_bytes," +
 	"eligible_worker_max_pods,worker_placement_known,pressure_state," +
 	"mce_request_max_hcs,mce_low_qps_max_hcs,mce_average_qps_max_hcs," +
-	"mce_medium_qps_max_hcs,mce_high_qps_max_hcs"
+	"mce_medium_qps_max_hcs,mce_high_qps_max_hcs,shared_infrastructure"
 
 // validHCPCapacityRow mirrors the hand-verified Task 2 fixture: 64 vCPU /
 // 128 GiB / 1500 maxPods, 4 HCs, 2 ready, 300 QPS observed mean → stored
@@ -30,7 +30,7 @@ const hcpCapacityTestHeader = "observed_at,mce_sampled_at,operator_version,ocp_v
 // (cpu_usage), high = 3 (cpu_usage).
 const validHCPCapacityRow = "2026-10-25T14:59:59Z,2026-10-25T14:59:00Z,deadbeef,4.22.17,," +
 	"hcp-published-sizing-v1,60,360,true,4,2,300,true,highly_available," +
-	"64000,137438953472,1500,true,unknown,8,,8,4,2"
+	"64000,137438953472,1500,true,unknown,8,,8,4,2,false"
 
 func hcpCapacityCSV(rows ...string) string {
 	return hcpCapacityTestHeader + "\n" + strings.Join(rows, "\n") + "\n"
@@ -59,6 +59,7 @@ func TestParseHCPCapacityRows_Valid(t *testing.T) {
 	assert.Equal(t, int64(137438953472), r.EligibleMemoryBytes)
 	assert.Equal(t, int64(1500), r.EligibleMaxPods)
 	assert.True(t, r.WorkerPlacementKnown)
+	assert.False(t, r.SharedInfrastructure, "shared_infrastructure parses as a strict boolean")
 	require.NotNil(t, r.MCERequestMaxHCs)
 	assert.Equal(t, int64(8), *r.MCERequestMaxHCs)
 	assert.Nil(t, r.MCELowQPSMaxHCs, "absent MCE reference parses nil, never zero")
@@ -90,6 +91,9 @@ func TestParseHCPCapacityRows_SkipMalformed(t *testing.T) {
 		{"wrong model version", bad(func(f []string) []string { f[5] = "hcp-published-sizing-v0"; return f }), "model version must match librobne/hcp — drift is a coordinate-both-sides event"},
 		{"bad mce ref", bad(func(f []string) []string { f[19] = "eight"; return f }), "unparseable MCE reference skips"},
 		{"bad pressure", bad(func(f []string) []string { f[18] = "clear"; return f }), "v1 never claims clear — only pressured/unknown"},
+		{"bad shared infra", bad(func(f []string) []string { f[24] = "yes"; return f }), "non-boolean shared_infrastructure skips"},
+		{"zero cadence", bad(func(f []string) []string { f[6] = "0"; return f }), "zero collection cadence degenerates the staleness window"},
+		{"huge cadence", bad(func(f []string) []string { f[7] = "9223372036854775807"; return f }), "absurd upload cadence overflows the staleness window"},
 		{"short row", strings.Join(strings.Split(validHCPCapacityRow, ",")[:20], ","), "wrong field count skips"},
 	}
 	for _, tc := range cases {

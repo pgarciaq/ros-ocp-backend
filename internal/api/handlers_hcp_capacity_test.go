@@ -31,6 +31,7 @@ const (
 	hcpCapClusterD = "44444444-4444-4444-4444-444444444444"
 	hcpCapClusterE = "55555555-5555-5555-5555-555555555555"
 	hcpCapClusterF = "66666666-6666-6666-6666-666666666666"
+	hcpCapClusterG = "77777777-7777-7777-7777-777777777777"
 )
 
 func seedHCPCapCluster(t *testing.T, orgID, clusterUUID string) {
@@ -74,7 +75,7 @@ func seedHCPCapRow(t *testing.T, orgID, clusterUUID, observedAt string) {
 			inventory_complete, current_hc_count, ready_hcp_count,
 			average_ready_hcp_qps, ready_hcp_qps_known, hosted_availability_basis,
 			eligible_worker_cpu_allocatable_millicores, eligible_worker_memory_allocatable_bytes,
-			eligible_worker_max_pods, worker_placement_known, pressure_state,
+			eligible_worker_max_pods, worker_placement_known, pressure_state, shared_infrastructure,
 			mce_request_max_hcs, mce_low_qps_max_hcs, mce_average_qps_max_hcs,
 			mce_medium_qps_max_hcs, mce_high_qps_max_hcs,
 			request_max_hcs, request_limiting_resource,
@@ -87,7 +88,7 @@ func seedHCPCapRow(t *testing.T, orgID, clusterUUID, observedAt string) {
 			60, 360,
 			true, 4, 2,
 			300, true, 'highly_available',
-			64000, 137438953472, 1500, true, 'unknown',
+			64000, 137438953472, 1500, true, 'unknown', false,
 			8, NULL, 8, 4, 2,
 			7, 'memory_request', 7, 'memory_request', 7, 'memory_request',
 			5, 'cpu_usage', 3, 'cpu_usage')`,
@@ -399,10 +400,11 @@ func TestHCPCapacityRow_ServeTimeSemantics(t *testing.T) {
 	unknownQPSAt := now.Add(-32 * time.Minute).Format(time.RFC3339)
 	belowFloorAt := now.Add(-33 * time.Minute).Format(time.RFC3339)
 	illustrativeAt := now.Add(-34 * time.Minute).Format(time.RFC3339)
+	compactAt := now.Add(-35 * time.Minute).Format(time.RFC3339)
 
 	// One cluster per variant: the latest endpoint always serves the
 	// newest row of the (filtered) cluster, so variants must not share one.
-	for _, clusterUUID := range []string{testutil.TestClusterUUID, hcpCapClusterB, hcpCapClusterC, hcpCapClusterD, hcpCapClusterE, hcpCapClusterF} {
+	for _, clusterUUID := range []string{testutil.TestClusterUUID, hcpCapClusterB, hcpCapClusterC, hcpCapClusterD, hcpCapClusterE, hcpCapClusterF, hcpCapClusterG} {
 		seedHCPCapCluster(t, orgID, clusterUUID)
 	}
 	seedHCPCapRow(t, orgID, testutil.TestClusterUUID, freshAt)
@@ -416,6 +418,8 @@ func TestHCPCapacityRow_ServeTimeSemantics(t *testing.T) {
 	hcpCapUpdate(t, orgID, hcpCapClusterE, belowFloorAt, "ocp_version = '4.16.9'")
 	seedHCPCapRow(t, orgID, hcpCapClusterF, illustrativeAt)
 	hcpCapUpdate(t, orgID, hcpCapClusterF, illustrativeAt, "hosted_availability_basis = 'mixed'")
+	seedHCPCapRow(t, orgID, hcpCapClusterG, compactAt)
+	hcpCapUpdate(t, orgID, hcpCapClusterG, compactAt, "shared_infrastructure = true")
 
 	e := setupHCPCapEcho(t, nil)
 	get := func(clusterUUID string) map[string]interface{} {
@@ -491,6 +495,13 @@ func TestHCPCapacityRow_ServeTimeSemantics(t *testing.T) {
 	}
 	assert.Equal(t, float64(7), illScenarios["request"]["max_hcs"], "warning never changes the math")
 	assert.Equal(t, float64(3), illScenarios["high_qps"]["max_hcs"], "warning never changes the math")
+
+	// Compact/shared-infrastructure topology → the §3.2.5 caveat warns
+	// (ADR-0334); the scenarios still serve — math unchanged, never suppressed.
+	compact := get(hcpCapClusterG)
+	assert.True(t, warnings(compact)["shared_infrastructure"].(bool), "compact topology carries the shared-infrastructure caveat")
+	assert.Equal(t, float64(7), hcpCapScenarios(t, compact)["request"]["max_hcs"], "caveat never changes the math")
+	assert.False(t, warnings(fresh)["shared_infrastructure"].(bool), "dedicated-worker clusters do not warn")
 }
 
 func TestHCPCapacityLatest_MCEMayBeStale(t *testing.T) {
