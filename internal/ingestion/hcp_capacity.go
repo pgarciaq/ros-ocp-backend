@@ -2,254 +2,29 @@ package ingestion
 
 import (
 	"context"
-	"encoding/csv"
-	"errors"
 	"fmt"
 	"io"
-	"math"
-	"reflect"
-	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
+	libcsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 	hcpcapacity "github.com/redhatinsights/ros-ocp-backend/librobne/hcp"
 )
 
 // W4 fleet-capacity snapshot ingestion (#392, ADR-0334 amendment).
 //
-// The 25-column header is the operator-side contract (KMO
-// TestHCPCapacityRow_Contract pins the same list); the model version is
-// validated against librobne/hcp.ModelVersion at parse so the operator
-// and the math cannot silently drift. Row-level problems (bad values,
-// future skew, cadence out of bounds) skip with counters — never
-// zero-filled. A header mismatch or a CSV syntax error aborts the parse
-// and returns an error, but the dispatch contract keeps that non-fatal:
-// the caller marks Done (not Failed), so a poisoned capacity file cannot
-// gate container recommendations via manifest completeness (SLO
-// contract). Scenarios are computed at ingest via librobne/hcp and
-// persisted; headroom and status are derived at serve time from the
-// stored maxima, current count, and completeness flags.
-
-// hcpCapacitySkewTolerance bounds the operator-supplied observed_at: a
-// future-dated row cannot keep `latest` permanently fresh.
-const hcpCapacitySkewTolerance = 5 * time.Minute
-
-// hcpCapacityMaxCadenceMinutes bounds the cadence fields the serve-side
-// staleness clock (2× max cadence) depends on: a zero or absurd value
-// would make the window degenerate and mark every row permanently stale.
-const hcpCapacityMaxCadenceMinutes = 60 * 24 * 60 // 60 days
-
-var hcpCapacityHeader = []string{
-	"observed_at", "mce_sampled_at", "operator_version", "ocp_version", "mce_version",
-	"native_model_version", "collection_interval_minutes", "upload_cycle_minutes",
-	"inventory_complete", "current_hc_count", "ready_hcp_count",
-	"average_ready_hcp_qps", "ready_hcp_qps_known", "hosted_availability_basis",
-	"eligible_worker_cpu_allocatable_millicores", "eligible_worker_memory_allocatable_bytes",
-	"eligible_worker_max_pods", "worker_placement_known", "pressure_state",
-	"mce_request_max_hcs", "mce_low_qps_max_hcs", "mce_average_qps_max_hcs",
-	"mce_medium_qps_max_hcs", "mce_high_qps_max_hcs",
-	// Appended (contract position 25): compact/shared-infrastructure
-	// topology — management control-plane nodes doubling as workers
-	// (ADR-0334 §3.2.5 caveat).
-	"shared_infrastructure",
-}
-
-// HCPCapacityRow is one parsed snapshot row. cluster_uuid is deliberately
-// absent: it arrives as trusted Kafka/report metadata, never CSV-supplied.
-type HCPCapacityRow struct {
-	ObservedAt                time.Time
-	MCESampledAt              *time.Time
-	OperatorVersion           string
-	OCPVersion                string
-	MCEVersion                string
-	NativeModelVersion        string
-	CollectionIntervalMinutes int64
-	UploadCycleMinutes        int64
-	InventoryComplete         bool
-	CurrentHCCount            int64
-	ReadyHCPCount             int64
-	AverageReadyHCPQPS        float64
-	ReadyHCPQPSKnown          bool
-	HostedAvailabilityBasis   string
-	EligibleCPUMillicores     int64
-	EligibleMemoryBytes       int64
-	EligibleMaxPods           int64
-	WorkerPlacementKnown      bool
-	PressureState             string
-	SharedInfrastructure      bool
-	MCERequestMaxHCs          *int64
-	MCELowQPSMaxHCs           *int64
-	MCEAverageQPSMaxHCs       *int64
-	MCEMediumQPSMaxHCs        *int64
-	MCEHighQPSMaxHCs          *int64
-}
-
-func parseStrictBool(s string) (bool, error) {
-	switch s {
-	case "true":
-		return true, nil
-	case "false":
-		return false, nil
-	}
-	return false, fmt.Errorf("not a strict boolean: %q", s)
-}
-
-func parseOptionalInt64(s string) (*int64, error) {
-	if s == "" {
-		return nil, nil
-	}
-	v, err := strconv.ParseInt(s, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	return &v, nil
-}
-
-// parseHCPCapacityRecord validates one 24-field record; ok=false means
-// skip-with-counter.
-func parseHCPCapacityRecord(rec []string, now time.Time) (HCPCapacityRow, bool) {
-	var r HCPCapacityRow
-	if len(rec) != len(hcpCapacityHeader) {
-		return r, false
-	}
-	var err error
-	if r.ObservedAt, err = time.Parse(time.RFC3339, rec[0]); err != nil {
-		return r, false
-	}
-	if r.ObservedAt.After(now.Add(hcpCapacitySkewTolerance)) {
-		return r, false
-	}
-	if rec[1] != "" {
-		t, err := time.Parse(time.RFC3339, rec[1])
-		if err != nil {
-			return r, false
-		}
-		r.MCESampledAt = &t
-	}
-	r.OperatorVersion = rec[2]
-	r.OCPVersion = rec[3]
-	r.MCEVersion = rec[4]
-	if rec[5] != hcpcapacity.ModelVersion {
-		return r, false
-	}
-	r.NativeModelVersion = rec[5]
-	if r.CollectionIntervalMinutes, err = strconv.ParseInt(rec[6], 10, 64); err != nil {
-		return r, false
-	}
-	if r.UploadCycleMinutes, err = strconv.ParseInt(rec[7], 10, 64); err != nil {
-		return r, false
-	}
-	// Cadence bounds: the serve-side staleness window is 2× max(cadence);
-	// zero or absurd values would degenerate it (every row permanently
-	// stale, or a negative window after Duration overflow).
-	if r.CollectionIntervalMinutes <= 0 || r.CollectionIntervalMinutes > hcpCapacityMaxCadenceMinutes ||
-		r.UploadCycleMinutes <= 0 || r.UploadCycleMinutes > hcpCapacityMaxCadenceMinutes {
-		return r, false
-	}
-	if r.InventoryComplete, err = parseStrictBool(rec[8]); err != nil {
-		return r, false
-	}
-	if r.CurrentHCCount, err = strconv.ParseInt(rec[9], 10, 64); err != nil {
-		return r, false
-	}
-	if r.ReadyHCPCount, err = strconv.ParseInt(rec[10], 10, 64); err != nil {
-		return r, false
-	}
-	if r.ReadyHCPQPSKnown, err = parseStrictBool(rec[12]); err != nil {
-		return r, false
-	}
-	if r.ReadyHCPQPSKnown {
-		q, err := strconv.ParseFloat(rec[11], 64)
-		if err != nil || math.IsNaN(q) || math.IsInf(q, 0) || q < 0 {
-			return r, false
-		}
-		r.AverageReadyHCPQPS = q
-	} else if rec[11] != "" {
-		return r, false
-	}
-	r.HostedAvailabilityBasis = rec[13]
-	switch r.HostedAvailabilityBasis {
-	case "", hcpcapacity.BasisHighlyAvailable, hcpcapacity.BasisMixed, hcpcapacity.BasisSingleReplica, hcpcapacity.BasisUnknown:
-	default:
-		return r, false
-	}
-	if r.EligibleCPUMillicores, err = strconv.ParseInt(rec[14], 10, 64); err != nil {
-		return r, false
-	}
-	if r.EligibleMemoryBytes, err = strconv.ParseInt(rec[15], 10, 64); err != nil {
-		return r, false
-	}
-	if r.EligibleMaxPods, err = strconv.ParseInt(rec[16], 10, 64); err != nil {
-		return r, false
-	}
-	if r.WorkerPlacementKnown, err = parseStrictBool(rec[17]); err != nil {
-		return r, false
-	}
-	switch rec[18] {
-	case "pressured", "unknown":
-		r.PressureState = rec[18]
-	default:
-		return r, false
-	}
-	if r.SharedInfrastructure, err = parseStrictBool(rec[24]); err != nil {
-		return r, false
-	}
-	if r.MCERequestMaxHCs, err = parseOptionalInt64(rec[19]); err != nil {
-		return r, false
-	}
-	if r.MCELowQPSMaxHCs, err = parseOptionalInt64(rec[20]); err != nil {
-		return r, false
-	}
-	if r.MCEAverageQPSMaxHCs, err = parseOptionalInt64(rec[21]); err != nil {
-		return r, false
-	}
-	if r.MCEMediumQPSMaxHCs, err = parseOptionalInt64(rec[22]); err != nil {
-		return r, false
-	}
-	if r.MCEHighQPSMaxHCs, err = parseOptionalInt64(rec[23]); err != nil {
-		return r, false
-	}
-	return r, true
-}
-
-// parseHCPCapacityRows parses the snapshot CSV. Header mismatch aborts the
-// file (the caller still marks Done); row-level problems skip with
-// counters.
-func parseHCPCapacityRows(r io.Reader, now time.Time) ([]HCPCapacityRow, int, error) {
-	reader := csv.NewReader(r)
-	// Variable field count: a short or long row is a row-level problem
-	// (skip with counter), not a file abort — the length check in
-	// parseHCPCapacityRecord governs.
-	reader.FieldsPerRecord = -1
-	header, err := reader.Read()
-	if err != nil {
-		return nil, 0, fmt.Errorf("hcp-capacity: reading header: %w", err)
-	}
-	if !reflect.DeepEqual(header, hcpCapacityHeader) {
-		return nil, 0, fmt.Errorf("hcp-capacity: missing or unexpected columns (header must match the 24-column operator contract)")
-	}
-	var rows []HCPCapacityRow
-	skipped := 0
-	for {
-		rec, err := reader.Read()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return nil, 0, fmt.Errorf("hcp-capacity: reading row: %w", err)
-		}
-		row, ok := parseHCPCapacityRecord(rec, now)
-		if !ok {
-			skipped++
-			continue
-		}
-		rows = append(rows, row)
-	}
-	return rows, skipped, nil
-}
+// The CSV parsing and validation live in librobne/csv (shared with the
+// robne CLI, #700): the 25-column operator contract, strict row
+// validation with skip reasons, and the future-skew rule
+// (HCPCapacitySkewCheck, applied here with wall clock — the CLI applies
+// it with its --now clock). Scenarios are computed at ingest via
+// librobne/hcp and persisted; headroom and status are derived at serve
+// time. The dispatch contract keeps everything non-fatal: the caller
+// marks Done, so a poisoned capacity file cannot gate container
+// recommendations via manifest completeness (SLO contract).
 
 // scenarioCols is the (max, limiting) pair stored per scenario.
 type scenarioCols struct {
@@ -269,7 +44,7 @@ func scenarioColumns(res hcpcapacity.CapacityResult) map[string]scenarioCols {
 // and persists inputs + scenarios. A CalculateCapacity validation error
 // (internally inconsistent row) is returned for the caller to skip with a
 // counter — never a file abort.
-func upsertHCPCapacityRow(ctx context.Context, pool *pgxpool.Pool, r HCPCapacityRow, orgID, clusterUUID string) error {
+func upsertHCPCapacityRow(ctx context.Context, pool *pgxpool.Pool, r libcsv.HCPCapacityRow, orgID, clusterUUID string) error {
 	res, err := hcpcapacity.CalculateCapacity(hcpcapacity.CapacityInputs{
 		Workers: hcpcapacity.WorkerCapacity{
 			CPUAllocatableMillicores: r.EligibleCPUMillicores,
@@ -374,7 +149,7 @@ func upsertHCPCapacityRow(ctx context.Context, pool *pgxpool.Pool, r HCPCapacity
 
 // nullableQPS renders the average as NULL when unknown — absence is the
 // unavailability signal, never zero.
-func nullableQPS(r HCPCapacityRow) interface{} {
+func nullableQPS(r libcsv.HCPCapacityRow) interface{} {
 	if !r.ReadyHCPQPSKnown {
 		return nil
 	}
@@ -412,13 +187,15 @@ func EnsureHCPCapacityPartitions(ctx context.Context, pool *pgxpool.Pool, monthS
 // are skipped with counters; a CalculateCapacity validation failure on an
 // internally inconsistent row skips that row, not the file.
 func ProcessHCPCapacityCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
-	rows, skipped, err := parseHCPCapacityRows(r, time.Now().UTC())
+	parsed, parseSkips, err := libcsv.ParseHCPCapacityRows(r)
 	if err != nil {
 		return err
 	}
+	rows, skewDrops := libcsv.HCPCapacitySkewCheck(parsed, time.Now().UTC())
+	skipped := len(parseSkips) + len(skewDrops)
 	if skipped > 0 {
 		metrics.IncCSVRowsSkipped("hcp-capacity", skipped)
-		logging.GetLogger().Warnf("ProcessHCPCapacityCSV: skipped %d malformed or invalid rows", skipped)
+		logging.GetLogger().Warnf("ProcessHCPCapacityCSV: skipped %d malformed, invalid, or future-dated rows", skipped)
 	}
 	inserted := 0
 	for _, row := range rows {

@@ -24,6 +24,7 @@ const (
 	KindSLO
 	KindAPITax
 	KindNodepool
+	KindHCPCapacity
 )
 
 // ClassifyFilename maps a path or tar member name to a CSV family.
@@ -34,6 +35,9 @@ func ClassifyFilename(name string) Kind {
 
 	if strings.HasPrefix(lower, "ros-openshift-container-") {
 		return KindContainerROS
+	}
+	if strings.HasPrefix(lower, "ros-openshift-hcp-capacity-") {
+		return KindHCPCapacity
 	}
 	if strings.HasPrefix(lower, "ros-openshift-cluster-quota-") {
 		return KindClusterQuota

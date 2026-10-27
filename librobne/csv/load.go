@@ -24,12 +24,26 @@ type LoadResult struct {
 	SLORows          []SLORow
 	APITaxRows       []APITaxRow
 	NodepoolRows     []NodepoolRow
+	HCPCapacityRows  []HCPCapacityRow
 	Files            []string
 	CostOnlySkipped  []string
 	RowsSkipped      int // unparseable data rows (bad numbers/timestamps); not cost-only files
+	// Warnings carry file-level poison (capacity today): the file was
+	// recognized but could not be parsed. The W4 dispatch contract makes
+	// a poisoned capacity file non-fatal — it must never gate other
+	// entities — so poison lands here instead of an error (#700).
+	Warnings []LoadWarning
 	// Manifest holds the tarball/dir manifest.json when present (nil for
 	// single-CSV inputs, absent or corrupt manifests).
 	Manifest *Manifest
+}
+
+// LoadWarning is one file-level poison notice: a recognized file whose
+// parse failed. Kind is the producing family ("hcp_capacity" today).
+type LoadWarning struct {
+	File   string
+	Kind   string
+	Reason string
 }
 
 // ErrNoROSFiles means the input had no ROS container, namespace, storage, VM, cluster-quota, snapshot, or SLO CSV the parser could use.
@@ -47,7 +61,8 @@ func (e *ErrCostOnlyInput) Error() string {
 func (r LoadResult) hasROS() bool {
 	if len(r.Rows) > 0 || len(r.NamespaceRows) > 0 || len(r.PVCRows) > 0 ||
 		len(r.VMRows) > 0 || len(r.VMPVCRows) > 0 || len(r.VMGPURows) > 0 ||
-		len(r.ClusterQuotaRows) > 0 || len(r.SnapshotRows) > 0 || len(r.SLORows) > 0 || len(r.APITaxRows) > 0 || len(r.NodepoolRows) > 0 {
+		len(r.ClusterQuotaRows) > 0 || len(r.SnapshotRows) > 0 || len(r.SLORows) > 0 || len(r.APITaxRows) > 0 || len(r.NodepoolRows) > 0 ||
+		len(r.HCPCapacityRows) > 0 {
 		return true
 	}
 	// Header-only snapshot inventory still counts so --plugins snapshot can
@@ -72,19 +87,38 @@ func mergePart(out *LoadResult, part LoadResult) {
 	out.SLORows = append(out.SLORows, part.SLORows...)
 	out.APITaxRows = append(out.APITaxRows, part.APITaxRows...)
 	out.NodepoolRows = append(out.NodepoolRows, part.NodepoolRows...)
+	out.HCPCapacityRows = append(out.HCPCapacityRows, part.HCPCapacityRows...)
 	out.Files = append(out.Files, part.Files...)
 	out.CostOnlySkipped = append(out.CostOnlySkipped, part.CostOnlySkipped...)
+	out.Warnings = append(out.Warnings, part.Warnings...)
 	out.RowsSkipped += part.RowsSkipped
 }
 
 func finishLoad(out LoadResult) (LoadResult, error) {
-	if out.hasROS() {
+	if out.hasROS() || hasCapacityAttempt(out) {
 		return out, nil
 	}
 	if len(out.CostOnlySkipped) > 0 {
 		return LoadResult{}, &ErrCostOnlyInput{Files: out.CostOnlySkipped}
 	}
 	return LoadResult{}, ErrNoROSFiles
+}
+
+// hasCapacityAttempt reports whether a capacity file was recognized at
+// all — parsed rows, a poison warning, or a header-only file (the snapshot
+// precedent). Gated to capacity: no behavior change for other kinds.
+func hasCapacityAttempt(r LoadResult) bool {
+	for _, w := range r.Warnings {
+		if w.Kind == "hcp_capacity" {
+			return true
+		}
+	}
+	for _, name := range r.Files {
+		if ClassifyFilename(name) == KindHCPCapacity {
+			return true
+		}
+	}
+	return false
 }
 
 func isMissingRequiredColumns(err error) bool {
@@ -293,6 +327,29 @@ func parseCSVReader(r io.Reader, name string, kind Kind) (LoadResult, error) {
 			return LoadResult{}, fmt.Errorf("%s: all %d data rows were unparseable", name, skipped)
 		}
 		return LoadResult{NodepoolRows: rows, Files: []string{name}, RowsSkipped: skipped}, nil
+	case KindHCPCapacity:
+		// W4 poison contract (#700): a capacity file must never gate
+		// other entities. File-level poison (header mismatch, read
+		// error, all-rows-unparseable) becomes a LoadWarning, not an
+		// error — this deliberately diverges from the
+		// fail-on-all-unparseable precedent of other kinds. Row-level
+		// skips stay in RowsSkipped; the future-skew check is NOT
+		// applied here (Load has no clock — consumers apply
+		// HCPCapacitySkewCheck).
+		rows, skips, err := ParseHCPCapacityRows(r)
+		if err != nil {
+			return LoadResult{
+				Files:    []string{name},
+				Warnings: []LoadWarning{{File: name, Kind: "hcp_capacity", Reason: err.Error()}},
+			}, nil
+		}
+		if len(rows) == 0 && len(skips) > 0 {
+			return LoadResult{
+				Files:    []string{name},
+				Warnings: []LoadWarning{{File: name, Kind: "hcp_capacity", Reason: fmt.Sprintf("all %d data rows were unparseable", len(skips))}},
+			}, nil
+		}
+		return LoadResult{HCPCapacityRows: rows, Files: []string{name}, RowsSkipped: len(skips)}, nil
 	}
 	rows, skipped, err := ParseRows(r)
 	if err != nil {

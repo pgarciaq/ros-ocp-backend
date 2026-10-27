@@ -5,8 +5,6 @@ package hcp
 
 import (
 	"sort"
-
-	roscsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 )
 
 // KnownWorkloads pins the named-workload inventory of the live Agent lab
@@ -56,14 +54,15 @@ var KnownWorkloads = map[string]struct{}{
 	"redhat-operators-catalog":           {},
 }
 
-// UnknownWorkloads returns the sorted distinct workload names in rows that
-// are absent from the pinned inventory. Blank names (CSV owner-join gap)
-// are skipped: they classify by namespace, never by tripwire.
-func UnknownWorkloads(rows []roscsv.Row) []string {
+// UnknownWorkloads returns the sorted distinct workload names in names
+// that are absent from the pinned inventory. Blank names (CSV owner-join
+// gap) are skipped: they classify by namespace, never by tripwire.
+// (Cycle-break note, #700 Task 1: takes extracted names, not csv.Rows —
+// this package must not import librobne/csv.)
+func UnknownWorkloads(names []string) []string {
 	var unknown []string
 	seen := map[string]bool{}
-	for _, row := range rows {
-		name := row.WorkloadName
+	for _, name := range names {
 		if name == "" || seen[name] {
 			continue
 		}

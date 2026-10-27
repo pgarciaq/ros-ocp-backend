@@ -1,7 +1,7 @@
 // Copyright 2026 Red Hat Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package hcp
+package hcp_test
 
 import (
 	"bytes"
@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/redhatinsights/ros-ocp-backend/librobne/hcp"
 
 	roscsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 	"github.com/stretchr/testify/assert"
@@ -24,24 +26,20 @@ func TestKnownWorkloadsPin(t *testing.T) {
 	// by design — so the pin holds names only, and length-pinning rules out
 	// silent pin edits: adding or dropping a name without updating the
 	// evidence must go red here.
-	assert.Len(t, KnownWorkloads, 39)
+	assert.Len(t, hcp.KnownWorkloads, 39)
 	for _, name := range []string{"etcd", "kube-apiserver", "kube-scheduler", "control-plane-operator"} {
-		assert.Contains(t, KnownWorkloads, name)
+		assert.Contains(t, hcp.KnownWorkloads, name)
 	}
 	// KubeVirt-only noise must never enter the pin: its presence would mean
 	// the Agent-platform evidence was contaminated.
-	assert.NotContains(t, KnownWorkloads, "virt-launcher")
+	assert.NotContains(t, hcp.KnownWorkloads, "virt-launcher")
 }
 
 func TestUnknownWorkloadsFindsPlantedName(t *testing.T) {
-	rows := []roscsv.Row{
-		{Namespace: "hc01-infra-hc01", WorkloadName: "etcd"},
-		{Namespace: "hc01-infra-hc01", WorkloadName: "weekend-operator"},
-		{Namespace: "hc01-infra-hc01", WorkloadName: ""},
-	}
+	names := []string{"etcd", "weekend-operator", ""}
 	// Exactly the planted name: rules out prefix/substring matching (which
 	// would also flag nothing here) and rules out reporting blanks.
-	assert.Equal(t, []string{"weekend-operator"}, UnknownWorkloads(rows))
+	assert.Equal(t, []string{"weekend-operator"}, hcp.UnknownWorkloads(names))
 }
 
 func TestWorkloadInventoryTripwire(t *testing.T) {
@@ -72,7 +70,11 @@ func TestWorkloadInventoryTripwire(t *testing.T) {
 			// review and pin, not a regression.
 			t.Logf("%s: parser skipped %d malformed rows", path, skipped)
 		}
-		assert.Empty(t, UnknownWorkloads(rows), "unpinned workloads in %s: review before W1 inclusion", path)
+		names := make([]string, len(rows))
+		for i, r := range rows {
+			names[i] = r.WorkloadName
+		}
+		assert.Empty(t, hcp.UnknownWorkloads(names), "unpinned workloads in %s: review before W1 inclusion", path)
 		assert.Empty(t, rawUnknownWorkloads(t, body), "unpinned workloads (raw scan) in %s: review before W1 inclusion", path)
 	}
 }
@@ -120,7 +122,11 @@ func TestTripwireReachesRequestlessRows(t *testing.T) {
 		"hc01-infra-hc01,ghost-operator,ReplicaSet,ghost,ghost-0,2026-09-15 00:00:01 +0000 UTC,2026-09-15 00:15:00 +0000 UTC,,0.05,,52428800\n"
 	parsed, _, err := roscsv.ParseRows(bytes.NewReader([]byte(body)))
 	require.NoError(t, err)
-	assert.Equal(t, []string{"ghost-operator"}, UnknownWorkloads(parsed), "unpinned request-less workload must reach the pin check (pre-#697: skipped rows hid it)")
+	parsedNames := make([]string, len(parsed))
+	for i, r := range parsed {
+		parsedNames[i] = r.WorkloadName
+	}
+	assert.Equal(t, []string{"ghost-operator"}, hcp.UnknownWorkloads(parsedNames), "unpinned request-less workload must reach the pin check (pre-#697: skipped rows hid it)")
 	assert.Equal(t, []string{"ghost-operator"}, rawUnknownWorkloads(t, []byte(body)))
 }
 
@@ -130,7 +136,7 @@ func rawUnknownWorkloads(t *testing.T, body []byte) []string {
 	t.Helper()
 	var unknown []string
 	for _, name := range rawWorkloads(t, body) {
-		if _, ok := KnownWorkloads[name]; !ok {
+		if _, ok := hcp.KnownWorkloads[name]; !ok {
 			unknown = append(unknown, name)
 		}
 	}

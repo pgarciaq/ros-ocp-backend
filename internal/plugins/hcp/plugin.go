@@ -107,7 +107,11 @@ func observeRows(rows []ingestion.MetricRow, hcpNamespaces map[string]bool) (hcp
 		hcpRows++
 		hcpSubset = append(hcpSubset, row)
 	}
-	return hcpRows, hcplib.UnknownWorkloads(hcpSubset)
+	workloadNames := make([]string, 0, len(hcpSubset))
+	for _, row := range hcpSubset {
+		workloadNames = append(workloadNames, row.WorkloadName)
+	}
+	return hcpRows, hcplib.UnknownWorkloads(workloadNames)
 }
 
 // AfterIngest resolves the persisted HCP namespace set once per ingest (one

@@ -1,12 +1,14 @@
 // Copyright 2026 Red Hat Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package hcp
+package hcp_test
 
 import (
 	"bytes"
 	"os"
 	"testing"
+
+	"github.com/redhatinsights/ros-ocp-backend/librobne/hcp"
 
 	roscsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 	"github.com/stretchr/testify/assert"
@@ -28,7 +30,7 @@ func mustParseFixture(t *testing.T) []roscsv.Row {
 }
 
 func TestIncludeRowMultiNamespace(t *testing.T) {
-	known := NewNamespaceSet([]string{"hc01-infra-hc01"})
+	known := hcp.NewNamespaceSet([]string{"hc01-infra-hc01"})
 	rows := mustParseFixture(t)
 
 	// keyed by row index: each assertion names the pre-lock behavior it rules out.
@@ -62,7 +64,7 @@ func TestIncludeRowMultiNamespace(t *testing.T) {
 		{8, false, "empty namespace must be excluded"},
 	}
 	for _, tc := range cases {
-		assert.Equal(t, tc.want, IncludeRow(rows[tc.row], known), "row %d (%s/%s): %s",
+		assert.Equal(t, tc.want, hcp.IncludeRow(rows[tc.row].Namespace, known), "row %d (%s/%s): %s",
 			tc.row, rows[tc.row].Namespace, rows[tc.row].Pod, tc.why)
 	}
 }
@@ -70,5 +72,5 @@ func TestIncludeRowMultiNamespace(t *testing.T) {
 func TestIncludeRowNilSetExcludes(t *testing.T) {
 	// No known namespaces means no input: rules out a nil-map panic and a
 	// permissive default in one assertion.
-	assert.False(t, IncludeRow(roscsv.Row{Namespace: "hc01-infra-hc01"}, nil))
+	assert.False(t, hcp.IncludeRow("hc01-infra-hc01", nil))
 }
