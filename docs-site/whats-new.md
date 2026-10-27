@@ -29,7 +29,7 @@ first production-ready native engine release.
 
 - **[Virtual Machine recommendations](features/virtual-machines.md)** — Right-size OpenShift Virtualization workloads: whole vCPU/GiB sizing, instance type matching (u1/cx1/m1/**n1**/gn1), idle and abandoned detection, disk projection, I/O profiling, crash-loop detection, GPU passthrough/vGPU/MIG on guests, **production vGPU time-slicing** (multi-signal slice count, vGPU profiles, FB/DRAM safety guards, notifications **56**–**57**), **n1 network-optimized** recommendations from sustained KubeVirt network metrics (notification **55**, `filter[is_network_bound]`), **placement and NUMA checks** (same-node redundancy, correlated workload groups, NUMA memory cap — notifications **60**–**63**, metadata flags `is_redundant_placement`, `has_shared_storage`, `numa_oversized`, `placement` settings block), graduated guest-agent confidence, `filter[guest_os]`, and dual cost/performance engines. Enabled by default; disable with `ROS_DISABLED_PLUGINS=vm`.
 
-- **[Hosted control plane recommendations](features/hosted-control-plane.md)** — Per-hosted-cluster HyperShift control-plane rightsizing: namespace-to-hosted-cluster association, dedicated `/hcp` list/filter/group-by surface with summed savings, Hosted control plane UI tab, thin cross-plane correlator advisories, and `/settings/hcp-correlation` policy.
+- **[Hosted control plane recommendations](features/hosted-control-plane.md)** — Per-hosted-cluster HyperShift control-plane rightsizing: namespace-to-hosted-cluster association, dedicated `/hcp` list/filter/group-by surface with summed savings, Hosted control plane UI tab, thin cross-plane correlator advisories, and `/settings/hcp-correlation` policy, plus the **fleet-capacity advisory** (W4): how many more hosted clusters the eligible workers can host, five scenarios with MCE reference gauges, honest degradation warnings, `/hcp/fleet-capacity` card list and history trend.
 
 ## Analysis and policy
 
@@ -145,6 +145,31 @@ Technical plans: [`docs/plans/recommendation-explanations.md`](https://github.co
 - **Table wrapper consolidation** — Consolidated LRU caches onto
   `hashicorp/golang-lru/v2`, replacing four custom implementations.
   ([Issue #95](https://github.com/pgarciaq/ros-ocp-backend/issues/95))
+
+## Recently completed (Phase 16–17)
+
+- **Multi-GPU awareness and node GPU count** (Phase 16) — node recommendations reason
+  about the full GPU set per node; see the
+  [changelog](changelog.md#100-phase16--2026-07-02--phase-16-multi-gpu-awareness-and-node-gpu-count).
+- **HCP fleet-capacity advisory (W4, [#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392))** —
+  `GET .../hcp/fleet-capacity` (latest per authorized management cluster) and
+  `.../fleet-capacity/history`: five scenarios (`request`, `low/average/medium/high_qps`)
+  from the published-sizing model with MCE capacity gauges as a separately labeled
+  reference; headroom withheld on unknown occupancy/placement/QPS or affirmed pressure;
+  explicit warnings (`stale`, `below_version_floor`, `pressured`, `pressure_unknown`,
+  `mce_may_be_stale`, `shared_infrastructure`). UI capacity cards on the Hosted control
+  plane tab. Operator CSV: `ros-openshift-hcp-capacity-*.csv` (25-column contract; the
+  KMO emission rides the rosocp fork branch — lab-proven, upstream release pending).
+- **robne CLI HCP support ([#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700))** —
+  `robne recommend --plugins hcp` renders the same advisory as the service from
+  management-cluster payloads (JSON envelope v12 `hcp_recommendations` sibling,
+  validate/diff/explain). Shared 25-column parser and serve-time rules with the backend
+  (`librobne/csv`, `librobne/hcp`). Two pre-release renames: plugin spelling
+  `cluster_quota` → `cluster-quota`, JSON root `recommendations` →
+  `container_recommendations`.
+- **nise capacity generator ([#702](https://github.com/pgarciaq/ros-ocp-backend/issues/702))** —
+  nise emits `ros-openshift-hcp-capacity-YYYYMM.csv` from an `hcp_capacity` static-YAML
+  block, defaults pinned to the hand-verified healthy-fleet fixture.
 
 ## Coming soon
 

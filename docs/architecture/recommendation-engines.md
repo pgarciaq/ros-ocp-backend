@@ -36,7 +36,8 @@ persist. See [ADR-0303](../adr/0303-library-extraction-librobne.md).
 | **quota** | No (threshold-based) | None | Yes (ingestion, `tighten` only) | [`recommend_quota.go`](../../librobne/quota/recommend.go) |
 | **cluster-quota** | No (threshold-based) | None | Yes (ingestion, `tighten` only) | [`recommend_cluster_quota.go`](../../librobne/quota/cluster.go) |
 | **snapshot** | No | None | Yes (recoverable cost) | [`snapshot_classify.go`](../../librobne/snapshot/classify.go) |
-| **vm** | Yes (`cost`, `performance`) | 7d / 15d / 30d (min 3 / 7 / 15 days) | Yes (ingestion); API field `savings` | [`vm_recommender.go`](../../librobne/vm/vm_recommender.go) |
+| **vm** | Yes (`cost`, `performance`) | 7d / 15d / 30d (min 3 / 7 / 15 days) | Yes (ingestion); API field `savings` |
+| **hcp** | Yes (container engines under CP guardrail floors); capacity advisory is threshold/model-based, not percentile | 1d / 7d / 15d | Yes (grouped per hosted cluster) | container engines + `librobne/hcp` (W4 published-sizing model) | [`vm_recommender.go`](../../librobne/vm/vm_recommender.go) |
 
 **Business hours** (container + namespace): optional second digest stream using the
 same cost/performance percentiles as container. See [Business Hours](../features-business-hours.md).
@@ -435,6 +436,37 @@ When `ROS_SAVINGS_ESTIMATES_ENABLED=false` or rates are missing, `savings` is JS
 
 Public docs: [Virtual Machine recommendations](../../docs-site/features/virtual-machines.md),
 [Plugin reference — vm](../../docs-site/plugin-reference/vm.md).
+
+---
+
+## Hosted Control Plane (HCP) Recommendations
+
+HCP control-plane pods run through the **container engines** with a
+control-plane guardrail profile: strict-guard components (etcd,
+kube-apiserver, konnectivity, …) take floors derived from the window-median
+request P50 — floors only ever raise recommendations, never lower or exclude
+rows — and replica optimization is suppressed (operators own control-plane
+topology). Rules and the workload-inventory pin live in
+[`librobne/hcp`](librobne/hcp/inventory.go);
+serving carries `hosted_cluster_id` association with fail-closed semantics.
+
+Two HCP-specific mechanisms are **not** sizing engines:
+
+- **Thin cross-plane correlator (W2)** — an hourly advisory job joining
+  hosted API pain with management-plane stress. Advisory-only; it never
+  modifies recommendations. Policy via `/settings/hcp-correlation`.
+- **Fleet-capacity advisory (W4)** — the published-sizing model
+  ([`librobne/hcp` capacity](librobne/hcp/capacity.go)):
+  five scenarios (`request`, `low/average/medium/high_qps`) computed from
+  eligible worker allocatable capacity, hosted-cluster occupancy, and QPS
+  baselines, with MCE capacity gauges as a separately labeled reference.
+  Headroom is withheld (null) when occupancy, placement, or QPS is unknown or
+  when node pressure is affirmed. Serve-time derivation (freshness window,
+  warnings, scenario status) is shared with the robne CLI in
+  [`librobne/hcp/serve.go`](librobne/hcp/serve.go).
+
+Design: [ADR-0334](docs/adr/0334-fleet-admission-headroom-w4.md) (amended).
+Consumer contract: [Hosted Control Plane Recommendations](features/hosted-control-plane.md).
 
 ---
 

@@ -1,6 +1,6 @@
 # Hosted Control Plane Recommendations
 
-> **Last verified:** 2026-10-26
+> **Last verified:** 2026-10-27
 
 !!! success "Status: Shipped"
     Per-hosted-cluster rightsizing for OpenShift HyperShift control planes:
@@ -13,7 +13,7 @@
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift/hcp` (list),
     `GET .../hcp/{recommendation-id}` (detail)  
-    **Fleet-capacity advisory (implemented; pending integration release):** `GET .../hcp/fleet-capacity` (latest per cluster), `GET .../hcp/fleet-capacity/history?filter[cluster_uuid]=…` (per-cluster trend)
+    **Fleet-capacity advisory (implemented; pending integration release):** `GET .../hcp/fleet-capacity` (latest per cluster), `GET .../hcp/fleet-capacity/history?filter[cluster_uuid]=…` (per-cluster trend). "Pending integration release" = the KMO CSV emission rides the rosocp fork branch (lab-proven); an upstream KMO release has not cut it yet. Offline consumers do not wait: `robne recommend --plugins hcp` ([#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)) reads the same CSV from a payload, and nise can generate it for testing ([#702](https://github.com/pgarciaq/ros-ocp-backend/issues/702))
     **Configurable:** Yes (correlator policy via `/settings/hcp-correlation`)  
     **Engines:** cost, performance (both returned on every response)
 

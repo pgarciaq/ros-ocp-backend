@@ -1,6 +1,6 @@
 # Hosted Control Plane & Fleet Control-Plane Optimization
 
-> **Last verified:** 2026-10-26
+> **Last verified:** 2026-10-27
 
 !!! success "Status: Core shipped; roadmap continues — see [Hosted Control Plane Recommendations](../features/hosted-control-plane.md)"
     Wedges W0 (topology), W1 (management-CP rightsizing), and thin W2
@@ -46,7 +46,7 @@
 | W1 management-CP rightsizing | Shipped | `hcp` plugin, association, dedicated `/hcp` surface, grouped savings, UI tab; REST/UI verification complete (#640/#654) |
 | Thin W2 correlator | Shipped | SLO rollup store, hourly advisories, `/settings/hcp-correlation` |
 | W3 unused hosted clusters | Core implemented; evidence/follow-ups remain | Usage/CPU idle advisory and NodePool-zero short lane (#658/#664/#673/#674); #688's aged specimen feeds #663; no CP-waste dollars or auto-delete; #665 live-consumption proof remains |
-| W4 fleet headroom | Implemented (2026-10-26, pending integration release) | ADR-0334 amended (2026-10-24): ROS-native published-sizing engine from raw management-cluster inputs, with MCE capacity gauges as a separately labeled reference. Stale/missing inputs and pressure degrade honestly; never a lab-universal N (#392, #409) |
+| W4 fleet headroom | Implemented (2026-10-26, pending integration release) | ADR-0334 amended (2026-10-24): ROS-native published-sizing engine from raw management-cluster inputs, with MCE capacity gauges as a separately labeled reference. Stale/missing inputs and pressure degrade honestly; never a lab-universal N (#392, #409). Shipped follow-ups: robne CLI `--plugins hcp` (#700, closed) and the nise capacity generator (#702, closed) |
 | W5 API tax | Planned / gated | ADR-0335 GO; APIRequestCount data and operator read path remain gated (#657) |
 | RH-operated (M3) bridge | Investigation deferred | [#620](https://github.com/pgarciaq/ros-ocp-backend/issues/620) |
 | Cost distribution | Postponed | Association is not an allocation key |

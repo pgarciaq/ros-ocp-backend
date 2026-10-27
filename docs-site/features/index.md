@@ -1,6 +1,6 @@
 # Features Overview
 
-> **Last verified:** 2026-10-05
+> **Last verified:** 2026-10-27
 
 ROS-OCP Backend provides intelligent resource optimization recommendations for
 OpenShift clusters. It analyzes historical usage from the koku-metrics-operator,
@@ -15,7 +15,7 @@ dollar impact using Koku cost model rates.
 | Usage Percentile-Band Plots | container (shipped); vm, namespace, node, jvm (planned) | — | No | No (detail-only; `p50`/`p95`/`p99`/`max` from digests) |
 | Namespace Quota Optimization | namespace | cost, performance | No (by design; use container-level savings) | Yes |
 | Node Consolidation | node | cost, performance | Yes | Yes |
-| Hosted Control Plane | hcp | cost, performance | Yes (grouped) | Yes (correlator policy) |
+| Hosted Control Plane | hcp | cost, performance | Yes (grouped per hosted cluster) | Yes (correlator policy; capacity advisory threshold-free) |
 | MachineSet Aggregation (Tier 1) | node | cost, performance | Yes (aggregated fleet savings) | Yes |
 | GPU MIG Profiling | gpu | single | Yes (container detail) | Yes |
 | GPU Time-Slicing | gpu | single | Yes | Yes |
@@ -50,7 +50,7 @@ dollar impact using Koku cost model rates.
 | [tag-filtering.md](tag-filtering.md) | Label-based filtering |
 | [percentile-band-plots.md](percentile-band-plots.md) | Usage percentile-band plots (replaced boxplots) |
 | [visual-insights.md](visual-insights.md) | Charts, gauges, and heatmaps on recommendation detail pages (**shipped**; list sparklines follow-up) |
-| [robne-cli.md](robne-cli.md) | Standalone `robne` CLI: files → stdout (Phase 1) and CLI-owned Postgres upsert (Phase **2a** shipped) |
+| [robne-cli.md](robne-cli.md) | Standalone `robne` CLI: files → stdout, CLI-owned Postgres upsert, `diff`/`explain`/`version`, HCP fleet-capacity |
 | [dual-engine.md](dual-engine.md) | Cost vs performance engines |
 | [savings-estimations.md](savings-estimations.md) | Dollar savings estimates |
 | [history-and-quality.md](history-and-quality.md) | History and quality metrics |
@@ -123,9 +123,10 @@ confidence with guest-agent adaptivity. Enabled by default; disable with
 Technical design: [`docs/design/vm-recommendations.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md).
 
 **[robne CLI](robne-cli.md)** — Standalone `bin/robne` (`make robne`) computes the
-same container recommendations from local NISE or operator ROS CSVs. Phase 1 writes
-JSON/CSV/table on stdout. Phase **2a** can also upsert into a Postgres this CLI owns
-(`--output postgres://…`, `--apply-schema` on bootstrap/upgrade).
+same recommendations as the service from local NISE or operator ROS CSVs: JSON/CSV/table
+stdout for every shipped entity (envelope v1–v12), CLI-owned Postgres upsert and
+recompute, `robne diff` for CI goldens, `robne explain` for per-recommendation factors,
+and HCP fleet-capacity from management-cluster payloads ([#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)).
 
 **[Integrating librobne](../architecture/librobne.md)** — Embed the same engine in-process
 (https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/).
@@ -137,9 +138,11 @@ sparklines remain an optional follow-up (`ROS_SPARKLINES_ENABLED=false` by defau
 
 ## Planned capabilities
 
-**Phase 14 (in progress):** recommendation explanation factors (`?include=explanation`
-on detail APIs) and GPU time-slicing persistence at ingest. See
-[What's New — Phase 14](../whats-new.md#in-progress-phase-14).
+Recently completed: recommendation explanation factors (`?include=explanation`) and
+GPU time-slicing persistence (Phase 14); pagination/sorting and savings display fixes
+(Phase 15); multi-GPU awareness and node GPU count (Phase 16); the HCP fleet-capacity
+advisory W4 plus the robne CLI HCP support (Phase 17). See
+[What's New](../whats-new.md).
 
 Other upcoming features (MachineSet Tier 2, seasonality, JVM, HPA/VPA, network, local mode)
 are documented separately and are **not yet available**:

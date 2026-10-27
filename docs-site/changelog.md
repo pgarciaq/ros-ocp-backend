@@ -8,6 +8,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **HCP fleet-capacity advisory — W4 ([#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392), [ADR-0334](architecture/adrs.md) amended):**
+  `GET /recommendations/openshift/hcp/fleet-capacity` (latest snapshot per
+  authorized management cluster) and `GET .../hcp/fleet-capacity/history`
+  (newest-first per-cluster trend, `filter[cluster_uuid]` required). Five
+  scenarios (`request`, `low_qps`, `average_qps`, `medium_qps`, `high_qps`)
+  from the native published-sizing model over eligible worker capacity,
+  occupancy, and QPS baselines, with MCE capacity gauges as a separately
+  labeled reference (null = absent, never zero). Headroom is null when
+  occupancy, worker placement, or average QPS is unknown and withheld when
+  node pressure is affirmed. Warnings: `stale`, `below_version_floor`,
+  `pressured`, `pressure_unknown`, `mce_may_be_stale`,
+  `shared_infrastructure`. Ingests the operator's 25-column
+  `ros-openshift-hcp-capacity-*.csv` (KMO emission rides the rosocp fork
+  branch; upstream release pending). Serve-time derivation shared with the
+  robne CLI in `librobne/hcp/serve.go`.
+- **robne CLI HCP fleet-capacity ([#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)):**
+  `robne recommend --plugins hcp` renders the same advisory as the service
+  from management-cluster payloads (disconnected-mode tarball/dir or reports
+  directory): JSON envelope v12 `hcp_recommendations` sibling carrying the
+  full observation series newest-first, table/CSV rendering of the latest
+  observation, capacity clock (`--now` > YAML > wall), manifest identity
+  (UUID-validated, `"unknown"` fallback), and `validate`/`diff`/`explain`
+  selectors (`--scenario`, `--observed-at`; latest-per-side diff; BH schedule
+  rejection). Shared 25-column parser in `librobne/csv` (single source with
+  backend ingestion). Two pre-release renames: plugin spelling
+  `cluster_quota` → `cluster-quota` (flag/YAML/registry; JSON sibling key
+  `cluster_quota_recommendations` unchanged) and JSON envelope root
+  `recommendations` → `container_recommendations`.
+- **nise HCP capacity generator ([#702](https://github.com/pgarciaq/ros-ocp-backend/issues/702), [pgarciaq/nise](https://github.com/pgarciaq/nise) `185d1e0`):**
+  `nise report ocp` emits the KMO-contract file
+  `ros-openshift-hcp-capacity-YYYYMM.csv` (one monthly accumulator, no
+  cluster id, part-number split rejected) from an `hcp_capacity`
+  static-YAML block; deterministic QPS variation against frozen MCE
+  references; defaults pinned to the hand-verified healthy-fleet fixture
+  (scenarios 7/7/7/5/3).
 - **Management-overhead scope ([#694](https://github.com/pgarciaq/ros-ocp-backend/issues/694), [ADR-0343](architecture/adrs.md)):**
   `filter[scope]=management` on `GET /recommendations/openshift/hcp` (list,
   both grouped variants, detail) selects management-overhead rows: container
