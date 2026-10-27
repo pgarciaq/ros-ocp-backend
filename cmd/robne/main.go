@@ -11,7 +11,11 @@ import (
 )
 
 func main() {
-	if err := newRootCmd().Execute(); err != nil {
+	root := newRootCmd()
+	// Hidden docs generator (#703); excluded from the generated tree by
+	// generateDocs, which builds a fresh public root.
+	root.AddCommand(newManCmd())
+	if err := root.Execute(); err != nil {
 		var ce *cliExit
 		if errors.As(err, &ce) {
 			if ce.Err != nil && ce.Err.Error() != "" {

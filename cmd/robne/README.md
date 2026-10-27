@@ -150,3 +150,28 @@ robne recommend --input postgres://localhost:5432/robne?sslmode=disable \
 ```
 
 Shell completion: `./bin/robne completion bash` (also zsh, fish, powershell).
+
+## Manpages and markdown docs (#703)
+
+`make man` regenerates roff manpages (`docs/man/man1/robne.1`,
+`robne-recommend.1`, …) and a markdown tree (`docs/man/markdown/`) from the
+live cobra command tree, so the pages cannot drift from `--help`. The output
+is committed; CI (`make man-check`, `.github/workflows/man-drift.yml`) fails
+when the committed pages no longer match the tree.
+
+```bash
+make man                 # regenerate into docs/man (commit the result)
+make man-check           # CI drift guard
+
+# Preview without installing (Linux and macOS):
+man -M docs/man robne
+man -M docs/man robne-explain
+
+# Permanent install: copy into a manpath directory, e.g.
+cp docs/man/man1/*.1 /usr/local/share/man/man1/     # Linux
+cp docs/man/man1/*.1 /opt/homebrew/share/man/man1/  # macOS (Homebrew prefix)
+```
+
+Windows has no `man` command — read `docs/man/markdown/` or `--help`.
+The generator is the hidden `robne man` subcommand (`--out`, `--markdown-out`;
+empty value skips that format); it never emits a page for itself.

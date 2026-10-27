@@ -84,6 +84,23 @@ ROBNE_VERSION ?= $(shell git describe --always --dirty 2>/dev/null || echo devel
 robne: ## Build the standalone robne CLI (Phase 1+2a, CGO_ENABLED=0)
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS) -X main.version=$(ROBNE_VERSION)" -o bin/robne ./cmd/robne
 
+.PHONY: man
+man: ## Generate robne manpages + markdown docs into docs/man (#703; commit the result)
+	go run ./cmd/robne man --out docs/man/man1 --markdown-out docs/man/markdown
+
+.PHONY: man-check
+man-check: ## Fail when committed docs/man drifted from the command tree (#703)
+	@tmp=$$(mktemp -d); \
+	trap 'rm -rf $$tmp' EXIT; \
+	go run ./cmd/robne man --out $$tmp/man1 --markdown-out $$tmp/markdown >/dev/null || exit 1; \
+	if ! diff -r docs/man/man1 $$tmp/man1 >/dev/null 2>&1; then \
+		echo "man-check: docs/man/man1 is stale; run 'make man' and commit"; exit 1; \
+	fi; \
+	if ! diff -r docs/man/markdown $$tmp/markdown >/dev/null 2>&1; then \
+		echo "man-check: docs/man/markdown is stale; run 'make man' and commit"; exit 1; \
+	fi; \
+	echo "man-check: docs/man is up to date with the command tree"
+
 .PHONY: build-all
 build-all: build robne ## Build rosocp and robne (not the docs site)
 

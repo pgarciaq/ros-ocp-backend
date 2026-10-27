@@ -239,6 +239,17 @@ rows from term windows.
 If no timestamp can be parsed, the CLI exits with an error. It does not silently use
 `time.Now()`. Spec §3.
 
+## Manpages and offline docs (#703)
+
+`make man` regenerates roff manpages (`docs/man/man1/robne.1` plus one page
+per subcommand) and a markdown tree (`docs/man/markdown/`) from the live
+command tree, so the pages cannot drift from `--help`. The output is
+committed to the repository and CI fails when it no longer matches the tree
+(`make man-check`). Preview without installing: `man -M docs/man robne`
+(works on Linux and macOS; on macOS, permanent install is a copy into
+`/opt/homebrew/share/man/man1` or any `MANPATH` directory). Windows has no
+`man` command — read `docs/man/markdown/` or `--help`.
+
 ## Shell completion
 
 Cobra adds a `completion` subcommand by default:

@@ -1,0 +1,35 @@
+name: robne manpage drift
+
+# #703: committed docs/man must match the cobra command tree. Generation
+# is deterministic (pinned header date), so a plain regen+diff is airtight.
+on:
+  pull_request:
+    paths:
+      - 'cmd/robne/**'
+      - 'docs/man/**'
+      - 'Makefile'
+      - '.github/workflows/man-drift.yml'
+  push:
+    branches: [main, 'pgarciaq-rosocp-superpowers-*']
+    paths:
+      - 'cmd/robne/**'
+      - 'docs/man/**'
+      - 'Makefile'
+      - '.github/workflows/man-drift.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  man-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Check committed manpages and markdown against the command tree
+        run: make man-check
