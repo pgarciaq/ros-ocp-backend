@@ -1634,6 +1634,79 @@ These patterns apply across multiple feature sections above. See each feature's 
 
 ---
 
+## 18. Hosted Control Plane (HCP) Recommendations
+
+Hosted control planes run as ordinary pods in per-hosted-cluster namespaces on
+a **management** cluster. The dedicated `/hcp` surface attributes those
+control-plane container recommendations to the hosted cluster they serve. The
+Optimizations page renders this as the **Hosted control plane** tab.
+
+### List
+
+`GET /api/cost-management/v1/recommendations/openshift/hcp`
+
+Same row shape and pagination as the container list; rows are HCP-namespaced
+container rows only (hosted-application workloads never appear here — they
+live on the Container tab under their own namespaces).
+
+| Param | Behavior |
+|-------|----------|
+| `filter[hosted_cluster_id]` | Narrows to one hosted cluster; unknown IDs return 200 with an empty list |
+| `filter[scope]=management` | Selects the management-overhead scope (the second sub-tab); the only accepted value — unknown values 400 |
+| `group_by[hosted_cluster_id]` | One row per hosted cluster: container count plus summed `estimated_savings` (`MoneyAmount`) |
+| `group_by[namespace]` | One row per namespace under the active scope; with `filter[scope]=management` this serves the overhead sub-tab |
+| `filter[term]` / `filter[engine]` | Display-side projection; rows carry all six variants |
+
+HCP-specific row fields:
+
+| Field | Meaning |
+|-------|---------|
+| `hosted_cluster_id` | Associated hosted cluster (omitted when empty — never guessed) |
+| `incomplete` | `true` when the row's namespace is HCP-evidenced yet association is missing — render as an `Incomplete` state, never as healthy attribution |
+| `management` | `true` when the row's cluster is a management cluster — a topology fact, independent of `incomplete` |
+| `estimated_savings` (grouped) | Per-hosted-cluster summed cents as `MoneyAmount` |
+
+The two flags answer different questions: `management` = *which kind of
+cluster does this row run on*; `incomplete` = *is hosted attribution expected
+but missing*. Both can be `true` on the same row.
+
+### Detail
+
+`GET .../hcp/{recommendation-id}` — same shape as container detail
+(`include=explanation` opt-in, `filter[term]`/`filter[engine]` honored).
+Off-scope IDs 404 under the active scope (a management row 404s without the
+scope param and vice versa).
+
+### Fleet-capacity advisory (W4)
+
+How many more hosted control planes could the management cluster's eligible
+workers host? Two endpoints:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET .../hcp/fleet-capacity` | Card-list discovery surface: the latest snapshot **per authorized management cluster**; `filter[cluster_uuid]` narrows to one |
+| `GET .../hcp/fleet-capacity/history?filter[cluster_uuid]=…` | Newest-first per-cluster trend (cluster filter **required**), `limit`/`offset` pagination |
+
+Each row carries five scenarios — `request`, `low_qps`, `average_qps`,
+`medium_qps`, `high_qps` — with:
+
+- `max_hcs` (integer estimate), `limiting_resource` (empty = no estimate for
+  that scenario), `headroom` (signed; **null** when occupancy, worker
+  placement, or average QPS is unknown, and **withheld** when node pressure is
+  affirmed — render as "no estimate", never as zero), and `status`
+  (`illustrative_only` for mixed/single-replica basis).
+- `mce_references` — MCE capacity gauges as a separately labeled reference;
+  **null means absent** (never render as zero).
+- Warnings: `stale`, `below_version_floor`, `pressured`, `pressure_unknown`,
+  `mce_may_be_stale`, `shared_infrastructure` — render as caution badges, not
+  errors.
+
+Unauthorized or unknown clusters are non-disclosing (200 with empty data).
+Consumer contract with full field semantics:
+[Hosted Control Plane Recommendations](features/hosted-control-plane.md).
+
+---
+
 ## Appendix: Notification codes endpoint
 
 `GET /recommendations/openshift/notification-codes` returns the machine-readable notification catalog. Use it to populate dynamic tooltips and badge text. All notification codes are documented in [Notification codes](architecture/notification-codes.md).

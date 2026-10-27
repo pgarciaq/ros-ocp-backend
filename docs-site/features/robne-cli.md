@@ -8,7 +8,7 @@
     [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471),
     [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463),
     [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474),
-    namespace + node/GPU + PVC + VM + quota + cluster_quota slices of [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472),
+    namespace + node/GPU + PVC + VM + quota + cluster-quota slices of [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472),
     [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473),
     [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481),
     [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482),
@@ -31,7 +31,7 @@
     HTML API browse: https://pgarciaq.github.io/ros-ocp-backend/pkg/ .
     (https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/).  
     **Input:** NISE ROS CSVs (container; namespace; node/GPU from the same container ROS; PVC from storage CSVs; VM from `ocp_ros_vm_usage` / `ros-openshift-vm-usage`; quota from namespace ROS; ClusterResourceQuota from `ocp_ros_cluster_quota` / `ros-openshift-cluster-quota`; snapshot inventory from `ocp_snapshot_inventory` / `ros-openshift-snapshot`; HCP fleet-capacity snapshots from `ros-openshift-hcp-capacity-*` — management-cluster payloads only). Default `--plugins` is **all shipped plugins** (implicit skip when a dedicated CSV is missing). Pin `--plugins` to override. koku-metrics-operator package tarball/dir, or this CLI’s digest tables (`--input postgres://`)
-    **Output:** JSON, CSV, table to stdout (Phase 1; namespace/node/GPU/PVC/VM/quota/cluster_quota/snapshot JSON siblings on version 2/3/4/5/6/7/8/9; business-hours siblings on version 10; HCP fleet-capacity `hcp_recommendations` sibling on version 12); PostgreSQL upsert of recs + container and other-entity digests (Phase **2a** + [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) + [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) + **2c** [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) + [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) + Path A [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482); snapshot is files-only; BH dual-writes container/namespace digest streams)
+    **Output:** JSON, CSV, table to stdout (Phase 1; namespace/node/GPU/PVC/VM/quota/cluster-quota/snapshot JSON siblings on version 2/3/4/5/6/7/8/9; business-hours siblings on version 10; HCP fleet-capacity `hcp_recommendations` sibling on version 12); PostgreSQL upsert of recs + container and other-entity digests (Phase **2a** + [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) + [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) + **2c** [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) + [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) + Path A [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482); snapshot is files-only; BH dual-writes container/namespace digest streams)
     **Config:** user file + cwd overlay — YAML replaces top-level keys; rate card merges by cluster id ([overlay](#config-overlay-yaml-and-rate-card))  
     **Infrastructure:** None — no Kafka, no API server, no Masu, no Settings API
 
@@ -60,7 +60,7 @@ zero-infrastructure tool for development, testing, air-gapped operator packages
 
 - **(a) Testing:** NISE CSVs → stdout recs, to check a new type or algorithm (no Postgres)
 - **(b) Support / debug:** customer operator payload → stdout recs (no Postgres; same as (a))
-- **(c) Pedestrian ROS:** daily payloads → `robne` → Postgres this CLI owns (embed migrations, upgrade when the binary is newer). Container recs (**2a**), digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)), digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)), other-entity rec upsert (**2c**, [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)), other-entity digest INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)), and other-entity Path A SELECT ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)) are shipped. Namespace/node/GPU/PVC/VM/quota/cluster_quota stdout is **2b**. Snapshot files → stdout is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) (files-only). Business hours ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)) dual-writes container/namespace digest streams. Not “seed a live Helm ROS.”
+- **(c) Pedestrian ROS:** daily payloads → `robne` → Postgres this CLI owns (embed migrations, upgrade when the binary is newer). Container recs (**2a**), digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)), digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)), other-entity rec upsert (**2c**, [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)), other-entity digest INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)), and other-entity Path A SELECT ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)) are shipped. Namespace/node/GPU/PVC/VM/quota/cluster-quota stdout is **2b**. Snapshot files → stdout is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) (files-only). Business hours ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)) dual-writes container/namespace digest streams. Not “seed a live Helm ROS.”
 - **CI / goldens:** pin `--now`, compare JSON with `robne diff` ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480))
 
 ---
@@ -73,7 +73,7 @@ The JSON/CSV row is a portable artifact for `robne diff` and goldens. Explanatio
 
 To see **why** a number is that number, run `robne explain` on the **same** `--input` / `--now` / `--config` as `recommend`. `explain` re-runs the engine and prints one recommendation’s identity, recommended numbers, and snake_case explanation factors (`data_days`, percentiles, OOM bump, floors, slopes, and the matching fields for other entity types). It does not read a recommend JSON file — that file has no explanation fields.
 
-**One entity type per run.** `--plugins` is exactly one name. Omit it for container. Two or more names is an error. YAML `plugins:` does not select the type. GPU: `--container` selects MIG; `--node` without `--container` selects timeslicing. `--schedule business_hours` is container, namespace, node, gpu, and vm ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)). PVC/quota/cluster_quota/snapshot error. HCP capacity explain (`--plugins hcp --scenario <name> [--observed-at <RFC3339>]`, [#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)) also rejects `--schedule business_hours`. Product APIs keep thin detail nests ([#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484)). Inapplicable flags are errors.
+**One entity type per run.** `--plugins` is exactly one name. Omit it for container. Two or more names is an error. YAML `plugins:` does not select the type. GPU: `--container` selects MIG; `--node` without `--container` selects timeslicing. `--schedule business_hours` is container, namespace, node, gpu, and vm ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)). PVC/quota/cluster-quota/snapshot error. HCP capacity explain (`--plugins hcp --scenario <name> [--observed-at <RFC3339>]`, [#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)) also rejects `--schedule business_hours`. Product APIs keep thin detail nests ([#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484)). Inapplicable flags are errors.
 
 | `--plugins` | Required | Optional |
 |---|---|---|
@@ -85,9 +85,9 @@ To see **why** a number is that number, run `robne explain` on the **same** `--i
 | `pvc` | `--namespace` `--pvc` `--term` | — |
 | `vm` | `--namespace` `--vm-name` `--term` `--engine` (`short_term` / `medium_term` / `long_term`) | — |
 | `quota` | `--namespace` `--quota-name` | `--recommendation-type` if not unique |
-| `cluster_quota` | `--cluster-quota-name` | `--recommendation-type` if not unique |
+| `cluster-quota` | `--cluster-quota-name` | `--recommendation-type` if not unique |
 | `snapshot` | `--namespace` `--snapshot-name` | — |
-| `hcp` (planned [#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)) | `--scenario` (`request` `low_qps` `average_qps` `medium_qps` `high_qps`) | `--observed-at` (default latest) |
+| `hcp` ([#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)) | `--scenario` (`request` `low_qps` `average_qps` `medium_qps` `high_qps`) | `--observed-at` (default latest) |
 
 ```bash
 # 1. What to apply (list)
@@ -112,12 +112,12 @@ robne explain --input ./ocp_ros_usage.csv --plugins gpu \
 robne explain --input ./ocp_ros_usage.csv --plugins gpu \
   --node gpu-1 --gpu-model "NVIDIA A100-SXM4-80GB" --term short
 
-# HCP fleet capacity (planned in #700 — not yet shipped)
+# HCP fleet capacity (#700 — shipped)
 robne explain --input ./metrics.tar.gz --plugins hcp \
   --scenario average_qps --observed-at 2026-10-25T14:00:00Z
 ```
 
-### HCP capacity input: identity and series (planned in #700)
+### HCP capacity input: identity and series
 
 - **One cluster per input.** Every file in one directory/tarball belongs to one cluster; all capacity CSVs merge into one series.
 - **Identity:** manifest `cluster_id`, else YAML `cluster_uuid`, else `"unknown"`. YAML overrides; manifest-vs-YAML disagreement is a hard error; manifest-vs-row mismatch warns on stderr (hand-copied payload tripwire).
@@ -157,7 +157,7 @@ robne recommend --input ./csvs/ --plugins gpu --format json
 robne recommend --input ./ocp_storage_usage.csv --plugins pvc --format json
 robne recommend --input ./ocp_ros_vm_usage.csv --plugins vm --format json
 robne recommend --input ./ocp_ros_namespace_usage.csv --plugins quota --format json
-robne recommend --input ./ocp_ros_cluster_quota.csv --plugins cluster_quota --format json
+robne recommend --input ./ocp_ros_cluster_quota.csv --plugins cluster-quota --format json
 robne recommend --input ./ocp_snapshot_inventory.csv --plugins snapshot --format json
 # Mix with containers: JSON only (CSV/table are one entity per stream)
 robne recommend --input ./csvs/ --plugins container,namespace,node --format json
@@ -203,12 +203,12 @@ YAML `plugins:` does not select the explain type. Inapplicable flags are errors.
 Engine knobs are a YAML file. **Sample:** [`cmd/robne/robne.yaml.sample`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/cmd/robne/robne.yaml.sample).
 
 This file is **not** the Settings API and **not** `ROS_*` admin locks. `--plugins` is an
-allowlist of recommenders (`container`, `namespace`, `node`, `gpu`, `pvc`, `vm`, `quota`, `cluster_quota`, `snapshot`), not `internal/plugins` registration.
+allowlist of recommenders (`container`, `namespace`, `node`, `gpu`, `pvc`, `vm`, `quota`, `cluster-quota`, `snapshot`, `hcp`), not `internal/plugins` registration.
 Unknown keys are errors. Omitted keys use librobne compiled defaults. **Default `--plugins` is all shipped plugins** (omit the flag and YAML `plugins:`). Implicit default skips a missing dedicated CSV / empty Path A table; an explicit list errors.
 
-**Business hours** (`business_hours:`) is cluster-wide YAML, not a `--plugins` name and not Settings JSON nesting. Omit the key for compiled default off. When `enabled: true`, robne always keeps an unweighted `all_hours` stream and adds a second `business_hours` stream (sample `interval_start` vs the YAML window in the YAML IANA zone; `--now` does not classify hours). JSON `version` is **10** for container/namespace BH siblings (`business_hours_recommendations`, `business_hours_namespace_recommendations`) and **11** when node, gpu, or vm is also on ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)). Node/GPU/timeslicing/VM keys (`business_hours_node_recommendations`, `business_hours_gpu_recommendations`, `business_hours_gpu_timeslicing_recommendations`, `business_hours_vm_recommendations`) are **full CLI DTOs** — not the product thin nest. Arrays, never `null`; omit a key when that plugin is off; empty after weighting is still `[]` (never copy all-hours into a BH key). BH rows with sizing set `notification_codes` to **79** / **80** / **81** / **82** only ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)); all-hours siblings omit the key. `recommendations` / `namespace_recommendations` stay all_hours. `--format csv` / `table` is a hard error (one entity and one schedule stream — use JSON). Overnight (`end_time < start_time`) is allowed; the window is local wall clock in the YAML IANA zone (not elapsed duration; DST may skip or repeat an hour). Equal start/end is not. Invalid IANA timezone is an error. Overlay replaces the whole `business_hours:` key. YAML `business_hours` with explicit `--plugins node` / `gpu` / `vm` is **allowed**. Remaining entity YAML blocks (`node:`, `gpu:`, `pvc:`, `vm:`, `quota:`, `cluster_quota:`, `snapshot:`) stay errors until
-that entity’s settings schema unlocks. `--plugins node` / `gpu` / `pvc` / `vm` / `quota` / `cluster_quota` / `snapshot` use compiled defaults
-without unlocking those YAML blocks. Namespace has no reserved `namespace:` block — it reuses container `sizing` / `terms`.
+**Business hours** (`business_hours:`) is cluster-wide YAML, not a `--plugins` name and not Settings JSON nesting. Omit the key for compiled default off. When `enabled: true`, robne always keeps an unweighted `all_hours` stream and adds a second `business_hours` stream (sample `interval_start` vs the YAML window in the YAML IANA zone; `--now` does not classify hours). JSON `version` is **10** for container/namespace BH siblings (`business_hours_recommendations`, `business_hours_namespace_recommendations`) and **11** when node, gpu, or vm is also on ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)). Node/GPU/timeslicing/VM keys (`business_hours_node_recommendations`, `business_hours_gpu_recommendations`, `business_hours_gpu_timeslicing_recommendations`, `business_hours_vm_recommendations`) are **full CLI DTOs** — not the product thin nest. Arrays, never `null`; omit a key when that plugin is off; empty after weighting is still `[]` (never copy all-hours into a BH key). BH rows with sizing set `notification_codes` to **79** / **80** / **81** / **82** only ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)); all-hours siblings omit the key. `container_recommendations` / `namespace_recommendations` stay all_hours. `--format csv` / `table` is a hard error (one entity and one schedule stream — use JSON). Overnight (`end_time < start_time`) is allowed; the window is local wall clock in the YAML IANA zone (not elapsed duration; DST may skip or repeat an hour). Equal start/end is not. Invalid IANA timezone is an error. Overlay replaces the whole `business_hours:` key. YAML `business_hours` with explicit `--plugins node` / `gpu` / `vm` is **allowed**. Remaining entity YAML blocks (`node:`, `gpu:`, `pvc:`, `vm:`, `quota:`, `cluster-quota:`, `snapshot:`) stay errors until
+that entity’s settings schema unlocks. `--plugins node` / `gpu` / `pvc` / `vm` / `quota` / `cluster-quota` / `snapshot` / `hcp` use compiled defaults
+without unlocking those YAML blocks. Namespace has no reserved `namespace:` block — it reuses container `sizing` / `terms`. Pre-release rename (#700): the plugin spelling is `cluster-quota` (flag and YAML key); an old `cluster_quota:` YAML block now hard-errors on the unknown key — rename it. The JSON sibling key `cluster_quota_recommendations` keeps its stable snake_case spelling.
 
 How files stack (replace vs merge): [Config overlay](#config-overlay-yaml-and-rate-card).
 
@@ -265,7 +265,7 @@ One `--input` path. Detect by filename (`DetermineCSVType`: `ocp_ros_usage` and
 `ros-openshift-namespace-` for namespace — classified **before** `ocp_ros_usage`)
 **and** header names. Default `--plugins` (all shipped) **skips** a plugin whose dedicated CSV is missing.
 An **explicit** `--plugins` / YAML `plugins:` **errors** when that plugin’s input is missing. Cluster-quota files (`ocp_ros_cluster_quota` / `ros-openshift-cluster-quota-`,
-classified **before** namespace) need the `cluster_quota` plugin. Snapshot files (`ocp_snapshot_inventory` / `ros-openshift-snapshot-*` / `cm-openshift-snapshot-inventory`,
+classified **before** namespace) need the `cluster-quota` plugin. Snapshot files (`ocp_snapshot_inventory` / `ros-openshift-snapshot-*` / `cm-openshift-snapshot-inventory`,
 classified **before** blanket `cm-openshift-*`) need the `snapshot` plugin.
 
 A classified **primary** ROS file (container, namespace, storage, VM usage, cluster-quota, snapshot) that is **present** but missing required columns is an error for both a directory and a `.tar.gz` ([#506](https://github.com/pgarciaq/ros-ocp-backend/issues/506)). Cost-only / unknown names in a mixed input are skipped. Malformed VM-PVC / VM-GPU companions still degrade. Missing file ≠ broken headers.
@@ -311,13 +311,13 @@ keep `--transform='s|^\./||'` until koku ships. Spec §8.
   "cluster_id": "cluster-a",
   "now": "2026-08-01T02:00:00Z",
   "skipped_rows": 0,
-  "recommendations": [ { "namespace": "app", "term": "short", "engine": "cost", "rec_cpu_request_mc": 58, "estimated_savings_cents": null } ]
+  "container_recommendations": [ { "namespace": "app", "term": "short", "engine": "cost", "rec_cpu_request_mc": 58, "estimated_savings_cents": null } ]
 }
 ```
 
 Row keys match the CSV header. Missing savings are JSON `null` (not omitted). Pin `--now` in CI. Phase 3 `robne diff` diffs this envelope. Spec §5.
 
-That `"version"` integer is **this run** (max plugin sibling; 10 when business hours is on), not which `robne` you installed. `robne version` ([#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489)) prints binary identity (`make robne` injects `git describe`; `go build` stays `devel`) and the plugin → envelope bump table. `business_hours` in that table is the YAML bump, not a `--plugins` name. There is no `--version` flag.
+That `"version"` integer is **this run** (max plugin sibling; 10 when business hours is on; 12 when hcp is on), not which `robne` you installed. `robne version` ([#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489)) prints binary identity (`make robne` injects `git describe`; `go build` stays `devel`) and the plugin → envelope bump table. `business_hours` in that table is the YAML bump, not a `--plugins` name. There is no `--version` flag.
 
 When `--plugins` includes `namespace`, `version` is at least **2** and the envelope adds sibling
 `namespace_recommendations` (always an array, never `null`). `--plugins node` is version **3**
@@ -325,15 +325,15 @@ When `--plugins` includes `namespace`, `version` is at least **2** and the envel
 `gpu_timeslicing_recommendations`); `--plugins pvc` is version **5**
 (`pvc_recommendations`); `--plugins vm` is version **6** (`vm_recommendations`;
 timeslicing is a column on the VM row); `--plugins quota` is version **7**
-(`quota_recommendations`; same namespace ROS CSV; empty array when no `quota_name`); `--plugins cluster_quota` is version **8**
+(`quota_recommendations`; same namespace ROS CSV; empty array when no `quota_name`); `--plugins cluster-quota` is version **8**
 (`cluster_quota_recommendations`; dedicated CRQ CSV; empty `namespaces` sums all in-memory namespace quota recs; memory is **bytes**); `--plugins snapshot` is version **9**
-(`snapshot_recommendations`; inventory CSV; empty `notification_codes` is `[]`; files-only). When YAML `business_hours.enabled` is true, `version` is **10** and the envelope adds `business_hours_recommendations` and `business_hours_namespace_recommendations` (always arrays). `recommendations` stays container-only all_hours. CSV/table cannot mix
+(`snapshot_recommendations`; inventory CSV; empty `notification_codes` is `[]`; files-only). `--plugins hcp` is version **12** (`hcp_recommendations`; capacity CSV; full observation series newest-first; the ladder assigns capacity after business hours, so BH+hcp emits v12 carrying both siblings). When YAML `business_hours.enabled` is true, `version` is **10** and the envelope adds `business_hours_recommendations` and `business_hours_namespace_recommendations` (always arrays). `container_recommendations` stays container-only all_hours. CSV/table cannot mix
 plugins **or** schedule streams — use JSON. Spec §5 / §7 / [ADR-0336](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0336-robne-json-entity-sibling-arrays.md).
 `--output postgres://` upserts recs for shipped 2b plugins ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) and INSERTs other-entity daily digests ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)) — not snapshot. It also persists the tarball manifest's cluster-topology classification on the `clusters` row (`dedicated`/`hosted`/`management`, `unknown` when the input carries no manifest) ([#407](https://github.com/pgarciaq/ros-ocp-backend/issues/407)). With business hours on, it dual-writes container and namespace `business_hours` digest rows; namespace recs stay all-hours like container ([#516](https://github.com/pgarciaq/ros-ocp-backend/issues/516)). `--input postgres://`
 SELECTs stored days for listed plugins ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) containers, [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) other entities) and recomputes recs; empty own-table SELECT is an error when the plugin is **explicit**; implicit default skips. Explicit `--plugins snapshot` with Path A is a hard error. Path A plus `business_hours.enabled` and no `business_hours` digest rows (after dropping empty plugins) is a hard error — no fallback to all_hours.
 
 ```bash
-jq '.recommendations[] | select(.term=="short" and .engine=="cost") | .rec_cpu_request_mc'
+jq '.container_recommendations[] | select(.term=="short" and .engine=="cost") | .rec_cpu_request_mc'
 ```
 
 Phase **2a** PostgreSQL is use case **(c)**: this binary **embeds** product `migrations/`.
@@ -515,6 +515,7 @@ All types supported by librobne, enabled via `--plugins` / YAML `plugins`:
 - namespace quota (**Phase 2b** — stdout shipped from namespace ROS optional quota columns; **2c** rec upsert shipped; digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) shipped)
 - cluster quota (**Phase 2b** — CRQ CSV stdout shipped; empty `namespaces` sums all in-memory namespace quota recs; **2c** rec upsert shipped; digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) shipped)
 - snapshot ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) — inventory CSV stdout shipped; files-only, not 2b, not Path A)
+- HCP fleet-capacity ([#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700) — capacity CSV stdout shipped; management-cluster payloads only; envelope 12 `hcp_recommendations` sibling with the full observation series; files-only, no Path A; validate/diff/explain selectors)
 
 Node/GPU still need **container ROS CSV**. PVC needs a **storage** CSV (`ocp_storage_usage` / `ros-openshift-storage`).
 VM needs a **usage** CSV (`ocp_ros_vm_usage` / `ros-openshift-vm-usage`).
@@ -531,7 +532,7 @@ Snapshot needs an **inventory CSV** (`ocp_snapshot_inventory` / `ros-openshift-s
 | **Phase 1** | Container from NISE **or** operator tarball/dir → JSON/CSV/table. YAML, `--plugins`, `--now`, `--rate-card`, `validate`. `librobne/csv` lands here. **Shipped.** |
 | **Phase 2a** | Use case (c): embed migrations, `migrate.Up()`, ensure cluster, container upsert ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)). **Shipped.** |
 | **pgdigest** | Container digest INSERT into this CLI’s DB ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)). **Shipped.** |
-| **Phase 2b** | Other entity CSVs → stdout envelopes ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)). **Namespace + node/GPU + PVC + VM + quota + cluster_quota stdout shipped.** Remaining 2b under #472 is none. Snapshot is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) (**shipped**). |
+| **Phase 2b** | Other entity CSVs → stdout envelopes ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)). **Namespace + node/GPU + PVC + VM + quota + cluster-quota stdout shipped.** Remaining 2b under #472 is none. Snapshot is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) (**shipped**). |
 | **Phase 2c** | Other entity rec upsert ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)). **Shipped.** Not digests. |
 | **Phase 2d** | Recompute from **this CLI’s** container digest tables ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)). **Shipped (container-only).** |
 | **Other-entity digest INSERT** | [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481). **Shipped.** [#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505): PVC/quota merge like ingest; other entities LWW. [#508](https://github.com/pgarciaq/ros-ocp-backend/issues/508): YAML `org_id` must match existing PVC rows for that cluster. Persist built days. |
@@ -541,6 +542,7 @@ Snapshot needs an **inventory CSV** (`ocp_snapshot_inventory` / `ros-openshift-s
 | **Phase 3** | Diff, container explain, CI helpers ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)). **Shipped.** |
 | **explain other entities** | Extend `robne explain` ([#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490)). **Shipped.** One entity type per run. |
 | **binary identity** | `robne version` ([#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489)). **Shipped.** Per-run JSON `version` unchanged. |
+| **HCP fleet-capacity** | Capacity CSV → `hcp_recommendations` sibling, validate/diff/explain, shared parser with backend ingestion ([#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)). **Shipped.** Envelope 12; two pre-release renames: plugin spelling `cluster_quota`→`cluster-quota` (rename the key in your robne.yaml) and JSON root `recommendations`→`container_recommendations`. |
 
 ---
 
@@ -568,6 +570,6 @@ Snapshot needs an **inventory CSV** (`ocp_snapshot_inventory` / `ros-openshift-s
 - No Masu, Kafka, Settings API, admin locks, or FX caches
 - No cost/savings without a rate card
 - No tag enrichment or cloud tag correlation (central-only)
-- Remaining entity YAML blocks (`node:`, `gpu:`, `pvc:`, `vm:`, `quota:`, `cluster_quota:`, `snapshot:`) stay reserved
+- Remaining entity YAML blocks (`node:`, `gpu:`, `pvc:`, `vm:`, `quota:`, `cluster-quota:`, `snapshot:`) stay reserved
 - CLI BH siblings for node/GPU/timeslicing/VM are full DTOs (envelope 11); product APIs stay thin detail nests ([#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484)/[#486](https://github.com/pgarciaq/ros-ocp-backend/issues/486)). PVC/quota/snapshot have no BH.
 - NISE still emits one ROS container row per container; N GPU-identity rows are [#502](https://github.com/pgarciaq/ros-ocp-backend/issues/502)

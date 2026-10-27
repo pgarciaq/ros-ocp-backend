@@ -13,7 +13,7 @@ section. **[Visual Insights](../features/visual-insights.md)** and the
 
 | Page | Topic |
 |------|-------|
-| *(Phase 14 — in progress)* | Recommendation explanations (`?include=explanation`) and GPU time-slicing persistence — see [What's New](../whats-new.md#in-progress-phase-14) and [`docs/plans/`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans) |
+| Recommendation explanations and GPU time-slicing persistence | Shipped with Phase 14 (`?include=explanation`, timeslicing persistence) — see [What's New](../whats-new.md) |
 | [machineset-recommendations.md](machineset-recommendations.md) | MachineSet replica and instance-type right-sizing (Tier 1 list API **shipped**; Tier 2 engine planned) |
 | [autoscaler-optimization.md](autoscaler-optimization.md) | MachineAutoscaler min/max bounds and scaling behavior (Tier 3) |
 | [seasonality.md](seasonality.md) | Seasonality detection and proactive recommendations |
@@ -22,7 +22,7 @@ section. **[Visual Insights](../features/visual-insights.md)** and the
 | [vpa-recommendations.md](vpa-recommendations.md) | Vertical Pod Autoscaler policy guidance |
 | [network.md](network.md) | Network egress, DNS latency, and traffic health |
 | [cross-cluster-vm-placement.md](cross-cluster-vm-placement.md) | Fleet advisory for which cluster should host or receive a KubeVirt VM (capacity, cost, constraints; MTV handoff) |
-| [hosted-control-plane-fleet-optimization.md](hosted-control-plane-fleet-optimization.md) | HCP / HyperShift & fleet control-plane FinOps (topology through API tax) — ADRs 0328–0335; [design plan](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/plans/hcp-fleet-optimization.md); **no coding yet** |
+| [hosted-control-plane-fleet-optimization.md](hosted-control-plane-fleet-optimization.md) | HCP / HyperShift & fleet control-plane FinOps (topology through API tax) — ADRs 0328–0335; [design plan](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/plans/hcp-fleet-optimization.md); **W0–W4 shipped** (see [shipped vs remaining](hosted-control-plane-fleet-optimization.md#shipped-vs-remaining)); the page is the roadmap record |
 | [local-mode.md](local-mode.md) | On-cluster recommendations without CSV upload; [scale estimates](local-mode.md#scale-estimates-200k-containers) (200K+) |
 | [replica-count-optimization.md](replica-count-optimization.md) | Optimal replica count recommendations for Deployments and StatefulSets (3-phase rollout: resource-based, traffic-aware, HPA config) |
 

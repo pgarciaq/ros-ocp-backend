@@ -52,7 +52,7 @@ internal/plugins/
 ├── namespace/            ← Namespace usage-based sizing
 ├── snapshot/             ← VolumeSnapshot staleness
 ├── slo/                  ← HCP SLO rollup store (no recs)
-├── hcp/                  ← HyperShift namespace observer (no recs)
+├── hcp/                  ← HyperShift observer + fleet-capacity CSV ingest
 ├── vm/                   ← OpenShift Virtualization VM right-sizing
 ├── kruize/               ← Legacy engine (mutual-exclusive)
 └── example/              ← Authoring template for new plugins
@@ -74,7 +74,7 @@ interface.
 | namespace | ✓ | | ✓ | | ✓ | ✓ (max 90d) |
 | snapshot | ✓ | | ✓ | | | |
 | slo | ✓ | | | | ✓ | |
-| hcp | | ✓ | ✓ | | | ✓ (max 90d) |
+| hcp | ✓ | ✓ | ✓ | | | ✓ (max 90d) |
 | vm | ✓ | | ✓ | | ✓ | ✓ (max 90d) |
 | kruize | | | | | | |
 
@@ -90,7 +90,7 @@ What each plugin needs from other plugins, by level (**CSVs → digests → recs
 | vm | — | — | — |
 | pvc / snapshot / cluster-quota | — | — | — |
 | slo | — | — | — (reads node digests for worker pressure; no hard requirement) |
-| hcp | **container** | recs: reads container rows via hook; routes registered only when enabled | HCP rows unobserved (no association); surface 404s when disabled |
+| hcp | **container** | observer reads container rows via hook; `hcp-capacity` CSV ingested as fleet-capacity history (W4); routes registered only when enabled | HCP rows unobserved (no association); capacity history absent; surface 404s when disabled |
 | quota | **container** | recs: aggregates sum `recommendation_sets` (`engine/quota/recommend_quota.go`) | soft: aggregates read as zeros (documented one-cycle lag) |
 | gpu | **container** | CSVs (hook) + recs (MIG history, `has_gpu` marking) | soft: core GPU recs unaffected; history + flags degrade (degradation must be user-visible via notification code, not logs-only) |
 | business-hours (each variant) | its own entity (see [BH digest sources](business-hours.md#per-entity-digest-sources)) | digests of that entity + shared schedules | that variant is dead; others unaffected |
