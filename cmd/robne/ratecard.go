@@ -7,6 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/google/uuid"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
@@ -114,6 +117,20 @@ func resolveClusterIDFromLoad(cfg fileConfig, loaded csv.LoadResult) (string, er
 		}
 		seen[id] = struct{}{}
 		uniq = append(uniq, id)
+	}
+	// #700 ADR-0345: capacity rows carry no cluster id by contract — the
+	// manifest fills the csvID slot when rows carry none. The
+	// manifest-supplied id must be UUID-shaped (round-10 N3: a crafted
+	// local manifest must not silently mislabel the advisory); the
+	// attribution source is logged.
+	if len(uniq) == 0 {
+		if m := loaded.Manifest; m != nil && m.ClusterUUID != "" {
+			if _, err := uuid.Parse(m.ClusterUUID); err != nil {
+				return "", fmt.Errorf("manifest cluster_id %q is not a UUID", m.ClusterUUID)
+			}
+			logging.GetLogger().Infof("cluster identity from payload manifest: %s", m.ClusterUUID)
+			uniq = append(uniq, m.ClusterUUID)
+		}
 	}
 	return resolveClusterIDs(cfg, uniq)
 }

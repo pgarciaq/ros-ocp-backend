@@ -257,8 +257,12 @@ func executePathA(ctx context.Context, f commonFlags) (recommendResult, error) {
 	if pluginEnabled(plugins, "snapshot") && explicit {
 		return out, fmt.Errorf("snapshot has no digest table; Path A (--input postgres://) does not SELECT snapshot inventory")
 	}
+	if pluginEnabled(plugins, "hcp") && explicit {
+		return out, fmt.Errorf("hcp has no digest table; Path A (--input postgres://) does not SELECT fleet-capacity snapshots — use file input (KMO disconnected-mode payload)")
+	}
 	if !explicit {
 		plugins = dropPlugin(plugins, "snapshot")
+		plugins = dropPlugin(plugins, "hcp")
 	}
 	if err := requirePostgresIdentity(loaded.cfg.OrgID, loaded.cfg.ClusterUUID); err != nil {
 		return out, err
@@ -549,6 +553,13 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 		out.SkippedRows = fl.skipped
 	}
 	out.plugins = fl.plugins
+	if pluginEnabled(fl.plugins, "hcp") {
+		caps, err := computeHCPCapacity(fl, fl.now, fl.clusterID)
+		if err != nil {
+			return out, err
+		}
+		out.HCPCapacity = caps
+	}
 	if err := attachFileOnlyRecs(&out, fl); err != nil {
 		return out, err
 	}
@@ -597,7 +608,9 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	if err != nil {
 		return out, err
 	}
+	printLoadWarnings(csvLoaded)
 	reportUnparseableRows(csvLoaded.RowsSkipped)
+	out.capacityRows = csvLoaded.HCPCapacityRows
 	out.plugins, err = applyFilePlugins(out.plugins, explicit, csvLoaded)
 	if err != nil {
 		return out, err
@@ -725,7 +738,16 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 			}
 		}
 	}
-	now, err := parseNow(f.now, out.cfg, maxEnd)
+	var now time.Time
+	if maxEnd.IsZero() {
+		// No digest-backed entity: the engine clock cannot resolve from
+		// interval_end. Capacity-only input uses the capacity clock
+		// (flag > YAML > wall — round-9 W8; parseNow would hard-error
+		// "cannot resolve engine clock" here).
+		now, err = resolveCapacityNow(f.now, out.cfg)
+	} else {
+		now, err = parseNow(f.now, out.cfg, maxEnd)
+	}
 	if err != nil {
 		return out, err
 	}
@@ -746,6 +768,7 @@ type fileLoad struct {
 	now                   time.Time
 	skipped               int
 	manifest              *csv.Manifest
+	capacityRows          []csv.HCPCapacityRow
 	bhEnabled             bool
 	bhSchedule            bhschedule.Schedule
 	containerDigests      []types.KeyedDigest
@@ -885,6 +908,13 @@ func computeRecommendations(f commonFlags) (recommendResult, error) {
 		out.SkippedRows = fl.skipped
 	}
 	out.plugins = fl.plugins
+	if pluginEnabled(fl.plugins, "hcp") {
+		caps, err := computeHCPCapacity(fl, fl.now, fl.clusterID)
+		if err != nil {
+			return out, err
+		}
+		out.HCPCapacity = caps
+	}
 	if err := attachFileOnlyRecs(&out, fl); err != nil {
 		return out, err
 	}

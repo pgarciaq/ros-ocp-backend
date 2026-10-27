@@ -37,6 +37,61 @@ const recommendJSONVersionWithHCPCapacity = 12
 var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster-quota", "snapshot", "hcp"}
 
 // recommendResult is the CLI-owned stdout payload (engine recs plus run metadata).
+type hcpCapacityScenarioOut struct {
+	Name             string `json:"name"`
+	MaxHCs           int64  `json:"max_hcs"`
+	LimitingResource string `json:"limiting_resource"`
+	Headroom         *int64 `json:"headroom"`
+	Status           string `json:"status"`
+}
+
+type hcpCapacitySourceVersionsOut struct {
+	Operator string `json:"operator"`
+	OCP      string `json:"ocp"`
+	MCE      string `json:"mce"`
+}
+
+type hcpCapacityEligibleWorkersOut struct {
+	CPUAllocatableMillicores int64 `json:"cpu_allocatable_millicores"`
+	MemoryAllocatableBytes   int64 `json:"memory_allocatable_bytes"`
+	MaxPods                  int64 `json:"max_pods"`
+}
+
+type hcpCapacityWarningsOut struct {
+	Stale                bool  `json:"stale"`
+	BelowVersionFloor    bool  `json:"below_version_floor"`
+	Pressured            bool  `json:"pressured"`
+	PressureUnknown      bool  `json:"pressure_unknown"`
+	MCEMayBeStale        *bool `json:"mce_may_be_stale,omitempty"`
+	SharedInfrastructure bool  `json:"shared_infrastructure"`
+}
+
+// HCPCapacityOut is the CLI's fleet-capacity DTO — the presentation shape
+// of one observation (service parity: scenarios, warnings, MCE refs,
+// source versions).
+type HCPCapacityOut struct {
+	ClusterUUID               string                        `json:"cluster_uuid"`
+	ObservedAt                time.Time                     `json:"observed_at"`
+	MCESampledAt              *time.Time                    `json:"mce_sampled_at"`
+	NativeModelVersion        string                        `json:"native_model_version"`
+	SourceVersions            hcpCapacitySourceVersionsOut  `json:"source_versions"`
+	CollectionIntervalMinutes int64                         `json:"collection_interval_minutes"`
+	UploadCycleMinutes        int64                         `json:"upload_cycle_minutes"`
+	SampleAgeSeconds          int64                         `json:"sample_age_seconds"`
+	InventoryComplete         bool                          `json:"inventory_complete"`
+	WorkerPlacementKnown      bool                          `json:"worker_placement_known"`
+	CurrentHCCount            int64                         `json:"current_hc_count"`
+	ReadyHCPCount             int64                         `json:"ready_hcp_count"`
+	AverageReadyHCPQPS        *float64                      `json:"average_ready_hcp_qps"`
+	ReadyHCPQPSKnown          bool                          `json:"ready_hcp_qps_known"`
+	HostedAvailabilityBasis   string                        `json:"hosted_availability_basis"`
+	PressureState             string                        `json:"pressure_state"`
+	EligibleWorkers           hcpCapacityEligibleWorkersOut `json:"eligible_workers"`
+	Scenarios                 []hcpCapacityScenarioOut      `json:"scenarios"`
+	MCEReferences             map[string]*int64             `json:"mce_references"`
+	Warnings                  hcpCapacityWarningsOut        `json:"warnings"`
+}
+
 type recommendResult struct {
 	Recs                []types.ContainerRec
 	BHRecs              []types.ContainerRec
@@ -54,6 +109,7 @@ type recommendResult struct {
 	QuotaRecs           []quota.QuotaRec
 	ClusterQuotaRecs    []quota.ClusterQuotaRec
 	SnapshotRecs        []snapshot.SnapshotRec
+	HCPCapacity         []HCPCapacityOut
 	Digests             []types.KeyedDigest
 	BHDigests           []types.KeyedDigest
 	NamespaceDigests    map[namespace.NamespaceKey][]types.DigestRow
@@ -100,6 +156,7 @@ type recommendJSON struct {
 	QuotaRecommendations                       *[]quotaOut          `json:"quota_recommendations,omitempty"`
 	ClusterQuotaRecommendations                *[]clusterQuotaOut   `json:"cluster_quota_recommendations,omitempty"`
 	SnapshotRecommendations                    *[]snapshotOut       `json:"snapshot_recommendations,omitempty"`
+	HCPRecommendations                         *[]HCPCapacityOut    `json:"hcp_recommendations,omitempty"`
 }
 
 // containerOut is the snake_case row DTO. Fields match containerOutCSVHeader.
@@ -581,6 +638,9 @@ func writeJSON(w io.Writer, result recommendResult) error {
 			rows[i] = toSnapshotOut(rec)
 		}
 		env.SnapshotRecommendations = &rows
+	}
+	if len(result.HCPCapacity) > 0 {
+		env.HCPRecommendations = &result.HCPCapacity
 	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
