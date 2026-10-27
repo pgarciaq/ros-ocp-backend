@@ -5,7 +5,7 @@ Phase 1 [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469);
 Phase 2a [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471);
 pgdigest INSERT [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463);
 digest SELECT [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474);
-namespace + node/GPU + PVC + VM + quota + cluster-quota files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (remaining 2b under #472 is none); other-entity rec PG [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) **shipped**; other-entity digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) **shipped**; other-entity Path A SELECT [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) **shipped**; snapshot stdout [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) **shipped**; business hours [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479) **shipped**; Phase 3 diff / container explain [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480) **shipped**; other-entity explain [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490) **shipped**; `robne version` [#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489) **shipped**;
+namespace + node/GPU + PVC + VM + quota + cluster-quota files → stdout; HCP fleet-capacity snapshots (`ros-openshift-hcp-capacity-*`, management-cluster payloads) → `hcp_recommendations` sibling (envelope 12) with the same advisory as the service (#700) [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (remaining 2b under #472 is none); other-entity rec PG [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) **shipped**; other-entity digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) **shipped**; other-entity Path A SELECT [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) **shipped**; snapshot stdout [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) **shipped**; business hours [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479) **shipped**; Phase 3 diff / container explain [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480) **shipped**; other-entity explain [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490) **shipped**; `robne version` [#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489) **shipped**;
 contract [`docs/plans/robne-cli-spec.md`](../../docs/plans/robne-cli-spec.md).
 
 ```bash
@@ -28,9 +28,9 @@ make robne
   --namespace kube-system --term short --engine cost
 ./bin/robne explain --input ./ocp_ros_usage.csv --plugins gpu --no-user-config \
   --namespace app --workload api --container api --term short
-# HCP fleet capacity (planned in #700 — not yet shipped):
-# ./bin/robne explain --input ./metrics.tar.gz --plugins hcp \
-#   --scenario average_qps --observed-at 2026-10-25T14:00:00Z
+# HCP fleet capacity (#700 — shipped):
+./bin/robne explain --input ./metrics.tar.gz --plugins hcp \
+  --scenario average_qps --observed-at 2026-10-25T14:00:00Z
 ```
 
 | File | Copy to |
