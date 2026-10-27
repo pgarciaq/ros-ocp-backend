@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
@@ -36,6 +37,8 @@ type explainFlags struct {
 	clusterQuotaName   string
 	snapshotName       string
 	recommendationType string
+	scenario           string
+	observedAt         string
 }
 
 func newExplainCmd() *cobra.Command {
@@ -63,10 +66,13 @@ Identity flags (inapplicable flags are errors):
   quota:               --namespace --quota-name
   cluster-quota:    --cluster-quota-name
   snapshot:            --namespace --snapshot-name
+  hcp:                 --scenario (one of request, low_qps, average_qps,
+                       medium_qps, high_qps) plus optional --observed-at
+                       (RFC3339; default latest)
 
 GPU: --container selects MIG; --node without --container selects timeslicing.
 --schedule business_hours is container, namespace, node, gpu, and vm
-(not pvc / quota / cluster-quota / snapshot).`,
+(not pvc / quota / cluster-quota / snapshot / hcp).`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runExplain(cmd.OutOrStdout(), f)
 		},
@@ -128,7 +134,7 @@ func runExplain(stdout io.Writer, f explainFlags) error {
 		switch plugin {
 		case "container", "namespace", "node", "gpu", "vm":
 		default:
-			return fmt.Errorf("--schedule business_hours is container, namespace, node, gpu, and vm only (got %s)", plugin)
+			return fmt.Errorf("--schedule business_hours is container, namespace, node, gpu, and vm only (not hcp; got %s)", plugin)
 		}
 		if !businessHoursEnabled(cfg) {
 			return fmt.Errorf("--schedule business_hours requires YAML business_hours.enabled")
@@ -303,6 +309,9 @@ func explainIdentitySets(plugin, gpuKind string) (required []string, allowed map
 	case "snapshot":
 		return []string{"--namespace", "--snapshot-name"},
 			allow("--namespace", "--snapshot-name"), nil
+	case "hcp":
+		return []string{"--scenario"},
+			allow("--scenario", "--observed-at"), nil
 	default:
 		return nil, nil, fmt.Errorf("unknown plugin %q", plugin)
 	}
@@ -328,6 +337,10 @@ func explainFlagValue(f explainFlags, name string) string {
 		return f.gpuModel
 	case "--pvc":
 		return f.pvc
+	case "--scenario":
+		return f.scenario
+	case "--observed-at":
+		return f.observedAt
 	case "--vm-name":
 		return f.vmName
 	case "--quota-name":
@@ -445,9 +458,76 @@ func explainJSON(result recommendResult, plugin, gpuKind, schedule string, f exp
 			return nil, err
 		}
 		return toSnapshotExplainOut(rec), nil
+	case "hcp":
+		return selectHCPCapacityOut(result.HCPCapacity, f)
 	default:
 		return nil, fmt.Errorf("unknown plugin %q", plugin)
 	}
+}
+
+// selectHCPCapacityOut picks the observation (--observed-at RFC3339 or
+// latest) and the scenario (--scenario, required) and renders the explain
+// shape: the source (snapshot inputs), the sizing assumption (model
+// baselines), and the limiting resource, with occupancy completeness and
+// pressure state.
+func selectHCPCapacityOut(recs []HCPCapacityOut, f explainFlags) (any, error) {
+	if len(recs) == 0 {
+		return nil, fmt.Errorf("no HCP capacity observations in this payload")
+	}
+	row := recs[0]
+	if f.observedAt != "" {
+		at, err := time.Parse(time.RFC3339, f.observedAt)
+		if err != nil {
+			return nil, fmt.Errorf("--observed-at: %w", err)
+		}
+		found := false
+		for _, r := range recs {
+			if r.ObservedAt.Equal(at) {
+				row = r
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("no capacity observation at %s (series has %d observations)", f.observedAt, len(recs))
+		}
+	}
+	var scenario *hcpCapacityScenarioOut
+	for i := range row.Scenarios {
+		if row.Scenarios[i].Name == f.scenario {
+			scenario = &row.Scenarios[i]
+			break
+		}
+	}
+	if scenario == nil {
+		return nil, fmt.Errorf("unknown scenario %q (one of request, low_qps, average_qps, medium_qps, high_qps)", f.scenario)
+	}
+	headroom := "withheld (unknown occupancy, placement, QPS — or affirmed pressure)"
+	if scenario.Headroom != nil {
+		headroom = fmt.Sprintf("%d", *scenario.Headroom)
+	}
+	return map[string]any{
+		"cluster_uuid":      row.ClusterUUID,
+		"observed_at":       row.ObservedAt.Format(time.RFC3339),
+		"scenario":          scenario.Name,
+		"max_hcs":           scenario.MaxHCs,
+		"limiting_resource": scenario.LimitingResource,
+		"headroom":          headroom,
+		"status":            scenario.Status,
+		"source": map[string]any{
+			"native_model_version":      row.NativeModelVersion,
+			"eligible_cpu_millicores":   row.EligibleWorkers.CPUAllocatableMillicores,
+			"eligible_memory_bytes":     row.EligibleWorkers.MemoryAllocatableBytes,
+			"eligible_max_pods":         row.EligibleWorkers.MaxPods,
+			"current_hc_count":          row.CurrentHCCount,
+			"average_ready_hcp_qps":     row.AverageReadyHCPQPS,
+			"hosted_availability_basis": row.HostedAvailabilityBasis,
+		},
+		"assumption":             fmt.Sprintf("%s published-sizing baselines (request packing 5 vCPU / 18 GiB / 75 pods per HA HC; QPS legs idle 2.9 vCPU / 11.1 GiB plus 9 vCPU / 2.5 GiB per 1000 QPS)", row.NativeModelVersion),
+		"inventory_complete":     row.InventoryComplete,
+		"worker_placement_known": row.WorkerPlacementKnown,
+		"pressure_state":         row.PressureState,
+	}, nil
 }
 
 func selectContainerRec(recs []types.ContainerRec, f explainFlags) (types.ContainerRec, error) {

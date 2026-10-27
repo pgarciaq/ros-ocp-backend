@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -158,7 +159,30 @@ func compareEnvelopes(left, right recommendJSON) (string, bool, error) {
 	if err := add(diffSlice("snapshot_recommendations", left.SnapshotRecommendations, right.SnapshotRecommendations, snapshotKey)); err != nil {
 		return "", false, err
 	}
+	if err := add(diffSlice("hcp_recommendations",
+		latestHCPCapacitySlicePtr(left.HCPRecommendations),
+		latestHCPCapacitySlicePtr(right.HCPRecommendations),
+		hcpCapacityKey)); err != nil {
+		return "", false, err
+	}
 	return b.String(), differs, nil
+}
+
+// latestHCPCapacitySlicePtr pre-selects series[0] (the latest observation)
+// from each side into a one-row slice — the spec's latest-per-side
+// comparison (round-9 W3): month-over-month envelopes whose latest rows
+// carry different observed_at values must compare latest-vs-latest, not
+// report added/removed rows. Nil/empty stays nil (missing side).
+func latestHCPCapacitySlicePtr(p *[]HCPCapacityOut) *[]HCPCapacityOut {
+	if p == nil || len(*p) == 0 {
+		return nil
+	}
+	one := []HCPCapacityOut{(*p)[0]}
+	return &one
+}
+
+func hcpCapacityKey(r HCPCapacityOut) string {
+	return r.ObservedAt.Format(time.RFC3339)
 }
 
 func slicePtr[T any](s []T) *[]T {

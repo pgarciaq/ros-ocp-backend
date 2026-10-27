@@ -1521,6 +1521,7 @@ func runValidate(f commonFlags) error {
 	if err != nil {
 		return err
 	}
+	printLoadWarnings(loaded)
 	reportUnparseableRows(loaded.RowsSkipped)
 	plugins, err = applyFilePlugins(plugins, explicit, loaded)
 	if err != nil {
@@ -1538,6 +1539,7 @@ func runValidate(f commonFlags) error {
 	wantQuota := pluginEnabled(plugins, "quota")
 	wantCRQ := pluginEnabled(plugins, "cluster-quota")
 	wantSnap := pluginEnabled(plugins, "snapshot")
+	wantHCP := pluginEnabled(plugins, "hcp")
 	clusterID, err := resolveClusterIDFromLoad(cfg, loaded)
 	if err != nil {
 		return err
@@ -1576,6 +1578,25 @@ func runValidate(f commonFlags) error {
 	if wantSnap {
 		if _, err := fmt.Fprintf(os.Stdout, "snapshot_rows: %d\n", len(loaded.SnapshotRows)); err != nil {
 			return err
+		}
+	}
+	if wantHCP {
+		if _, err := fmt.Fprintf(os.Stdout, "hcp_capacity_rows: %d\n", len(loaded.HCPCapacityRows)); err != nil {
+			return err
+		}
+		// Skipped rows with reasons (observed_at when field 0 parses,
+		// else the 1-based row index). Skew is evaluated at compute with
+		// the capacity clock, not here (#700 Task 6).
+		for _, skip := range loaded.HCPCapacitySkips {
+			id := fmt.Sprintf("#%d", skip.Index)
+			if skip.ObservedAt != "" {
+				if _, perr := time.Parse(time.RFC3339, skip.ObservedAt); perr == nil {
+					id = skip.ObservedAt
+				}
+			}
+			if _, err := fmt.Fprintf(os.Stdout, "  skipped row %s: %s\n", id, skip.Reason); err != nil {
+				return err
+			}
 		}
 	}
 	if _, err := fmt.Fprintf(os.Stdout, "cluster_id: %s\n", clusterID); err != nil {

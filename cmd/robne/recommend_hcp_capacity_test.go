@@ -350,3 +350,142 @@ func TestRecommend_CapacityOnlyPoisonedExplicit(t *testing.T) {
 	assert.Contains(t, err.Error(), "capacity snapshots are emitted by HyperShift management clusters")
 	assert.Contains(t, stderr.String(), "warning:", "the poison warning printed before the exit")
 }
+
+// --- Task 6: validate / diff / explain ---
+
+func TestValidate_HCPCapacity(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	var out bytes.Buffer
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	err := runValidate(commonFlags{input: "testdata/hcp-capacity", noUserConfig: true, plugins: "hcp"})
+	_ = w.Close()
+	os.Stdout = oldStdout
+	_, _ = out.ReadFrom(r)
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "hcp_capacity_rows: 3")
+}
+
+func TestValidate_HCPCapacitySkippedReasons(t *testing.T) {
+	// A row with a bad value (inventory_complete is not a strict
+	// boolean): the skip surfaces with its reason (observed_at when
+	// field 0 parses, else the row index).
+	dir := t.TempDir()
+	body := "observed_at,mce_sampled_at,operator_version,ocp_version,mce_version,native_model_version,collection_interval_minutes,upload_cycle_minutes,inventory_complete,current_hc_count,ready_hcp_count,average_ready_hcp_qps,ready_hcp_qps_known,hosted_availability_basis,eligible_worker_cpu_allocatable_millicores,eligible_worker_memory_allocatable_bytes,eligible_worker_max_pods,worker_placement_known,pressure_state,mce_request_max_hcs,mce_low_qps_max_hcs,mce_average_qps_max_hcs,mce_medium_qps_max_hcs,mce_high_qps_max_hcs,shared_infrastructure\n" +
+		"2026-10-26T21:59:59Z,,deadbeef,4.22.17,,hcp-published-sizing-v1,60,60,maybe,3,3,19.8,true,single_replica,46500,147688947712,750,true,unknown,8,8,8,4,2,true\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ros-openshift-hcp-capacity-202610.csv"), []byte(body), 0o600)) //nolint:gosec // G304/G703: t.TempDir test fixture
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	var out bytes.Buffer
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	err := runValidate(commonFlags{input: dir, noUserConfig: true, plugins: "hcp"})
+	_ = w.Close()
+	os.Stdout = oldStdout
+	_, _ = out.ReadFrom(r)
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "hcp_capacity_rows: 0")
+	assert.Contains(t, out.String(), "skipped row 2026-10-26T21:59:59Z: inventory_complete")
+}
+
+func TestValidate_HCPCapacityOnlyNoClock(t *testing.T) {
+	// Round-10 W4: validate on capacity-only input must not hit the
+	// engine-clock wall (validate has its own now derivation path).
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	err := runValidate(commonFlags{input: "testdata/hcp-capacity", noUserConfig: true, plugins: "hcp"})
+	require.NoError(t, err)
+}
+
+func hcpEnvRows(t *testing.T, at time.Time, max int64, limit string) []HCPCapacityOut {
+	t.Helper()
+	return []HCPCapacityOut{{
+		ClusterUUID: "c1", ObservedAt: at, CurrentHCCount: 3,
+		Scenarios: []hcpCapacityScenarioOut{{Name: "request", MaxHCs: max, LimitingResource: limit}},
+	}}
+}
+
+func hcpEnvelope(rows []HCPCapacityOut) recommendJSON {
+	env := recommendJSON{Version: 12}
+	if rows != nil {
+		env.HCPRecommendations = &rows
+	}
+	return env
+}
+
+func TestDiff_HCPCapacity(t *testing.T) {
+	// Latest-per-side (round-9 W3): envelopes whose latest rows carry
+	// different observed_at values compare latest-vs-latest, never
+	// added/removed rows.
+	left := hcpEnvelope(hcpEnvRows(t, time.Date(2026, 10, 26, 20, 59, 59, 0, time.UTC), 7, "memory_request"))
+	right := hcpEnvelope(hcpEnvRows(t, time.Date(2026, 10, 26, 21, 59, 59, 0, time.UTC), 6, "cpu_request"))
+	out, differs, err := compareEnvelopes(left, right)
+	require.NoError(t, err)
+	assert.True(t, differs)
+	assert.Contains(t, out, "hcp_recommendations")
+	assert.NotContains(t, out, "missing", "different observed_at is latest-vs-latest, not added/removed")
+
+	// Missing side.
+	empty := hcpEnvelope(nil)
+	out2, differs2, err := compareEnvelopes(left, empty)
+	require.NoError(t, err)
+	assert.True(t, differs2)
+	assert.Contains(t, out2, "hcp_recommendations")
+}
+
+func TestExplain_HCPCapacity(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	var out bytes.Buffer
+	err := runExplain(&out, explainFlags{
+		commonFlags: commonFlags{input: "testdata/hcp-capacity", noUserConfig: true, now: "2026-10-26T22:30:00Z", plugins: "hcp", format: "json"},
+		scenario:    "medium_qps",
+	})
+	require.NoError(t, err)
+	body := out.String()
+	assert.Contains(t, body, "cpu_usage", "medium scenario limiting resource")
+	assert.Contains(t, body, "published-sizing")
+	assert.Contains(t, body, "46500", "eligible cpu in the source")
+	assert.Contains(t, body, "single_replica")
+}
+
+func TestExplain_HCPCapacitySelectors(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+
+	// --observed-at selects the row.
+	var out bytes.Buffer
+	err := runExplain(&out, explainFlags{
+		commonFlags: commonFlags{input: "testdata/hcp-capacity", noUserConfig: true, now: "2026-10-26T22:30:00Z", plugins: "hcp", format: "json"},
+		scenario:    "request",
+		observedAt:  "2026-10-26T20:59:59Z",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "2026-10-26T20:59:59Z")
+
+	// Bad scenario name → error.
+	err = runExplain(&bytes.Buffer{}, explainFlags{
+		commonFlags: commonFlags{input: "testdata/hcp-capacity", noUserConfig: true, now: "2026-10-26T22:30:00Z", plugins: "hcp", format: "json"},
+		scenario:    "turbo_qps",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown scenario")
+
+	// BH schedule rejected for hcp.
+	err = runExplain(&bytes.Buffer{}, explainFlags{
+		commonFlags: commonFlags{input: "testdata/hcp-capacity", noUserConfig: true, now: "2026-10-26T22:30:00Z", plugins: "hcp", format: "json"},
+		scenario:    "request",
+		schedule:    "business_hours",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "business_hours")
+}

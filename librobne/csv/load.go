@@ -33,6 +33,9 @@ type LoadResult struct {
 	// a poisoned capacity file non-fatal — it must never gate other
 	// entities — so poison lands here instead of an error (#700).
 	Warnings []LoadWarning
+	// HCPCapacitySkips carries the per-row skip reasons from capacity
+	// parsing (validate surfaces them; RowsSkipped keeps the count).
+	HCPCapacitySkips []RowSkip
 	// Manifest holds the tarball/dir manifest.json when present (nil for
 	// single-CSV inputs, absent or corrupt manifests).
 	Manifest *Manifest
@@ -91,6 +94,7 @@ func mergePart(out *LoadResult, part LoadResult) {
 	out.Files = append(out.Files, part.Files...)
 	out.CostOnlySkipped = append(out.CostOnlySkipped, part.CostOnlySkipped...)
 	out.Warnings = append(out.Warnings, part.Warnings...)
+	out.HCPCapacitySkips = append(out.HCPCapacitySkips, part.HCPCapacitySkips...)
 	out.RowsSkipped += part.RowsSkipped
 }
 
@@ -345,11 +349,12 @@ func parseCSVReader(r io.Reader, name string, kind Kind) (LoadResult, error) {
 		}
 		if len(rows) == 0 && len(skips) > 0 {
 			return LoadResult{
-				Files:    []string{name},
-				Warnings: []LoadWarning{{File: name, Kind: "hcp_capacity", Reason: fmt.Sprintf("all %d data rows were unparseable", len(skips))}},
+				Files:            []string{name},
+				Warnings:         []LoadWarning{{File: name, Kind: "hcp_capacity", Reason: fmt.Sprintf("all %d data rows were unparseable", len(skips))}},
+				HCPCapacitySkips: skips,
 			}, nil
 		}
-		return LoadResult{HCPCapacityRows: rows, Files: []string{name}, RowsSkipped: len(skips)}, nil
+		return LoadResult{HCPCapacityRows: rows, Files: []string{name}, RowsSkipped: len(skips), HCPCapacitySkips: skips}, nil
 	}
 	rows, skipped, err := ParseRows(r)
 	if err != nil {

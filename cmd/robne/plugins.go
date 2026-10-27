@@ -132,11 +132,13 @@ func requireExplicitFilePlugins(plugins []string, loaded csv.LoadResult) error {
 	if wantSnap && !loadedHasKind(loaded, csv.KindSnapshot) {
 		return fmt.Errorf("no snapshot inventory CSV found (snapshot plugin reads ocp_snapshot_inventory / ros-openshift-snapshot)")
 	}
-	if wantHCP && len(loaded.HCPCapacityRows) == 0 {
-		// Zero-rows-loaded → the missing-snapshot message. All-rows-
-		// skew-dropped is the compute path's diagnosis (round-9 W2:
-		// this function runs pre-compute via applyFilePlugins and
-		// cannot see skew drops).
+	if wantHCP && len(loaded.HCPCapacityRows) == 0 && len(loaded.HCPCapacitySkips) == 0 {
+		// Zero-rows-loaded and zero skips → the missing-snapshot message.
+		// All-rows-skipped (skips present) passes so validate can report
+		// the reasons — the compute path's skew diagnosis and this
+		// function's zero-rows message both remain precise (round-9 W2:
+		// this function runs pre-compute via applyFilePlugins and cannot
+		// see skew drops).
 		return fmt.Errorf("no capacity snapshot in this payload; capacity snapshots are emitted by HyperShift management clusters (KMO ros-openshift-hcp-capacity CSV)")
 	}
 	return nil
