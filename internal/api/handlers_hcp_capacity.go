@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -37,13 +36,6 @@ import (
 // Serve-time derivation (not persisted): headroom/status/staleness/
 // cautions come from the stored row. Affirmative pressure withholds exact
 // headroom; unknown pressure stays an explicit warning (ADR-0334 rule 8).
-
-// hcpCapacityOCPFloorMajor/minor is the documented OCP management version
-// floor (ADR-0334 amendment: OCP 4.17+ / MCE 2.6+).
-const (
-	hcpCapacityOCPFloorMajor = 4
-	hcpCapacityOCPFloorMinor = 17
-)
 
 type hcpCapacitySourceVersions struct {
 	Operator string `json:"operator"`
@@ -110,53 +102,19 @@ func hcpCapacityClusterParam(c echo.Context) string {
 	return strings.TrimSpace(queryparams.FirstFilter(c, "cluster"))
 }
 
-// hcpCapacityFreshnessWindow is 2× the row's own effective cadence: a
-// 6-hour upload cycle must not mark a fresh hourly row stale.
-func hcpCapacityFreshnessWindow(s model.HCPCapacitySnapshot) time.Duration {
-	cadence := s.CollectionIntervalMinutes
-	if s.UploadCycleMinutes > cadence {
-		cadence = s.UploadCycleMinutes
-	}
-	return 2 * time.Duration(cadence) * time.Minute
-}
-
-// hcpCapacityBelowFloor reports a known ocp_version below the documented
-// 4.17 floor. Unparseable or unknown versions never warn (only a clearly
-// below-floor version does).
-func hcpCapacityBelowFloor(ocpVersion string) bool {
-	if ocpVersion == "" {
-		return false
-	}
-	parts := strings.SplitN(ocpVersion, ".", 3)
-	if len(parts) < 2 {
-		return false
-	}
-	major, errMajor := strconv.Atoi(parts[0])
-	minor, errMinor := strconv.Atoi(parts[1])
-	if errMajor != nil || errMinor != nil {
-		return false
-	}
-	return major < hcpCapacityOCPFloorMajor ||
-		(major == hcpCapacityOCPFloorMajor && minor < hcpCapacityOCPFloorMinor)
-}
-
-// buildHCPCapacityRow derives the serving row from the stored snapshot.
-// Headroom nil rules mirror librobne/hcp exactly: no estimate (empty
-// limiting resource), incomplete inventory, unknown worker placement, or
-// unknown average QPS (that scenario only). Affirmative pressure
-// additionally withholds headroom on every scenario (ADR-0334 rule 8);
-// unknown pressure keeps headroom and warns explicitly.
+// buildHCPCapacityRow derives the serving row from the stored snapshot
+// via the shared librobne/hcp rules (see snapshotToServeObservation and
+// serve.go): headroom nil rules, scenario status, and the warning set
+// are single-sourced with the robne CLI (#700); the characterization
+// goldens pin this handler's output across the refactor.
 func buildHCPCapacityRow(s model.HCPCapacitySnapshot, now time.Time, mceMayBeStale *bool) hcpCapacityRowResponse {
 	age := now.Sub(s.ObservedAt)
 	if age < 0 {
 		age = 0
 	}
-	pressured := s.PressureState == "pressured"
-
-	status := hcpcapacity.StatusOK
-	if s.HostedAvailabilityBasis == hcpcapacity.BasisMixed || s.HostedAvailabilityBasis == hcpcapacity.BasisSingleReplica {
-		status = hcpcapacity.StatusIllustrativeOnly
-	}
+	obs := snapshotToServeObservation(s)
+	warnings := hcpcapacity.DeriveWarnings(obs, now, mceMayBeStale)
+	status := hcpcapacity.ScenarioStatus(obs.Basis)
 
 	row := hcpCapacityRowResponse{
 		ClusterUUID:               s.ClusterUUID,
@@ -189,12 +147,12 @@ func buildHCPCapacityRow(s model.HCPCapacitySnapshot, now time.Time, mceMayBeSta
 			hcpcapacity.ScenarioHighQPS:    s.MCEHighQPSMaxHCs,
 		},
 		Warnings: hcpCapacityWarnings{
-			Stale:                age > hcpCapacityFreshnessWindow(s),
-			BelowVersionFloor:    hcpCapacityBelowFloor(s.OCPVersion),
-			Pressured:            pressured,
-			PressureUnknown:      s.PressureState == "unknown",
-			MCEMayBeStale:        mceMayBeStale,
-			SharedInfrastructure: s.SharedInfrastructure,
+			Stale:                warnings.Stale,
+			BelowVersionFloor:    warnings.BelowVersionFloor,
+			Pressured:            warnings.Pressured,
+			PressureUnknown:      warnings.PressureUnknown,
+			MCEMayBeStale:        warnings.MCEMayBeStale,
+			SharedInfrastructure: warnings.SharedInfrastructure,
 		},
 	}
 	if s.MCESampledAt != nil {
@@ -220,10 +178,8 @@ func buildHCPCapacityRow(s model.HCPCapacitySnapshot, now time.Time, mceMayBeSta
 			LimitingResource: col.limit,
 			Status:           status,
 		}
-		if col.limit != "" && s.InventoryComplete && s.WorkerPlacementKnown && !pressured &&
-			(col.name != hcpcapacity.ScenarioAverageQPS || s.ReadyHCPQPSKnown) {
-			h := col.max - s.CurrentHCCount
-			sc.Headroom = &h
+		if h := hcpcapacity.DeriveHeadroom(obs, col.name, col.max, col.limit); h != nil {
+			sc.Headroom = h
 		}
 		row.Scenarios = append(row.Scenarios, sc)
 	}
@@ -244,60 +200,68 @@ func hcpCapacityErr(c echo.Context, status int, msg string) error {
 	return c.JSON(status, echo.Map{"status": "error", "message": msg})
 }
 
-// hcpCapacityMCEEqual compares the five MCE reference gauges (NULL is a
-// value: absent == absent, absent != zero).
-func hcpCapacityMCEEqual(a, b model.HCPCapacitySnapshot) bool {
-	eq := func(x, y *int64) bool {
-		if x == nil || y == nil {
-			return x == y
-		}
-		return *x == *y
+// snapshotToServeObservation maps the DB snapshot into the shared
+// derivation view (trivial field copies; the rules live in
+// librobne/hcp/serve.go). Scenarios ride in the stable contract order.
+func snapshotToServeObservation(s model.HCPCapacitySnapshot) hcpcapacity.ServeObservation {
+	return hcpcapacity.ServeObservation{
+		ObservedAt:           s.ObservedAt,
+		MCESampledAt:         s.MCESampledAt,
+		OperatorVersion:      s.OperatorVersion,
+		OCPVersion:           s.OCPVersion,
+		MCEVersion:           s.MCEVersion,
+		NativeModelVersion:   s.NativeModelVersion,
+		CollectionMinutes:    s.CollectionIntervalMinutes,
+		UploadMinutes:        s.UploadCycleMinutes,
+		InventoryComplete:    s.InventoryComplete,
+		QPSKnown:             s.ReadyHCPQPSKnown,
+		QPS:                  s.AverageReadyHCPQPS,
+		CurrentHC:            s.CurrentHCCount,
+		ReadyHC:              s.ReadyHCPCount,
+		Basis:                s.HostedAvailabilityBasis,
+		Pressure:             s.PressureState,
+		SharedInfrastructure: s.SharedInfrastructure,
+		Workers: hcpcapacity.WorkerCapacity{
+			CPUAllocatableMillicores: s.EligibleCPUMillicores,
+			MemoryAllocatableBytes:   s.EligibleMemoryBytes,
+			MaxPods:                  s.EligibleMaxPods,
+			PlacementKnown:           s.WorkerPlacementKnown,
+		},
+		MCERequest: s.MCERequestMaxHCs,
+		MCELow:     s.MCELowQPSMaxHCs,
+		MCEAverage: s.MCEAverageQPSMaxHCs,
+		MCEMedium:  s.MCEMediumQPSMaxHCs,
+		MCEHigh:    s.MCEHighQPSMaxHCs,
+		Scenarios: []hcpcapacity.CapacityScenario{
+			{Name: hcpcapacity.ScenarioRequest, MaxHCs: s.RequestMaxHCs, LimitingResource: s.RequestLimitingResource},
+			{Name: hcpcapacity.ScenarioLowQPS, MaxHCs: s.LowQPSMaxHCs, LimitingResource: s.LowQPSLimitingResource},
+			{Name: hcpcapacity.ScenarioAverageQPS, MaxHCs: s.AverageQPSMaxHCs, LimitingResource: s.AverageQPSLimitingResource},
+			{Name: hcpcapacity.ScenarioMediumQPS, MaxHCs: s.MediumQPSMaxHCs, LimitingResource: s.MediumQPSLimitingResource},
+			{Name: hcpcapacity.ScenarioHighQPS, MaxHCs: s.HighQPSMaxHCs, LimitingResource: s.HighQPSLimitingResource},
+		},
 	}
-	return eq(a.MCERequestMaxHCs, b.MCERequestMaxHCs) &&
-		eq(a.MCELowQPSMaxHCs, b.MCELowQPSMaxHCs) &&
-		eq(a.MCEAverageQPSMaxHCs, b.MCEAverageQPSMaxHCs) &&
-		eq(a.MCEMediumQPSMaxHCs, b.MCEMediumQPSMaxHCs) &&
-		eq(a.MCEHighQPSMaxHCs, b.MCEHighQPSMaxHCs)
 }
 
-// hcpCapacityNativeDiffers reports whether the native inputs moved
-// between two snapshots (worker capacity, occupancy, or traffic basis).
-func hcpCapacityNativeDiffers(a, b model.HCPCapacitySnapshot) bool {
-	return a.EligibleCPUMillicores != b.EligibleCPUMillicores ||
-		a.EligibleMemoryBytes != b.EligibleMemoryBytes ||
-		a.EligibleMaxPods != b.EligibleMaxPods ||
-		a.CurrentHCCount != b.CurrentHCCount ||
-		a.ReadyHCPCount != b.ReadyHCPCount ||
-		a.ReadyHCPQPSKnown != b.ReadyHCPQPSKnown ||
-		!hcpCapacityQPSEqual(a, b)
-}
-
-func hcpCapacityQPSEqual(a, b model.HCPCapacitySnapshot) bool {
-	if a.AverageReadyHCPQPS == nil || b.AverageReadyHCPQPS == nil {
-		return a.AverageReadyHCPQPS == b.AverageReadyHCPQPS
-	}
-	return *a.AverageReadyHCPQPS == *b.AverageReadyHCPQPS
-}
-
-// hcpCapacityMCEMayBeStale implements the frozen-reference caution: MCE
-// gauges unchanged across the full freshness window while native inputs
-// moved → the references may lag the fleet. Degrades to false on query
-// error — the caution must never fail the read.
+// hcpCapacityMCEMayBeStale implements the frozen-reference caution via
+// the shared series rule: fetch the window rows, map, reverse to
+// newest-first, delegate. Degrades to false on query error — the caution
+// must never fail the read.
 func hcpCapacityMCEMayBeStale(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, latest model.HCPCapacitySnapshot) bool {
-	rows, err := model.GetHCPCapacitySince(ctx, pool, orgID, clusterUUID, latest.ObservedAt.Add(-hcpCapacityFreshnessWindow(latest)))
+	obs := snapshotToServeObservation(latest)
+	window := hcpcapacity.FreshnessWindow(obs.CollectionMinutes, obs.UploadMinutes)
+	rows, err := model.GetHCPCapacitySince(ctx, pool, orgID, clusterUUID, latest.ObservedAt.Add(-window))
 	if err != nil || len(rows) < 2 {
 		return false
 	}
-	mceSame := true
-	nativeChanged := false
-	for _, prior := range rows {
-		if prior.ObservedAt.Equal(latest.ObservedAt) {
-			continue
-		}
-		mceSame = mceSame && hcpCapacityMCEEqual(prior, latest)
-		nativeChanged = nativeChanged || hcpCapacityNativeDiffers(prior, latest)
+	series := make([]hcpcapacity.ServeObservation, 0, len(rows))
+	for _, r := range rows {
+		series = append(series, snapshotToServeObservation(r))
 	}
-	return mceSame && nativeChanged
+	// DB rows are ascending; the series rule wants newest-first.
+	for i, j := 0, len(series)-1; i < j; i, j = i+1, j-1 {
+		series[i], series[j] = series[j], series[i]
+	}
+	return hcpcapacity.MCEMayBeStaleFromSeries(series)
 }
 
 // GetHCPCapacityLatest handles GET /recommendations/openshift/hcp/fleet-capacity.

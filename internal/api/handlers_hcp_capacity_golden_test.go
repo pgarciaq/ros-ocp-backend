@@ -69,7 +69,9 @@ func TestHCPCapacityHandler_Characterization(t *testing.T) {
 		require.Len(t, rows, 1)
 		return rows[0]
 	}
-	scenariosOf := func(t *testing.T, r map[string]interface{}) map[string]map[string]interface{} { return hcpCapScenarios(t, r) }
+	scenariosOf := func(t *testing.T, r map[string]interface{}) map[string]map[string]interface{} {
+		return hcpCapScenarios(t, r)
+	}
 	warningsOf := func(r map[string]interface{}) map[string]interface{} { return r["warnings"].(map[string]interface{}) }
 	headroomOf := func(s map[string]map[string]interface{}, name string) interface{} { return s[name]["headroom"] }
 

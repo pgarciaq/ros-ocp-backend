@@ -3,8 +3,6 @@
 
 package hcp
 
-import ()
-
 // NewNamespaceSet builds the known-HCP-namespace lookup from the fact source
 // (TopologyFacts.HostedControlPlaneNamespaces). Membership is exact: shaping
 // like {hc.namespace}-{hc.name} without membership excludes.
