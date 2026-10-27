@@ -76,7 +76,7 @@ func pruneMissingFilePlugins(plugins []string, loaded csv.LoadResult) []string {
 			if len(loaded.VMRows) > 0 {
 				out = append(out, p)
 			}
-		case "cluster_quota":
+		case "cluster-quota":
 			if len(loaded.ClusterQuotaRows) > 0 {
 				out = append(out, p)
 			}
@@ -107,7 +107,7 @@ func requireExplicitFilePlugins(plugins []string, loaded csv.LoadResult) error {
 	wantPVC := pluginEnabled(plugins, "pvc")
 	wantVM := pluginEnabled(plugins, "vm")
 	wantQuota := pluginEnabled(plugins, "quota")
-	wantCRQ := pluginEnabled(plugins, "cluster_quota")
+	wantCRQ := pluginEnabled(plugins, "cluster-quota")
 	wantSnap := pluginEnabled(plugins, "snapshot")
 	needContainerRows := wantC || wantNode || wantGPU
 	if needContainerRows && len(loaded.Rows) == 0 {
@@ -120,7 +120,7 @@ func requireExplicitFilePlugins(plugins []string, loaded csv.LoadResult) error {
 		return fmt.Errorf("no ROS namespace CSV found")
 	}
 	if wantCRQ && len(loaded.ClusterQuotaRows) == 0 {
-		return fmt.Errorf("no cluster-quota CSV found (cluster_quota plugin reads ocp_ros_cluster_quota / ros-openshift-cluster-quota)")
+		return fmt.Errorf("no cluster-quota CSV found (cluster-quota plugin reads ocp_ros_cluster_quota / ros-openshift-cluster-quota)")
 	}
 	if wantPVC && len(loaded.PVCRows) == 0 {
 		return fmt.Errorf("no storage CSV found (pvc plugin reads ocp_storage_usage / ros-openshift-storage)")
@@ -169,7 +169,7 @@ func pruneEmptyPathAPlugins(fl *fileLoad) {
 			if len(fl.quotaDaily) > 0 {
 				out = append(out, p)
 			}
-		case "cluster_quota":
+		case "cluster-quota":
 			if len(fl.clusterQuotaDaily) > 0 {
 				out = append(out, p)
 			}

@@ -26,7 +26,7 @@ func envelopeCapability() []envelopeBump {
 		{"pvc", recommendJSONVersionWithPVC},
 		{"vm", recommendJSONVersionWithVM},
 		{"quota", recommendJSONVersionWithQuota},
-		{"cluster_quota", recommendJSONVersionWithClusterQuota},
+		{"cluster-quota", recommendJSONVersionWithClusterQuota},
 		{"snapshot", recommendJSONVersionWithSnapshot},
 		{"hcp", recommendJSONVersionWithHCPCapacity},
 		{"business_hours", recommendJSONVersionWithBusinessHours},

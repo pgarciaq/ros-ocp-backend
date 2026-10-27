@@ -212,8 +212,8 @@ func TestYAMLOverlay_ConfigFlagSkipsCwd(t *testing.T) {
 }
 
 func TestValidatePlugins_ClusterQuotaAllowed(t *testing.T) {
-	require.NoError(t, validatePlugins(fileConfig{Plugins: []string{"cluster_quota"}}, ""))
-	require.NoError(t, validatePlugins(fileConfig{}, "container,cluster_quota"))
+	require.NoError(t, validatePlugins(fileConfig{Plugins: []string{"cluster-quota"}}, ""))
+	require.NoError(t, validatePlugins(fileConfig{}, "container,cluster-quota"))
 }
 
 func TestValidatePlugins_UnknownStillRejected(t *testing.T) {
@@ -255,7 +255,7 @@ func TestResolvedPlugins_DefaultAllShipped(t *testing.T) {
 
 func TestYAMLOverlay_ClusterQuotaEnabled(t *testing.T) {
 	cwd := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte("cluster_quota:\n  enabled: true\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte("cluster-quota:\n  enabled: true\n"), 0o600))
 	_, err := loadFileConfig(overlayEnv{Home: t.TempDir(), Cwd: cwd, NoUser: true}, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Phase 1")

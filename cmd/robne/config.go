@@ -18,18 +18,18 @@ import (
 var allowedYAMLKeys = map[string]struct{}{
 	"org_id": {}, "cluster_uuid": {}, "now": {}, "plugins": {},
 	"terms": {}, "sizing": {}, "idle": {}, "staleness_hours": {},
-	"business_hours": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {}, "snapshot": {},
+	"business_hours": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster-quota": {}, "snapshot": {},
 }
 
-var reservedYAMLKeys = []string{"node", "gpu", "pvc", "vm", "quota", "cluster_quota", "snapshot"}
+var reservedYAMLKeys = []string{"node", "gpu", "pvc", "vm", "quota", "cluster-quota", "snapshot"}
 
 var enabledPlugins = map[string]struct{}{
-	"container": {}, "namespace": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {}, "snapshot": {}, "hcp": {},
+	"container": {}, "namespace": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster-quota": {}, "snapshot": {}, "hcp": {},
 }
 
 var knownPlugins = map[string]struct{}{
 	"container": {}, "node": {}, "namespace": {}, "gpu": {},
-	"pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {}, "snapshot": {}, "hcp": {},
+	"pvc": {}, "vm": {}, "quota": {}, "cluster-quota": {}, "snapshot": {}, "hcp": {},
 }
 
 type fileConfig struct {
@@ -47,7 +47,7 @@ type fileConfig struct {
 	PVC            map[string]any     `yaml:"pvc,omitempty"`
 	VM             map[string]any     `yaml:"vm,omitempty"`
 	Quota          map[string]any     `yaml:"quota,omitempty"`
-	ClusterQuota   map[string]any     `yaml:"cluster_quota,omitempty"`
+	ClusterQuota   map[string]any     `yaml:"cluster-quota,omitempty"`
 	Snapshot       map[string]any     `yaml:"snapshot,omitempty"`
 }
 
@@ -337,7 +337,7 @@ func validatePlugins(cfg fileConfig, flag string) error {
 }
 
 func allShippedPlugins() []string {
-	return []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster_quota", "snapshot", "hcp"}
+	return []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster-quota", "snapshot", "hcp"}
 }
 
 func pluginsExplicit(cfg fileConfig, flag string) bool {

@@ -313,7 +313,7 @@ func TestExecuteRecommend_PathAClusterQuotaWithoutQuotaDays(t *testing.T) {
 
 	result, err := executeRecommend(commonFlags{
 		input:        poolDSN(t, pool, ""),
-		plugins:      "cluster_quota",
+		plugins:      "cluster-quota",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 		format:       "json",
@@ -521,7 +521,7 @@ func TestPersist_MixedEntityRecs(t *testing.T) {
 		OrgID:      orgID,
 		ClusterID:  cluster,
 		Now:        now,
-		plugins:    []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster_quota"},
+		plugins:    []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster-quota"},
 		ValidTerms: []string{"short", "medium", "long"},
 		Recs: []types.ContainerRec{{
 			OrgID: orgID, ClusterUUID: cluster, Namespace: "app", Workload: "api",

@@ -5,7 +5,7 @@ Phase 1 [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469);
 Phase 2a [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471);
 pgdigest INSERT [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463);
 digest SELECT [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474);
-namespace + node/GPU + PVC + VM + quota + cluster_quota files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (remaining 2b under #472 is none); other-entity rec PG [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) **shipped**; other-entity digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) **shipped**; other-entity Path A SELECT [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) **shipped**; snapshot stdout [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) **shipped**; business hours [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479) **shipped**; Phase 3 diff / container explain [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480) **shipped**; other-entity explain [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490) **shipped**; `robne version` [#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489) **shipped**;
+namespace + node/GPU + PVC + VM + quota + cluster-quota files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (remaining 2b under #472 is none); other-entity rec PG [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) **shipped**; other-entity digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) **shipped**; other-entity Path A SELECT [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) **shipped**; snapshot stdout [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) **shipped**; business hours [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479) **shipped**; Phase 3 diff / container explain [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480) **shipped**; other-entity explain [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490) **shipped**; `robne version` [#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489) **shipped**;
 contract [`docs/plans/robne-cli-spec.md`](../../docs/plans/robne-cli-spec.md).
 
 ```bash
@@ -83,11 +83,11 @@ bumps `version` to **6**, and adds `vm_recommendations`. Timeslicing is a column
 on the VM row, not a second sibling. YAML `vm:` stays reserved. `--plugins quota`
 reads the **same namespace ROS CSV** (optional `quota_name`; named-quota sums are
 ResourceQuota hard), bumps `version` to **7**, and adds `quota_recommendations`.
-YAML `quota:` stays reserved. `--plugins cluster_quota` parses NISE
+YAML `quota:` stays reserved. `--plugins cluster-quota` parses NISE
 `*ocp_ros_cluster_quota.csv` / operator `ros-openshift-cluster-quota-*`
 (classified before namespace), bumps `version` to **8**, and adds
 `cluster_quota_recommendations`. Empty `namespaces` sums all in-memory
-namespace quota recs; memory is **bytes**. YAML `cluster_quota:` stays reserved.
+namespace quota recs; memory is **bytes**. YAML `cluster-quota:` stays reserved.
 `--plugins snapshot` parses NISE `ocp_snapshot_inventory` / operator
 `ros-openshift-snapshot-*` / `cm-openshift-snapshot-inventory` (classified before
 blanket `cm-openshift-*`), bumps `version` to **9**, and adds
@@ -110,14 +110,14 @@ default skips missing dedicated CSVs / empty Path A tables; an explicit list err
 CSV/table are one entity per stream; mixing requires JSON (a container ROS file also
 enables `node` — pin `--plugins container` for table/csv). `--output postgres://` upserts recs
 for shipped 2b plugins ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473))
-and INSERTs other-entity daily digests ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)). `--input postgres://` SELECTs stored days for listed plugins ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) containers, [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) other entities); empty own-table SELECT is an error when the plugin is **explicit**; implicit default skips. Explicit `--plugins snapshot` with Path A is a hard error. YAML `node:` / `gpu:` / `pvc:` / `vm:` / `quota:` / `cluster_quota:` / `snapshot:` stay reserved (plugins are unlocked). [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) / [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) / [ADR-0336](../../docs/adr/0336-robne-json-entity-sibling-arrays.md).
+and INSERTs other-entity daily digests ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)). `--input postgres://` SELECTs stored days for listed plugins ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) containers, [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) other entities); empty own-table SELECT is an error when the plugin is **explicit**; implicit default skips. Explicit `--plugins snapshot` with Path A is a hard error. YAML `node:` / `gpu:` / `pvc:` / `vm:` / `quota:` / `cluster-quota:` / `snapshot:` stay reserved (plugins are unlocked). [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) / [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) / [ADR-0336](../../docs/adr/0336-robne-json-entity-sibling-arrays.md).
 
 `--output postgres://…` (or `postgresql://`) upserts today’s container `all_hours`
 digests and other-entity daily rows (namespace, node, GPU, PVC, VM + GPU devices,
 quota, cluster quota), SELECTs `[end − MaxWindowDays, end]` for listed plugins,
 then upserts recs for containers
 and shipped 2b plugins (namespace, node, GPU MIG + time-slicing, PVC, VM, quota,
-cluster_quota). With YAML `business_hours.enabled`, also writes `business_hours`
+cluster-quota). With YAML `business_hours.enabled`, also writes `business_hours`
 container, namespace, node, GPU, and VM digest rows ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)).
 Namespace recs persist that stream; container/node/GPU/VM recs stay all_hours
 (no BH rec upsert). PVC and quota days merge like ingest (`GREATEST`/`LEAST`);

@@ -19,7 +19,7 @@ cluster_uuid: "local-cluster"     # stdout (a)(b): any string. postgres:// (c): 
 # now: "2026-08-07T00:00:00Z"
 
 # Omit plugins: to enable every shipped plugin (container, namespace, node, gpu,
-# pvc, vm, quota, cluster_quota, snapshot). Missing dedicated CSVs / empty Path A
+# pvc, vm, quota, cluster-quota, snapshot). Missing dedicated CSVs / empty Path A
 # tables are skipped. An explicit list (flag --plugins or this key) errors when
 # that plugin's input is missing. Path A plus explicit snapshot is a hard error
 # (no snapshot digest table). csv/table stay one entity per stream — pin
@@ -32,7 +32,7 @@ cluster_uuid: "local-cluster"     # stdout (a)(b): any string. postgres:// (c): 
 #   - pvc
 #   - vm
 #   - quota
-#   - cluster_quota
+#   - cluster-quota
 #   - snapshot
 
 terms:
@@ -108,5 +108,5 @@ staleness_hours: 48
 # pvc: { ... }
 # vm: { ... }
 # quota: { ... }
-# cluster_quota: { ... }
+# cluster-quota: { ... }
 # snapshot: { ... }

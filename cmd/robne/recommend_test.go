@@ -866,7 +866,7 @@ func TestRecommend_ClusterQuotaPluginStdout(t *testing.T) {
 
 	result, err := computeRecommendations(commonFlags{
 		input:        csvPath,
-		plugins:      "cluster_quota",
+		plugins:      "cluster-quota",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 		format:       "json",
@@ -910,7 +910,7 @@ func TestRecommend_ClusterQuotaNoHardLimitsEmptyRecs(t *testing.T) {
 
 	result, err := computeRecommendations(commonFlags{
 		input:        csvPath,
-		plugins:      "cluster_quota",
+		plugins:      "cluster-quota",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 		format:       "json",
@@ -936,7 +936,7 @@ func TestRecommend_ClusterQuotaWithoutCSVError(t *testing.T) {
 
 	_, err := computeRecommendations(commonFlags{
 		input:        cwd,
-		plugins:      "cluster_quota",
+		plugins:      "cluster-quota",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 	})
@@ -954,7 +954,7 @@ func TestValidate_ClusterQuotaOnly(t *testing.T) {
 
 	require.NoError(t, runValidate(commonFlags{
 		input:        cwd,
-		plugins:      "cluster_quota",
+		plugins:      "cluster-quota",
 		noUserConfig: true,
 	}))
 }
@@ -988,7 +988,7 @@ func TestRecommend_ClusterQuotaWithoutNamespaceStillEmits(t *testing.T) {
 
 	result, err := computeRecommendations(commonFlags{
 		input:        cwd,
-		plugins:      "cluster_quota",
+		plugins:      "cluster-quota",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 	})

@@ -522,7 +522,7 @@ func TestRunExplain_ClusterQuota(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := runExplain(&buf, explainFlags{
-		commonFlags:      commonFlags{input: csvPath, plugins: "cluster_quota", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
+		commonFlags:      commonFlags{input: csvPath, plugins: "cluster-quota", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
 		clusterQuotaName: "team-a",
 	})
 	require.NoError(t, err)

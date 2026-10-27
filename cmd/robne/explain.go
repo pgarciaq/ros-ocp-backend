@@ -61,12 +61,12 @@ Identity flags (inapplicable flags are errors):
   pvc:                 --namespace --pvc --term
   vm:                  --namespace --vm-name --term --engine
   quota:               --namespace --quota-name
-  cluster_quota:       --cluster-quota-name
+  cluster-quota:    --cluster-quota-name
   snapshot:            --namespace --snapshot-name
 
 GPU: --container selects MIG; --node without --container selects timeslicing.
 --schedule business_hours is container, namespace, node, gpu, and vm
-(not pvc / quota / cluster_quota / snapshot).`,
+(not pvc / quota / cluster-quota / snapshot).`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runExplain(cmd.OutOrStdout(), f)
 		},
@@ -90,7 +90,7 @@ GPU: --container selects MIG; --node without --container selects timeslicing.
 	cmd.Flags().StringVar(&f.quotaName, "quota-name", "", "namespace ResourceQuota name")
 	cmd.Flags().StringVar(&f.clusterQuotaName, "cluster-quota-name", "", "ClusterResourceQuota name")
 	cmd.Flags().StringVar(&f.snapshotName, "snapshot-name", "", "VolumeSnapshot name")
-	cmd.Flags().StringVar(&f.recommendationType, "recommendation-type", "", "quota / cluster_quota recommendation type when the match is not unique")
+	cmd.Flags().StringVar(&f.recommendationType, "recommendation-type", "", "quota / cluster-quota recommendation type when the match is not unique")
 	return cmd
 }
 
@@ -297,7 +297,7 @@ func explainIdentitySets(plugin, gpuKind string) (required []string, allowed map
 	case "quota":
 		return []string{"--namespace", "--quota-name"},
 			allow("--namespace", "--quota-name", "--recommendation-type"), nil
-	case "cluster_quota":
+	case "cluster-quota":
 		return []string{"--cluster-quota-name"},
 			allow("--cluster-quota-name", "--recommendation-type"), nil
 	case "snapshot":
@@ -433,7 +433,7 @@ func explainJSON(result recommendResult, plugin, gpuKind, schedule string, f exp
 			return nil, err
 		}
 		return toQuotaExplainOut(rec), nil
-	case "cluster_quota":
+	case "cluster-quota":
 		rec, err := selectClusterQuotaRec(result.ClusterQuotaRecs, f)
 		if err != nil {
 			return nil, err

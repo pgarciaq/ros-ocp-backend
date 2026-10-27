@@ -34,7 +34,7 @@ const recommendJSONVersionWithBusinessHours = 10
 const recommendJSONVersionWithBusinessHoursPlugins = 11
 const recommendJSONVersionWithHCPCapacity = 12
 
-var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster_quota", "snapshot", "hcp"}
+var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster-quota", "snapshot", "hcp"}
 
 // recommendResult is the CLI-owned stdout payload (engine recs plus run metadata).
 type recommendResult struct {
@@ -347,7 +347,7 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 		return fmt.Errorf("--format %s is one entity and one schedule stream; use json when business_hours.enabled is true", format)
 	}
 	if stdoutEntityCount(result.plugins) > 1 && (format == "csv" || format == "table") {
-		return fmt.Errorf("--format %s is one entity per stream; use json when --plugins includes more than one of container, namespace, node, gpu, pvc, vm, quota, cluster_quota, snapshot", format)
+		return fmt.Errorf("--format %s is one entity per stream; use json when --plugins includes more than one of container, namespace, node, gpu, pvc, vm, quota, cluster-quota, snapshot", format)
 	}
 	switch format {
 	case "json":
@@ -366,7 +366,7 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 			return writeVMCSV(w, result.VMRecs)
 		case "quota":
 			return writeQuotaCSV(w, result.QuotaRecs)
-		case "cluster_quota":
+		case "cluster-quota":
 			return writeClusterQuotaCSV(w, result.ClusterQuotaRecs)
 		case "snapshot":
 			return writeSnapshotCSV(w, result.SnapshotRecs)
@@ -387,7 +387,7 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 			return writeVMTable(w, result.VMRecs)
 		case "quota":
 			return writeQuotaTable(w, result.QuotaRecs)
-		case "cluster_quota":
+		case "cluster-quota":
 			return writeClusterQuotaTable(w, result.ClusterQuotaRecs)
 		case "snapshot":
 			return writeSnapshotTable(w, result.SnapshotRecs)
@@ -438,7 +438,7 @@ func envelopeVersion(plugins []string, bh bool) int {
 	if pluginEnabled(plugins, "quota") {
 		v = recommendJSONVersionWithQuota
 	}
-	if pluginEnabled(plugins, "cluster_quota") {
+	if pluginEnabled(plugins, "cluster-quota") {
 		v = recommendJSONVersionWithClusterQuota
 	}
 	if pluginEnabled(plugins, "snapshot") {
@@ -568,7 +568,7 @@ func writeJSON(w io.Writer, result recommendResult) error {
 		}
 		env.QuotaRecommendations = &rows
 	}
-	if pluginEnabled(result.plugins, "cluster_quota") {
+	if pluginEnabled(result.plugins, "cluster-quota") {
 		rows := make([]clusterQuotaOut, len(result.ClusterQuotaRecs))
 		for i, rec := range result.ClusterQuotaRecs {
 			rows[i] = toClusterQuotaOut(rec)

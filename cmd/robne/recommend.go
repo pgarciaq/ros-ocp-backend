@@ -339,7 +339,7 @@ func loadPathADigests(ctx context.Context, q pgdigest.Querier, fl *fileLoad, sta
 	wantPVC := pluginEnabled(fl.plugins, "pvc")
 	wantVM := pluginEnabled(fl.plugins, "vm")
 	wantQuota := pluginEnabled(fl.plugins, "quota")
-	wantCRQ := pluginEnabled(fl.plugins, "cluster_quota")
+	wantCRQ := pluginEnabled(fl.plugins, "cluster-quota")
 	orgID, cluster := fl.orgID, fl.clusterID
 
 	if wantC || wantQuota || wantCRQ {
@@ -612,7 +612,7 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	wantPVC := pluginEnabled(out.plugins, "pvc")
 	wantVM := pluginEnabled(out.plugins, "vm")
 	wantQuota := pluginEnabled(out.plugins, "quota")
-	wantCRQ := pluginEnabled(out.plugins, "cluster_quota")
+	wantCRQ := pluginEnabled(out.plugins, "cluster-quota")
 	wantSnap := pluginEnabled(out.plugins, "snapshot")
 	clusterID, err := resolveClusterIDFromLoad(out.cfg, csvLoaded)
 	if err != nil {
@@ -934,7 +934,7 @@ func loadBusinessHoursDigests(fl *fileLoad, csvLoaded csv.LoadResult) error {
 	weightFn := func(t time.Time) float64 {
 		return bhschedule.ScheduleWeight(t, s)
 	}
-	if pluginEnabled(fl.plugins, "container") || pluginEnabled(fl.plugins, "quota") || pluginEnabled(fl.plugins, "cluster_quota") {
+	if pluginEnabled(fl.plugins, "container") || pluginEnabled(fl.plugins, "quota") || pluginEnabled(fl.plugins, "cluster-quota") {
 		digests, _, err := csv.DailyDigestsWeighted(csvLoaded.Rows, weightFn)
 		if err != nil {
 			return err
@@ -1081,7 +1081,7 @@ func attachFileOnlyRecs(out *recommendResult, fl fileLoad) error {
 		}
 		out.QuotaRecs = recs
 	}
-	if pluginEnabled(fl.plugins, "cluster_quota") {
+	if pluginEnabled(fl.plugins, "cluster-quota") {
 		quotaRecs := out.QuotaRecs
 		if !pluginEnabled(fl.plugins, "quota") {
 			recs, err := recommendQuotas(fl, out.Recs)
@@ -1506,7 +1506,7 @@ func runValidate(f commonFlags) error {
 	wantPVC := pluginEnabled(plugins, "pvc")
 	wantVM := pluginEnabled(plugins, "vm")
 	wantQuota := pluginEnabled(plugins, "quota")
-	wantCRQ := pluginEnabled(plugins, "cluster_quota")
+	wantCRQ := pluginEnabled(plugins, "cluster-quota")
 	wantSnap := pluginEnabled(plugins, "snapshot")
 	clusterID, err := resolveClusterIDFromLoad(cfg, loaded)
 	if err != nil {

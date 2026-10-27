@@ -692,7 +692,7 @@ func TestWriteRecs_JSONClusterQuotaSibling(t *testing.T) {
 	require.NoError(t, writeRecs(&buf, recommendResult{
 		ClusterID: "c",
 		Now:       time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
-		plugins:   []string{"cluster_quota"},
+		plugins:   []string{"cluster-quota"},
 		ClusterQuotaRecs: []quota.ClusterQuotaRec{{
 			OrgID:              "org-hidden",
 			ClusterUUID:        "should-not-appear-on-row",
@@ -735,7 +735,7 @@ func TestWriteRecs_JSONClusterQuotaSiblingEmptyArray(t *testing.T) {
 	require.NoError(t, writeRecs(&buf, recommendResult{
 		ClusterID: "c",
 		Now:       time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
-		plugins:   []string{"cluster_quota"},
+		plugins:   []string{"cluster-quota"},
 	}, "json"))
 	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
 	assert.Contains(t, compact, `"version":8`)
@@ -767,7 +767,7 @@ func TestWriteRecs_CSVMixedClusterQuotaContainerError(t *testing.T) {
 	err := writeRecs(bytes.NewBuffer(nil), recommendResult{
 		Recs:             []types.ContainerRec{sampleRec(nil)},
 		ClusterQuotaRecs: []quota.ClusterQuotaRec{{ClusterQuotaName: "team-a"}},
-		plugins:          []string{"container", "cluster_quota"},
+		plugins:          []string{"container", "cluster-quota"},
 	}, "csv")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "json")
