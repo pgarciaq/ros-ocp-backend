@@ -404,7 +404,7 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 		return fmt.Errorf("--format %s is one entity and one schedule stream; use json when business_hours.enabled is true", format)
 	}
 	if stdoutEntityCount(result.plugins) > 1 && (format == "csv" || format == "table") {
-		return fmt.Errorf("--format %s is one entity per stream; use json when --plugins includes more than one of container, namespace, node, gpu, pvc, vm, quota, cluster-quota, snapshot", format)
+		return fmt.Errorf("--format %s is one entity per stream; use json when --plugins includes more than one of container, namespace, node, gpu, pvc, vm, quota, cluster-quota, snapshot, hcp", format)
 	}
 	switch format {
 	case "json":
@@ -427,6 +427,8 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 			return writeClusterQuotaCSV(w, result.ClusterQuotaRecs)
 		case "snapshot":
 			return writeSnapshotCSV(w, result.SnapshotRecs)
+		case "hcp":
+			return writeHCPCapacityCSV(w, result.HCPCapacity)
 		default:
 			return writeCSV(w, result.Recs)
 		}
@@ -448,6 +450,8 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 			return writeClusterQuotaTable(w, result.ClusterQuotaRecs)
 		case "snapshot":
 			return writeSnapshotTable(w, result.SnapshotRecs)
+		case "hcp":
+			return writeHCPCapacityTable(w, result.HCPCapacity)
 		default:
 			return writeTable(w, result.Recs)
 		}
@@ -1260,6 +1264,68 @@ func writeSnapshotTable(w io.Writer, recs []snapshot.SnapshotRec) error {
 		}
 		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\n",
 			row.Namespace, row.SnapshotName, row.RecommendationType, row.AgeDays, cost); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
+// writeHCPCapacityCSV renders the LATEST observation's five scenarios as
+// rows (the JSON sibling carries the full series; table/CSV is the
+// at-a-glance view — design round-2 N4).
+func writeHCPCapacityCSV(w io.Writer, recs []HCPCapacityOut) error {
+	if len(recs) == 0 {
+		return fmt.Errorf("no HCP capacity observations to write")
+	}
+	latest := recs[0]
+	cw := csv.NewWriter(w)
+	if err := cw.Write([]string{
+		"cluster_uuid", "observed_at", "scenario", "max_hcs",
+		"limiting_resource", "headroom", "status", "current_hc_count",
+	}); err != nil {
+		return err
+	}
+	for _, sc := range latest.Scenarios {
+		headroom := ""
+		if sc.Headroom != nil {
+			headroom = strconv.FormatInt(*sc.Headroom, 10)
+		}
+		if err := cw.Write([]string{
+			latest.ClusterUUID,
+			latest.ObservedAt.Format(time.RFC3339),
+			sc.Name,
+			strconv.FormatInt(sc.MaxHCs, 10),
+			sc.LimitingResource,
+			headroom,
+			sc.Status,
+			strconv.FormatInt(latest.CurrentHCCount, 10),
+		}); err != nil {
+			return err
+		}
+	}
+	cw.Flush()
+	return cw.Error()
+}
+
+// writeHCPCapacityTable renders the latest observation's scenarios in a
+// tabwriter grid, matching the snapshot-table style.
+func writeHCPCapacityTable(w io.Writer, recs []HCPCapacityOut) error {
+	if len(recs) == 0 {
+		return fmt.Errorf("no HCP capacity observations to write")
+	}
+	latest := recs[0]
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	if _, err := fmt.Fprintf(tw, "CLUSTER\tOBSERVED_AT\tSCENARIO\tMAX_HCS\tLIMITING_RESOURCE\tHEADROOM\tSTATUS\n"); err != nil {
+		return err
+	}
+	for _, sc := range latest.Scenarios {
+		headroom := ""
+		if sc.Headroom != nil {
+			headroom = strconv.FormatInt(*sc.Headroom, 10)
+		}
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\t%s\t%s\n",
+			latest.ClusterUUID, latest.ObservedAt.Format(time.RFC3339),
+			sc.Name, sc.MaxHCs, sc.LimitingResource, headroom, sc.Status); err != nil {
 			return err
 		}
 	}

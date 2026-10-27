@@ -263,3 +263,90 @@ func TestRecommend_BHAndCapacityEnvelope(t *testing.T) {
 	assert.Equal(t, 12, env.Version, "capacity step is last in the ladder: BH does not pin the envelope at 10/11")
 	require.Len(t, env.HCPRecommendations, 3, "the capacity sibling rides the BH envelope")
 }
+
+// --- Task 5: table/CSV rendering (latest observation only) + the fourth
+// poison-matrix cell ---
+
+func capacityRenderResult(t *testing.T) recommendResult {
+	t.Helper()
+	result, err := runCapacityRecommend(t, "testdata/hcp-capacity", "2026-10-26T22:30:00Z", func(f *commonFlags) {
+		f.plugins = "hcp"
+	})
+	require.NoError(t, err)
+	require.Len(t, result.HCPCapacity, 3)
+	return result
+}
+
+func TestWriteRecs_HCPCapacityTable(t *testing.T) {
+	result := capacityRenderResult(t)
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "table"))
+	out := buf.String()
+
+	// Latest observation only: the 21:59 row's five scenarios render; the
+	// 19:59/20:59 observations do not.
+	assert.Contains(t, out, "SCENARIO")
+	assert.Contains(t, out, "request")
+	assert.Contains(t, out, "memory_request")
+	assert.Contains(t, out, "high_qps")
+	assert.Equal(t, 5, strings.Count(out, "21:59:59Z"), "five scenario lines from the latest observation only")
+	assert.NotContains(t, out, "19:59:59Z", "older observations do not render")
+	assert.NotContains(t, out, "20:59:59Z", "older observations do not render")
+	assert.Contains(t, out, "11111111-1111-1111-1111-111111111111")
+	// Signed headroom and the withheld marker both visible.
+	assert.Contains(t, out, "-1")
+}
+
+func TestWriteRecs_HCPCapacityCSV(t *testing.T) {
+	result := capacityRenderResult(t)
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "csv"))
+	out := buf.String()
+
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	require.Len(t, lines, 6, "header + five scenario rows")
+	assert.Contains(t, lines[0], "scenario")
+	assert.Contains(t, lines[0], "max_hcs")
+	assert.Contains(t, lines[0], "headroom")
+	// The high_qps row: max 2, limiting cpu_usage, headroom -1.
+	var highLine string
+	for _, l := range lines {
+		if strings.Contains(l, ",high_qps,") {
+			highLine = l
+		}
+	}
+	require.NotEmpty(t, highLine, "high_qps row present")
+	assert.Contains(t, highLine, "2")
+	assert.Contains(t, highLine, "cpu_usage")
+	assert.Contains(t, highLine, "-1")
+}
+
+func TestRecommend_CapacityOnlyPoisonedExplicit(t *testing.T) {
+	// The fourth poison-matrix cell (round-9 W4): capacity-only poisoned
+	// CSV + explicit hcp → warnings printed to stderr, then the friendly
+	// nonzero exit.
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ros-openshift-hcp-capacity-202610.csv"), []byte("observed_at,operator_version\nnope,deadbeef\n"), 0o600)) //nolint:gosec // G304/G703: t.TempDir test fixture
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+	_, err := computeRecommendations(commonFlags{
+		input:        dir,
+		noUserConfig: true,
+		now:          "2026-10-26T22:30:00Z",
+		format:       "json",
+		plugins:      "hcp",
+	})
+	_ = w.Close()
+	os.Stderr = oldStderr
+	var stderr bytes.Buffer
+	_, _ = stderr.ReadFrom(r)
+
+	require.Error(t, err, "explicit hcp with no parseable capacity rows is a nonzero exit")
+	assert.Contains(t, err.Error(), "capacity snapshots are emitted by HyperShift management clusters")
+	assert.Contains(t, stderr.String(), "warning:", "the poison warning printed before the exit")
+}
