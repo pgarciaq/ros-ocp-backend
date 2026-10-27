@@ -71,9 +71,10 @@ Input classes this fix must handle correctly; each pinned by the named test in i
 ### Task 6: Goldens, sample, docs
 
 - [ ] Regenerate goldens (`make robne` + the golden regeneration path); verify the diffs are exactly the VM/PVC term-window changes (spot-check one VM row's data_days against the new table).
-- [ ] `cmd/robne/robne.yaml.sample`: commented `plugin_terms:` example.
-- [ ] `cmd/robne/README.md` and `docs-site/features/robne-cli.md`: the three term groups, `plugin_terms:` usage, the `terms:` container-scoping clarification, the pre-release output-change note.
-- [ ] `make man-check` (no flag changes expected; the guard confirms). `make docs-lint docs-drift docs-sync-check`.
+- [ ] `cmd/robne/robne.yaml.sample`: commented `plugin_terms:` example. This stays the **single canonical sample file** — no second YAML sample; the copy-the-full-block contract and the whole-key-replacement warnings are built around one file.
+- [ ] `cmd/robne/README.md` and `docs-site/features/robne-cli.md`: the three term groups, `plugin_terms:` usage (short inline snippet matching the sample's commented shape), the `terms:` container-scoping clarification, the pre-release output-change note.
+- [ ] Cobra `Example` field on the **root command**: a compact `robne.yaml` config example (a `sizing:` fragment plus the commented `plugin_terms:` shape mirroring the sample, the search-path one-liner, and pointers to `robne.yaml.sample` and the spec for the full contract). This is the only vehicle for YAML content in the manpages/markdown — `GenManTree`/`GenMarkdownTree` render it into the EXAMPLES sections of both trees; never hand-edit generated files. Reference-grade depth only: overlay semantics and per-plugin tables stay in the spec and the curated public page.
+- [ ] `make man` (the Example field changes generated output — regeneration expected) and `make man-check` green. `make docs-lint docs-drift docs-sync-check`.
 
 ### Task 7: Parity re-run — the acceptance gate
 
