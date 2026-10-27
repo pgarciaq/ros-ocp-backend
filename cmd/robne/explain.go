@@ -97,6 +97,11 @@ GPU: --container selects MIG; --node without --container selects timeslicing.
 	cmd.Flags().StringVar(&f.clusterQuotaName, "cluster-quota-name", "", "ClusterResourceQuota name")
 	cmd.Flags().StringVar(&f.snapshotName, "snapshot-name", "", "VolumeSnapshot name")
 	cmd.Flags().StringVar(&f.recommendationType, "recommendation-type", "", "quota / cluster-quota recommendation type when the match is not unique")
+	// HCP capacity selectors (#700). These were documented and honored by
+	// runExplain but never registered here — the CLI rejected them with
+	// "unknown flag" while the struct-level tests passed.
+	cmd.Flags().StringVar(&f.scenario, "scenario", "", "hcp capacity scenario (request, low_qps, average_qps, medium_qps, high_qps)")
+	cmd.Flags().StringVar(&f.observedAt, "observed-at", "", "hcp capacity observation timestamp (RFC3339; default latest)")
 	return cmd
 }
 

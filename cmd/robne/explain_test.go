@@ -638,3 +638,12 @@ func TestToNodeExplainOut_SnakeCase(t *testing.T) {
 	assert.Contains(t, string(raw), `"sizing_formula"`)
 	assert.NotContains(t, string(raw), "SizingFormula")
 }
+
+// The registered flags must also be accepted by the CLI itself —
+// generated docs alone do not prove the parser takes them.
+func TestExplainAcceptsHCPFlags(t *testing.T) {
+	cmd := newExplainCmd()
+	require.NoError(t, cmd.Flags().Set("scenario", "average_qps"))
+	require.NoError(t, cmd.Flags().Set("observed-at", "2026-10-25T14:00:00Z"))
+	assert.Equal(t, "average_qps", cmd.Flags().Lookup("scenario").Value.String())
+}
