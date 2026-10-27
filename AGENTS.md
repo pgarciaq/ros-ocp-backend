@@ -135,6 +135,7 @@ When the task matches, **read the file before acting**.
 | HCP lab ops (HyperShift deploy, lab DNS, MCO drains, operator images) | [docs/agents/hcp-lab-operations.md](docs/agents/hcp-lab-operations.md) |
 | List SQL / indexes | [.cursor/skills/query-performance-review/SKILL.md](.cursor/skills/query-performance-review/SKILL.md) |
 | Cluster-scale benchmarks | [.cursor/skills/scale-benchmark/SKILL.md](.cursor/skills/scale-benchmark/SKILL.md) |
+| Server vs robne CLI parity validation | [.cursor/skills/server-robne-parity/SKILL.md](.cursor/skills/server-robne-parity/SKILL.md) |
 | Humans / DCO / Last verified / phase bump | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Cluster E2E pytest (until the chart harness is replaced) | [docs/testing/validating-native-engine.md](docs/testing/validating-native-engine.md) |
 | Local IQE test setup without Nexus | [docs/testing/iqe-local-without-nexus.md](docs/testing/iqe-local-without-nexus.md) |
