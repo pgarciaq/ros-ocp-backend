@@ -1011,7 +1011,7 @@ func TestRecommend_ClusterQuotaEmptyNamespacesSumsAll(t *testing.T) {
 
 	result, err := computeRecommendations(commonFlags{
 		input:        cwd,
-		plugins:      "quota,cluster_quota",
+		plugins:      "quota,cluster-quota",
 		noUserConfig: true,
 		now:          "2026-08-04T02:00:00Z",
 	})
@@ -1036,7 +1036,7 @@ func TestRecommend_ClusterQuotaNamespacesFilterMembership(t *testing.T) {
 
 	result, err := computeRecommendations(commonFlags{
 		input:        cwd,
-		plugins:      "quota,cluster_quota",
+		plugins:      "quota,cluster-quota",
 		noUserConfig: true,
 		now:          "2026-08-04T02:00:00Z",
 	})
@@ -1061,7 +1061,7 @@ func TestRecommend_ClusterQuotaTwoQuotasInOneNamespaceBothCount(t *testing.T) {
 
 	result, err := computeRecommendations(commonFlags{
 		input:        cwd,
-		plugins:      "quota,cluster_quota",
+		plugins:      "quota,cluster-quota",
 		noUserConfig: true,
 		now:          "2026-08-04T02:00:00Z",
 	})
