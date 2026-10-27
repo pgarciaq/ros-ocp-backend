@@ -142,8 +142,8 @@ func TestWriteRecs_JSONEmptyRecommendationsArray(t *testing.T) {
 		Now:       time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
 	}, "json"))
 	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
-	assert.Contains(t, compact, `"recommendations":[]`)
-	assert.NotContains(t, compact, `"recommendations":null`)
+	assert.Contains(t, compact, `"container_recommendations":[]`)
+	assert.NotContains(t, compact, `"container_recommendations":null`)
 	assert.NotContains(t, compact, `"namespace_recommendations"`)
 }
 
@@ -162,7 +162,7 @@ func TestWriteRecs_JSONNamespaceSibling(t *testing.T) {
 
 	var env struct {
 		Version                  int            `json:"version"`
-		Recommendations          []containerOut `json:"recommendations"`
+		Recommendations          []containerOut `json:"container_recommendations"`
 		NamespaceRecommendations []struct {
 			Namespace             string `json:"namespace"`
 			Term                  string `json:"term"`

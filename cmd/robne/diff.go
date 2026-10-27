@@ -110,7 +110,7 @@ func compareEnvelopes(left, right recommendJSON) (string, bool, error) {
 		return nil
 	}
 
-	if err := add(diffSlice("recommendations", slicePtr(left.Recommendations), slicePtr(right.Recommendations), containerKey)); err != nil {
+	if err := add(diffSlice("container_recommendations", slicePtr(left.Recommendations), slicePtr(right.Recommendations), containerKey)); err != nil {
 		return "", false, err
 	}
 	if err := add(diffSlice("business_hours_recommendations", left.BusinessHoursRecommendations, right.BusinessHoursRecommendations, containerKey)); err != nil {

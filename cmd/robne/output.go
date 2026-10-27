@@ -84,7 +84,7 @@ type recommendJSON struct {
 	ClusterID                                  string               `json:"cluster_id"`
 	Now                                        string               `json:"now"`
 	SkippedRows                                int                  `json:"skipped_rows"`
-	Recommendations                            []containerOut       `json:"recommendations"`
+	Recommendations                            []containerOut       `json:"container_recommendations"`
 	BusinessHoursRecommendations               *[]containerOut      `json:"business_hours_recommendations,omitempty"`
 	NamespaceRecommendations                   *[]namespaceOut      `json:"namespace_recommendations,omitempty"`
 	BusinessHoursNamespaceRecommendations      *[]namespaceOut      `json:"business_hours_namespace_recommendations,omitempty"`

@@ -396,7 +396,7 @@ So for both real generators today, `UniqueClusterIDs` is empty and YAML `cluster
   "cluster_id": "cluster-a",
   "now": "2026-08-01T02:00:00Z",
   "skipped_rows": 0,
-  "recommendations": [
+  "container_recommendations": [
     {
       "namespace": "app",
       "workload": "api",
@@ -421,14 +421,14 @@ So for both real generators today, `UniqueClusterIDs` is empty and YAML `cluster
 
 | Rule | Detail |
 |------|--------|
-| Envelope | `version` (int: `1` container-only, `2` namespace, `3` node, `4` gpu, `5` pvc, `6` vm, `7` quota, `8` cluster_quota, `9` snapshot — **max** of enabled plugins), `cluster_id`, `now` (RFC3339 UTC), `skipped_rows`, `recommendations` (always an array, never `null`; **container rows only**) |
+| Envelope | `version` (int: `1` container-only, `2` namespace, `3` node, `4` gpu, `5` pvc, `6` vm, `7` quota, `8` cluster_quota, `9` snapshot — **max** of enabled plugins), `cluster_id`, `now` (RFC3339 UTC), `skipped_rows`, `container_recommendations` (always an array, never `null`; **container rows only**) |
 | Rows | CLI-owned DTO in `cmd/robne` (`containerOut`). Same keys as CSV. No explanation factors, trend slopes, or `float32` confidence. |
 | Savings | `estimated_savings_cents` is JSON `null` when unset (not omitted, not `0`) |
 | Engine type | Do **not** add `json` tags on `librobne/types.ContainerRec` |
 | CI | Pin `--now`. Numeric golden: `cmd/robne/testdata/golden_short_cost.json` (`rec_cpu_request_mc` / `rec_mem_request_kib` only) |
 
 ```bash
-jq '.recommendations[] | select(.term=="short" and .engine=="cost") | .rec_cpu_request_mc'
+jq '.container_recommendations[] | select(.term=="short" and .engine=="cost") | .rec_cpu_request_mc'
 ```
 
 The `58` / `58880` request values are the numeric golden (`cmd/robne/testdata/golden_short_cost.json`). Other fields in the example match that same one-day fixture but are not frozen.
@@ -491,7 +491,7 @@ GPU infers kind from flags (no `--kind`): `--container` → MIG; `--node` withou
   "cluster_id": "cluster-a",
   "now": "2026-08-01T02:00:00Z",
   "skipped_rows": 0,
-  "recommendations": [],
+  "container_recommendations": [],
   "namespace_recommendations": [
     { "namespace": "app", "term": "short", "engine": "cost", "rec_cpu_request_mc": 100 }
   ]

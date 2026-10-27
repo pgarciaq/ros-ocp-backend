@@ -2049,7 +2049,7 @@ Abbreviated list shape:
     "container": "app",
     "workload": "api-deployment",
     "category": "optimized",
-    "recommendations": {
+    "container_recommendations": {
       "estimated_monthly_savings": { "value": "12.34", "units": "USD" },
       "short_term": { "cost": { }, "performance": { } },
       "medium_term": { "cost": { }, "performance": { } },
