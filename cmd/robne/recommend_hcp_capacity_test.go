@@ -489,3 +489,18 @@ func TestExplain_HCPCapacitySelectors(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "business_hours")
 }
+
+func TestDiff_HCPCapacityClusterMismatch(t *testing.T) {
+	// #700 acceptance: "focused tests for valid, incomplete, and
+	// mismatched-cluster inputs" — cross-cluster capacity diffs are
+	// allowed and flagged as the existing cluster_id meta delta, not a
+	// new error (review-2 W4).
+	left := hcpEnvelope(hcpEnvRows(t, time.Date(2026, 10, 26, 21, 59, 59, 0, time.UTC), 7, "memory_request"))
+	left.ClusterID = "11111111-1111-1111-1111-111111111111"
+	right := hcpEnvelope(hcpEnvRows(t, time.Date(2026, 10, 26, 21, 59, 59, 0, time.UTC), 7, "memory_request"))
+	right.ClusterID = "22222222-2222-2222-2222-222222222222"
+	out, differs, err := compareEnvelopes(left, right)
+	require.NoError(t, err, "cross-cluster capacity diff is allowed, not an error")
+	assert.True(t, differs)
+	assert.Contains(t, out, "cluster_id: 11111111-1111-1111-1111-111111111111 → 22222222-2222-2222-2222-222222222222")
+}
