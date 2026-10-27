@@ -257,7 +257,11 @@ def compare(entity, robne_doc, server_doc):
     elif kind == "flat":
         cmp_flat(rep, robne, server, cfg["skey"], cfg["ckey"], cfg["fields"])
     elif kind == "node":
-        S = {r["node"]: r for r in server}
+        # Aggregate server rows per node: per-term fetches produce one row per
+        # (node, term), so search all rows for the requested term's block.
+        S = {}
+        for r in server:
+            S.setdefault(r["node"], []).append(r)
         C = {}
         for r in robne:
             C.setdefault(r["node"], []).append(r)
@@ -265,7 +269,15 @@ def compare(entity, robne_doc, server_doc):
         rep.only_robne = [k for k in C if k not in S]
         for k in sorted(set(S) & set(C), key=str):
             for cr in C[k]:
-                eng = S[k]["recommendation_terms"][norm_term(cr["term"])]["recommendation_engines"][cr["engine"]]
+                block = None
+                for srow in S[k]:
+                    block = srow["recommendation_terms"].get(norm_term(cr["term"]))
+                    if block is not None:
+                        break
+                if block is None:
+                    rep.diff(k, f"{cr['term']}/{cr['engine']}", "variant present", "MISSING server-side")
+                    continue
+                eng = block["recommendation_engines"][cr["engine"]]
                 tag = f"{cr['term']}/{cr['engine']}"
                 for name, a, b in [("cpu", eng["recommended_cpu_cores"] * 1000, cr["recommended_cpu_mc"]),
                                    ("mem", eng["recommended_memory_gib"] * 1048576, cr["recommended_mem_kib"])]:

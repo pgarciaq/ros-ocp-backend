@@ -48,8 +48,8 @@ once, upload that exact directory, and point robne at it.
    | gpu-mig | `ros_ocp_e2e/ocp_report_gpu_mig_ros.yml` |
    | gpu-timeslicing | `ros_ocp_e2e/ocp_report_gpu_timeslicing.yml` |
    | vm (+ pvc/gpu companions) | `ocp_vm_recommendations/vm_static_data.yml` |
-   | pvc | `ros_ocp_e2e/ocp_report_pvc_rightsizing.yml` |
-   | cluster-quota | chart `seed_cluster_quota.yml` (the flow also enriches the CSV — `e2e_helpers.enrich_cluster_quota_csv_files`) |
+   | pvc | `ros_ocp_e2e/ocp_report_pvc_rightsizing.yml` (**window-insensitive by construction** — monotonic growth gives identical values per term, so it cannot manifest the #705 medium-window bug; a window-sensitive fixture is required to detect it — recipe in #706's run records) |
+   | cluster-quota | `ros_ocp_e2e/ocp_report_cluster_quota.yml` (the chart CRQ flow's template; the flow also enriches the CSV — `e2e_helpers.enrich_cluster_quota_csv_files`) |
    | snapshot | `ros_ocp_e2e/ocp_report_snapshot_classification.yml` |
    | hcp capacity | `ros_ocp_e2e/ocp_report_hcp_capacity.yml` |
 
@@ -88,20 +88,28 @@ once, upload that exact directory, and point robne at it.
    decay/staleness match (second granularity; microseconds are dropped):
    `SELECT MAX(updated_at) FROM <table> WHERE cluster_uuid='<uuid>';`
    → `robne recommend --input <dir> --plugins <p> --format json --no-user-config --now <stamp>`.
-   Stamp tables: container/node `recommendation_sets`, namespace
+   Stamp tables: container `recommendation_sets`, node `node_recommendations`, namespace
    `namespace_recommendation_sets`, gpu-mig `gpu_mig_recommendation_sets`,
    gpu-timeslicing `node_gpu_timeslicing_recommendations`, vm
    `vm_recommendations`, pvc `pvc_recommendation_sets`, cluster-quota
    `cluster_quota_recommendation_sets`, snapshot `snapshot_recommendation_sets`,
-   hcp `hcp_capacity_history`. DB access:
+   hcp `hcp_capacity_history` (stamp column `observed_at`, not `updated_at`). DB access:
    `oc exec -n cost-onprem cost-onprem-database-0 -- env PGPASSWORD="$ROS_PASS" psql -U "$ROS_USER" -d costonprem_ros -t -c "…"`
    with `ROS_USER`/`ROS_PASS` from secret `cost-onprem-db-credentials`
    (keys `ros-user`/`ros-password`).
-3. **Fetch server rows** through the gateway (Bearer JWT + identity; the
-   cluster cert is self-signed and filters contain brackets, so always
-   `curl -skg`). For the container family and PVC, fetch **per
-   term** and merge — the default projection serves a subset:
-   `filter[term]=short_term|medium_term|long_term`.
+3. **Fetch server rows** through the gateway (Bearer JWT + identity — the
+   JWT lives ~300 s, refresh between batches; the cluster cert is
+   self-signed and filters contain brackets, so always `curl -skg`).
+   For the container family and PVC, fetch **per term** and merge — the
+   default projection serves a subset:
+   `filter[term]=short_term|medium_term|long_term`. Container-family
+   fetches must pin `memory-unit=MiB` (the server's byte default produces
+   exact-2^20-ratio garbage in the comparator). The container list route
+   is the base `/recommendations/openshift` (or `/container` — singular,
+   like `/vm`; the plural forms fall into detail routes). The VM list
+   caps `limit` at 100 — paginate for larger sets. For the HCP real-data
+   leg, the testdata manifest carries a placeholder cluster id — identify
+   the real cluster empirically from `hcp_capacity_history`.
 4. **Compare**: `python3 compare_parity.py --entity <e> --robne <r.json> --server <s1.json> [s2.json …]`.
    Entities: container, namespace, node, gpu-mig, gpu-timeslicing, vm, pvc,
    cluster-quota, snapshot, hcp.
@@ -129,7 +137,38 @@ once, upload that exact directory, and point robne at it.
 | Uploads produce no server recs | Non-UUID cluster id → Kafka poison; use `str(uuid.uuid4())` |
 | Row-shape misread as divergence | Server nests term/engine and rounds memory to MiB; the comparator normalizes — use it, don't eyeball |
 | VM list endpoint 400 "bad recommendation_id" | List route is `/vm` (singular); `/vms/…` is the history route |
+| Container list 400 the same way | Container list is the base route or `/container` (singular) |
+| Container memory diffs in exact 2^20 ratios | Server served bytes — pin `memory-unit=MiB` on container-family fetches |
+| robne hcp stdout not pure JSON | The hcp path leaks log lines before the envelope — strip them (robne bug, tracked) |
+| sshuttle dies but the hypervisor answers | SSH `-L` port-forwards through the hypervisor + a kubeconfig pointing at localhost is a viable reconnection; if the hypervisor is unreachable too, stop and ask |
 | Payload files vanish from `/tmp` | Keep scratch under `.superpowers/tmp/` |
+
+## Interrupted Runs
+
+Cluster unreachability mid-run (VPN/sshuttle drop, hypervisor gone)
+manifests as **silent poll timeouts and hung agents** — recognize it
+early (`oc whoami` timing out, TCP to the cluster VIP dead), stop, and
+ask for reconnection; do not retry around a network-level block.
+
+What survives an interruption: the payloads on disk, and — for anything
+already injected — the server's computed recommendations. The expensive
+phases are done; do not redo them.
+
+Resume protocol:
+
+1. **Check connectivity first** (`oc whoami`; TCP to the API VIP).
+2. **Verify what landed** per payload cluster: the clock-pinning stamp
+   query doubles as the landed-check — a stamp means recs exist.
+3. **Never re-generate or re-inject** a cluster that landed; reuse its
+   payload dir and cluster id from the scratch records.
+4. **Resume from fetch/compare** (stamps → robne → fetch → compare).
+5. As you work, **persist the resume state** — cluster ids, stamps,
+   injection results — in the scratch dir; it is the hand-off artifact.
+
+A hung agent (wedged in a call through the dead tunnel) will not
+recover on its own once connectivity returns; dispatch a fresh agent
+with a pointer to the scratch state and this protocol rather than
+waiting it out.
 
 ## Reporting
 
