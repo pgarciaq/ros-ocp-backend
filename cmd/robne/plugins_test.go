@@ -34,3 +34,18 @@ func TestApplyFilePlugins_ImplicitKeepsClassifiedSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"snapshot"}, got)
 }
+
+// Round-9 B1: hcp must prune when no capacity rows are loaded — without
+// this case, every default run (allShippedPlugins includes hcp) would
+// emit v12 with no capacity sibling.
+func TestPruneMissingFilePlugins_HCP(t *testing.T) {
+	loadedWithCapacity := csv.LoadResult{
+		Rows:            []csv.Row{{Namespace: "app"}},
+		HCPCapacityRows: []csv.HCPCapacityRow{{CurrentHCCount: 3}},
+	}
+	loadedWithout := csv.LoadResult{Rows: []csv.Row{{Namespace: "app"}}}
+
+	assert.Equal(t, []string{"container", "hcp"}, pruneMissingFilePlugins([]string{"container", "hcp"}, loadedWithCapacity))
+	assert.Equal(t, []string{"container"}, pruneMissingFilePlugins([]string{"container", "hcp"}, loadedWithout))
+	assert.Equal(t, []string{"hcp"}, pruneMissingFilePlugins([]string{"hcp"}, loadedWithCapacity))
+}

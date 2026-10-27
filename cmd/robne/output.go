@@ -32,8 +32,9 @@ const recommendJSONVersionWithClusterQuota = 8
 const recommendJSONVersionWithSnapshot = 9
 const recommendJSONVersionWithBusinessHours = 10
 const recommendJSONVersionWithBusinessHoursPlugins = 11
+const recommendJSONVersionWithHCPCapacity = 12
 
-var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster_quota", "snapshot"}
+var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster_quota", "snapshot", "hcp"}
 
 // recommendResult is the CLI-owned stdout payload (engine recs plus run metadata).
 type recommendResult struct {
@@ -443,11 +444,22 @@ func envelopeVersion(plugins []string, bh bool) int {
 	if pluginEnabled(plugins, "snapshot") {
 		v = recommendJSONVersionWithSnapshot
 	}
+	// Fall-through ladder (#700 Task 3, round-8 C1 option 2): no early
+	// returns. The historical BH early-returns were a short-circuit of
+	// max() — BH values dominate the entity ladder — so assigning (and
+	// falling through) is behavior-identical for every existing
+	// combination, pinned by the v1–v11 assertions. Capacity (v12) is
+	// assigned LAST so it wins regardless of BH; a misplaced check now
+	// fails loudly in the version tests instead of silently as dead code,
+	// and v13+ are one-line appends with no precedence reasoning.
 	if bh {
+		v = recommendJSONVersionWithBusinessHours
 		if pluginEnabled(plugins, "node") || pluginEnabled(plugins, "gpu") || pluginEnabled(plugins, "vm") {
-			return recommendJSONVersionWithBusinessHoursPlugins
+			v = recommendJSONVersionWithBusinessHoursPlugins
 		}
-		return recommendJSONVersionWithBusinessHours
+	}
+	if pluginEnabled(plugins, "hcp") {
+		v = recommendJSONVersionWithHCPCapacity
 	}
 	return v
 }

@@ -47,9 +47,10 @@ func TestEnvelopeCapability_CoversStdoutPluginsAndBH(t *testing.T) {
 	}
 	assert.Equal(t, recommendJSONVersionWithBusinessHours, names["business_hours"])
 	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, names["business_hours_plugins"])
+	assert.Equal(t, recommendJSONVersionWithHCPCapacity, names["hcp"])
 	_, timeslicing := names["gpu_timeslicing"]
 	assert.False(t, timeslicing, "timeslicing is a GPU sibling, not a separate envelope bump")
-	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, jsonEnvelopeMax())
+	assert.Equal(t, recommendJSONVersionWithHCPCapacity, jsonEnvelopeMax())
 }
 
 func TestEnvelopeVersion_ContainerOnlyStaysOne(t *testing.T) {
@@ -80,4 +81,24 @@ func TestBinaryVersion_EmptyIsDevel(t *testing.T) {
 	assert.Equal(t, "devel", binaryVersion())
 	version = "abc123-dirty"
 	assert.Equal(t, "abc123-dirty", binaryVersion())
+}
+
+// Envelope v12 + the fall-through ladder (#700 Task 3). The ladder has
+// no early returns: entity ladder → BH assigns v10/v11 → capacity
+// assigns v12 last (round-8 C1 option 2). Plain-BH envelopes keep
+// v10/v11 byte-identical.
+func TestEnvelopeVersion_CapacityOnly(t *testing.T) {
+	assert.Equal(t, recommendJSONVersionWithHCPCapacity, envelopeVersion([]string{"hcp"}, false))
+}
+
+func TestEnvelopeVersion_BHAndCapacity(t *testing.T) {
+	assert.Equal(t, recommendJSONVersionWithHCPCapacity, envelopeVersion([]string{"hcp"}, true))
+	assert.Equal(t, recommendJSONVersionWithHCPCapacity, envelopeVersion([]string{"hcp", "node"}, true))
+	assert.Equal(t, recommendJSONVersionWithHCPCapacity, envelopeVersion([]string{"container", "hcp"}, true))
+}
+
+func TestEnvelopeVersion_PlainBHUnchanged(t *testing.T) {
+	assert.Equal(t, recommendJSONVersionWithBusinessHours, envelopeVersion([]string{"container"}, true))
+	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, envelopeVersion([]string{"node"}, true))
+	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, envelopeVersion([]string{"gpu", "vm"}, true))
 }

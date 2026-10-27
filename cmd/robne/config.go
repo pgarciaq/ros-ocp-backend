@@ -24,12 +24,12 @@ var allowedYAMLKeys = map[string]struct{}{
 var reservedYAMLKeys = []string{"node", "gpu", "pvc", "vm", "quota", "cluster_quota", "snapshot"}
 
 var enabledPlugins = map[string]struct{}{
-	"container": {}, "namespace": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {}, "snapshot": {},
+	"container": {}, "namespace": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {}, "snapshot": {}, "hcp": {},
 }
 
 var knownPlugins = map[string]struct{}{
 	"container": {}, "node": {}, "namespace": {}, "gpu": {},
-	"pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {}, "snapshot": {},
+	"pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {}, "snapshot": {}, "hcp": {},
 }
 
 type fileConfig struct {
@@ -337,7 +337,7 @@ func validatePlugins(cfg fileConfig, flag string) error {
 }
 
 func allShippedPlugins() []string {
-	return []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster_quota", "snapshot"}
+	return []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster_quota", "snapshot", "hcp"}
 }
 
 func pluginsExplicit(cfg fileConfig, flag string) bool {

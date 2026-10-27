@@ -84,6 +84,14 @@ func pruneMissingFilePlugins(plugins []string, loaded csv.LoadResult) []string {
 			if loadedHasKind(loaded, csv.KindSnapshot) {
 				out = append(out, p)
 			}
+		case "hcp":
+			// Round-9 B1: hcp must prune when no capacity rows are
+			// loaded — allShippedPlugins includes it, so without this
+			// case every default run would emit envelope v12 with no
+			// capacity sibling.
+			if len(loaded.HCPCapacityRows) > 0 {
+				out = append(out, p)
+			}
 		default:
 			out = append(out, p)
 		}
@@ -167,6 +175,11 @@ func pruneEmptyPathAPlugins(fl *fileLoad) {
 			}
 		case "snapshot":
 			// Path A has no snapshot digest table.
+		case "hcp":
+			// Path A has no capacity digest table (#700): auto mode
+			// drops hcp here; explicit hcp gets the friendly error in
+			// Task 4's Path-A wiring. Without this case the default arm
+			// keeps hcp and an empty-select Path-A run stops erroring.
 		default:
 			out = append(out, p)
 		}
