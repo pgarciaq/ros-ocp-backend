@@ -250,6 +250,13 @@ committed to the repository and CI fails when it no longer matches the tree
 `/opt/homebrew/share/man/man1` or any `MANPATH` directory). Windows has no
 `man` command — read `docs/man/markdown/` or `--help`.
 
+**Full command reference, no checkout needed:** the markdown tree is
+[browsable on GitHub](https://github.com/pgarciaq/ros-ocp-backend/tree/{{ git_branch }}/docs/man/markdown) —
+[`robne.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/man/markdown/robne.md)
+plus one page per subcommand (`robne_recommend.md`, `robne_explain.md`, …),
+each with the complete flag tables and examples rendered from the same
+command tree the CI drift check guards.
+
 ## Shell completion
 
 Cobra adds a `completion` subcommand by default:
