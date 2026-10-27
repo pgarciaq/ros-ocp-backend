@@ -28,10 +28,50 @@ unit conversions, display-rounding tolerances; exit 1 on divergence).
 ## Prerequisites
 
 - Cluster access (`oc` logged in; read the cluster's `ACCESS.md`).
-- robne built (`make robne`); payloads on disk — either the chart E2E temp dirs
-  (`/tmp/e2e-*`, one cluster each) or nise-generated.
+- robne built (`make robne`); a payload on disk — a surviving chart E2E temp
+  dir (`/tmp/e2e-*`, one cluster each) or freshly generated (next section).
 - For PVC / cluster-quota legs: the E2E flows package only the CSVs they assert
   on — inject those payloads manually (fresh UUID cluster; see Procedure).
+
+## Generating Fresh Payloads
+
+E2E temp dirs live in `/tmp` and get cleaned — when none survive, generate.
+Parity requires the **same bytes** to reach robne and the server: generate
+once, upload that exact directory, and point robne at it.
+
+1. **Template per entity** (nise repo `examples/`, or the chart's
+   `tests/fixtures/nise_templates/` for cluster-quota):
+
+   | Entity | Template |
+   |---|---|
+   | container / namespace / node / quota | `ros_ocp_e2e/ocp_report_ros_0.yml` |
+   | gpu-mig | `ros_ocp_e2e/ocp_report_gpu_mig_ros.yml` |
+   | gpu-timeslicing | `ros_ocp_e2e/ocp_report_gpu_timeslicing.yml` |
+   | vm (+ pvc/gpu companions) | `ocp_vm_recommendations/vm_static_data.yml` |
+   | pvc | `ros_ocp_e2e/ocp_report_pvc_rightsizing.yml` |
+   | cluster-quota | chart `seed_cluster_quota.yml` (the flow also enriches the CSV — `e2e_helpers.enrich_cluster_quota_csv_files`) |
+   | snapshot | `ros_ocp_e2e/ocp_report_snapshot_classification.yml` |
+   | hcp capacity | `ros_ocp_e2e/ocp_report_hcp_capacity.yml` |
+
+2. **Generate** (inside a scratch dir; output lands in cwd). Use the chart
+   repo's pinned venv nise (`~/dev/koku/cost-onprem-chart/tests/.venv/bin/nise`)
+   or the nise checkout's (`~/dev/koku/nise/.venv/bin/nise`):
+   `nise report ocp --static-report-file <tpl> --ocp-cluster-id <uuid4> -s <start> -e <end> --ros-ocp-info -w`
+   Pass `-s`/`-e` explicitly — nise defaults end to **today**, and term windows
+   anchor to the data's last day. For a fresh run use a window ending
+   yesterday (the E2E flows use now−14d … now−1d) unless deliberately
+   straddling a window boundary (#705 fixtures do). Snapshot-relative offsets
+   (`creation_days_ago`) anchor to the window **start**, so old snapshots age
+   as the window drifts. nise exits 0 silently — verify the expected CSV
+   appeared with `ls` (primary CSV per entity: snapshot
+   `ocp_snapshot_inventory.csv`, pvc `ocp_storage_usage.csv`, vm
+   `ocp_ros_vm_usage.csv`, gpu `ocp_ros_usage.csv` + `ocp_gpu_usage.csv`,
+   cluster-quota `ocp_ros_cluster_quota.csv`, hcp
+   `ros-openshift-hcp-capacity-*.csv`).
+3. **Upload that same directory** via the injection recipe (Procedure step 6).
+4. **Real-cluster (KMO-collected) data cannot be generated** — retrieve the
+   payload from the cluster's object storage instead, or use saved testdata
+   (e.g. `cmd/robne/testdata/hcp-capacity/` for the real HCP leg).
 
 ## Procedure
 
