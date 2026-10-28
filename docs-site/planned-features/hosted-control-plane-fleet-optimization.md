@@ -372,7 +372,7 @@ Wedges are **shippable product slices**. Research validates; implementation chil
 | **W3 — HC zombie / lifecycle** | Idle hosted + CP still on → delete/review advisory (not hibernate/`pausedUntil`) | D | **Core implemented** — workload/CPU and pool-zero lanes; aged-HC evidence, cost estimate, and cost-group follow-ups remain (#663/#661/#665) | R4 [#388](https://github.com/pgarciaq/ros-ocp-backend/issues/388) ✅ |
 | **W4 — Fleet admission headroom** | Labeled packing / MCE headroom (not lab-universal N) | E | **Implemented 2026-10-26 (integration release pending)** [#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392) — native engine + MCE reference (ADR-0334 amended) | R5 [#389](https://github.com/pgarciaq/ros-ocp-backend/issues/389) ✅ |
 | **W5 — API tax (operators/webhooks)** | Top-N SA + slow webhook digests; both planes | G | Post-MVP; **R6 GO** (ADR-0335), but APIRequestCount slice is gated on source data/operator support (#657) | R6 [#390](https://github.com/pgarciaq/ros-ocp-backend/issues/390) ✅ |
-| **W6 — CP cost attribution** | $ per HC from management | H | Post-MVP / postponed (#394, #627) | Backlog |
+| **W6 — CP cost attribution** | $ per HC from management | H | Post-MVP / postponed (#627; #394 closed as its duplicate) | Backlog |
 | **W7 — CP pools / MachineSet** | Dedicated management pools | I | Post-MVP / postponed (#395) | Backlog |
 | **W8 — HC sleep schedules** | Business-hours non-prod | J | Post-MVP / postponed (#396); no native HCP hibernate claim | Backlog |
 | **W9 — Fleet placement share** | Shared index with VM placement | K | Coordinate | Link sibling feature |
