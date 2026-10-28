@@ -109,6 +109,7 @@ nav:
       - Cross-Cluster VM Placement: planned-features/cross-cluster-vm-placement.md
       - HCP & Fleet Control-Plane Optimization: planned-features/hosted-control-plane-fleet-optimization.md
       - robne SaaS Clowder Cutover: planned-features/robne-saas-clowder-cutover.md
+      - Recommendation Processing Separation (under consideration): planned-features/native-recommendation-processing.md
       - Replica Count Optimization: planned-features/replica-count-optimization.md
       - Local Mode: planned-features/local-mode.md
   - Architecture:
