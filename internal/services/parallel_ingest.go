@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -17,6 +18,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	kafka_internal "github.com/redhatinsights/ros-ocp-backend/internal/kafka"
+	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
@@ -192,11 +194,26 @@ func processVMFileBatch(
 			continue
 		}
 		markFileProcessing(ctx, pool, log, kafkaMsg, filename, string(types.PayloadTypeVM))
-		err := ingestCSVFromURL(ctx, f.file, orgID, clusterUUID, string(types.PayloadTypeVM),
-			func(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
-				_, err := batch.AddCSV(ctx, r)
+		// Download directly and route via the batch's AddFile. The plugin
+		// dispatch (ingestCSVFromURL) is per-file by trait design and would
+		// run the plugin's per-file ProcessVMCSV, defeating the batch; the
+		// VM plugin returns no hook rows, so nothing is bypassed.
+		err := func() error {
+			var body io.ReadCloser
+			if err := metrics.ObservePhase(metrics.PhaseDownload, func() error {
+				var err error
+				body, err = utils.ReadCSVBodyFromUrl(f.file)
+				return err
+			}); err != nil {
+				csvFetchError.Inc()
+				return fmt.Errorf("fetch vm CSV: %w", err)
+			}
+			defer func() { _ = body.Close() }()
+			return metrics.ObservePhase(metrics.PhaseParseDigest, func() error {
+				_, err := batch.AddFile(ctx, body)
 				return err
 			})
+		}()
 		if err != nil {
 			if isTransientKafkaProcessingError(err) {
 				return err, false

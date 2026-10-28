@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -630,6 +631,50 @@ func (b *VMDigestBatch) AddCSV(ctx context.Context, r io.Reader) (int, error) {
 	}
 	b.total += n
 	return n, nil
+}
+
+// IsVMGPUDeviceCSVHeader reports a VM gpu-device companion CSV by header.
+func IsVMGPUDeviceCSVHeader(header string) bool {
+	lower := strings.ToLower(header)
+	return strings.Contains(lower, "gpu_uuid") && !strings.Contains(lower, "cpu_usage_mc")
+}
+
+// IsVMPVCCSVHeader reports a VM pvc companion CSV by header.
+func IsVMPVCCSVHeader(header string) bool {
+	lower := strings.ToLower(header)
+	return strings.Contains(lower, "pvc_name") && !strings.Contains(lower, "cpu_usage_mc")
+}
+
+// AddFile routes ONE payload file by its header, mirroring the VM plugin's
+// IngestCSV: gpu-device and pvc companions ingest per file (their tables
+// are per-file scoped); usage rows go to the shared accumulators so
+// same-day rows across files merge (#707). Returns the kind routed to.
+func (b *VMDigestBatch) AddFile(ctx context.Context, r io.Reader) (kind string, err error) {
+	buf := bufio.NewReader(r)
+	header, err := buf.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return "", fmt.Errorf("reading VM CSV header: %w", err)
+	}
+	body := io.MultiReader(strings.NewReader(header), buf)
+	switch {
+	case IsVMGPUDeviceCSVHeader(header):
+		if err := IngestVMGPUDeviceCSV(ctx, b.pool, body, b.orgID, b.clusterUUID); err != nil {
+			return "vm-gpu", fmt.Errorf("ingesting VM GPU device CSV: %w", err)
+		}
+		logging.ForOrg(b.orgID, b.clusterUUID).Info("VMDigestBatch.AddFile: upserted VM GPU device rows")
+		return "vm-gpu", nil
+	case IsVMPVCCSVHeader(header):
+		if err := IngestVMPVCCSV(ctx, b.pool, body, b.orgID, b.clusterUUID); err != nil {
+			return "vm-pvc", fmt.Errorf("ingesting VM PVC CSV: %w", err)
+		}
+		logging.ForOrg(b.orgID, b.clusterUUID).Info("VMDigestBatch.AddFile: upserted VM PVC rows")
+		return "vm-pvc", nil
+	default:
+		if _, err := b.AddCSV(ctx, body); err != nil {
+			return "vm", err
+		}
+		return "vm", nil
+	}
 }
 
 // Flush computes and upserts the digests once for the whole payload. Call

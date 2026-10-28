@@ -88,15 +88,9 @@ func (p *VMPlugin) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reade
 	return nil, nil
 }
 
-func isVMGPUDeviceCSVHeader(header string) bool {
-	lower := strings.ToLower(header)
-	return strings.Contains(lower, "gpu_uuid") && !strings.Contains(lower, "cpu_usage_mc")
-}
+func isVMGPUDeviceCSVHeader(header string) bool { return ingestion.IsVMGPUDeviceCSVHeader(header) }
 
-func isVMPVCCSVHeader(header string) bool {
-	lower := strings.ToLower(header)
-	return strings.Contains(lower, "pvc_name") && !strings.Contains(lower, "cpu_usage_mc")
-}
+func isVMPVCCSVHeader(header string) bool { return ingestion.IsVMPVCCSVHeader(header) }
 
 func (p *VMPlugin) RegisterRoutes(g *echo.Group) {
 	if plugin.EnabledFor(plugin.KruizePluginName) || !plugin.EnabledFor(p.Name()) {
