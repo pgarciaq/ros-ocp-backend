@@ -25,6 +25,7 @@ Package: [`internal/plugins/pvc`](https://github.com/pgarciaq/ros-ocp-backend/bl
 | CSVIngestor | Yes — parses `storage` CSV type |
 | APIProvider | Yes — list and detail |
 | RetentionProvider | Yes |
+| HistoryRetentionProvider | Yes — `pvc_recommendation_quality` (#701) |
 | TermProvider | Yes — short/medium/long (max 365 days) |
 
 ## What it does

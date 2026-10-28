@@ -27,7 +27,7 @@ it as capacity history rows via `internal/ingestion`.
 |-------|-----------|
 | CSVIngestor | Yes — claims the `hcp-capacity` CSV type; rows are parsed and persisted as history by `internal/ingestion` (shared parser with the robne CLI, `librobne/csv`) |
 | IngestHook | Yes — observes `container` rows after ingestion (`AfterIngest`) |
-| RetentionProvider | No — the core history sweep owns `hcp_capacity_history` (the trait carries only the month cutoff; a plugin sweep would silently deliver 6 months instead of 90 days — tracked in [#701](https://github.com/pgarciaq/ros-ocp-backend/issues/701)) |
+| HistoryRetentionProvider | Yes — declares `hcp_capacity_history`; swept by the core history sweep at the days cutoff by construction ([#701](https://github.com/pgarciaq/ros-ocp-backend/issues/701)) |
 | APIProvider | Yes — registers the dedicated HCP surface: `GET /recommendations/openshift/hcp`, `GET .../hcp/:recommendation-id`, plus the fleet-capacity endpoints `GET .../hcp/fleet-capacity` (latest per authorized management cluster) and `GET .../hcp/fleet-capacity/history` (per-cluster trend). Routes are absent under Kruize or when disabled |
 | TermProvider | Yes — short/medium/long windows via `DefaultTerms`, `MaxWindowDays` 90 |
 

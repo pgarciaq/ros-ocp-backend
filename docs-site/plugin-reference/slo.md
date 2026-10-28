@@ -22,6 +22,7 @@ Package: [`internal/plugins/slo`](https://github.com/pgarciaq/ros-ocp-backend/bl
 |-------|-----------|
 | CSVIngestor | Yes — parses `slo` CSV type, idempotent hourly upserts |
 | RetentionProvider | Yes — sweeps both tables (partition drops) |
+| HistoryRetentionProvider | Yes — `hosted_api_bucket_rollups`, `hosted_worker_pressure` (#701) |
 | APIProvider | No — no routes |
 | TermProvider | No — store only, no recommendation windows |
 

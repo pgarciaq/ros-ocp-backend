@@ -23,6 +23,7 @@ Package: [`internal/plugins/vm`](https://github.com/pgarciaq/ros-ocp-backend/blo
 | CSVIngestor | Yes — parses ROS VM usage CSV |
 | APIProvider | Yes — list, detail, history |
 | RetentionProvider | Yes |
+| HistoryRetentionProvider | Yes — `vm_recommendation_quality` (#701) |
 | TermProvider | Yes — short/medium/long (max 90 days) |
 
 !!! note "VM term naming convention"

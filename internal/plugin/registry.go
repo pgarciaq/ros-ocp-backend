@@ -1,6 +1,8 @@
 package plugin
 
 import (
+	"testing"
+
 	"fmt"
 	"strings"
 	"sync"
@@ -45,6 +47,23 @@ func Register(p Plugin) {
 	regMu.Lock()
 	defer regMu.Unlock()
 	registry = append(registry, p)
+}
+
+// RegisterForTest registers p and removes it when the test finishes.
+// Test-only: production code registers from init().
+func RegisterForTest(tb testing.TB, p Plugin) {
+	tb.Helper()
+	Register(p)
+	tb.Cleanup(func() {
+		regMu.Lock()
+		defer regMu.Unlock()
+		for i, existing := range registry {
+			if existing == p {
+				registry = append(registry[:i], registry[i+1:]...)
+				return
+			}
+		}
+	})
 }
 
 // All returns every registered plugin (enabled or not).

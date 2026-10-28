@@ -93,6 +93,17 @@ If your plugin writes digests or recommendation sets, implement this so data exp
 
 **Exceptions:** `kruize` owns no tables in-process; `snapshot` inventory purge remains in core [`retention.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/retention.go).
 
+## HistoryRetentionProvider
+
+Declares **history-class** tables for the core history sweep (#701). Tables
+declared here are swept at the `ROS_HISTORY_RETENTION_DAYS` cutoff (default
+90 days) — never the digest month cutoff — **by construction**: there is no
+code path where an implementer applies the wrong cutoff. The core
+`historyRetainedTables` list remains the plugin-less-binary fallback; plugin
+declarations ADD to it (overlap harmless, `DROP IF EXISTS`). Implement it
+when your plugin owns a history or quality table; `RetentionProvider` stays
+for digest-class tables and custom digest sweep logic.
+
 ## TermProvider
 
 Declares `DefaultTerms()` (short / medium / long) and `MaxWindowDays()`.

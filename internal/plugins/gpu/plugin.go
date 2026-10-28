@@ -132,4 +132,10 @@ func (p *GPUPlugin) DefaultTerms() []plugin.TermConfig {
 	return engine.ContainerFamilyPluginTerms()
 }
 
+func (p *GPUPlugin) HistoryRetentionTables() []string {
+	// #701: swept by the core history sweep at the days cutoff; the core
+	// list keeps this entry as the plugin-less fallback (overlap harmless).
+	return []string{"gpu_mig_recommendation_quality"}
+}
+
 func (p *GPUPlugin) MaxWindowDays() int { return 90 }

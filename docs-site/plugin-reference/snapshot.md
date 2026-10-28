@@ -22,6 +22,7 @@ Package: [`internal/plugins/snapshot`](https://github.com/pgarciaq/ros-ocp-backe
 | Trait | Supported |
 |-------|-----------|
 | CSVIngestor | Yes — ingests snapshot inventory, classifies, upserts `snapshot_recommendation_sets` |
+| HistoryRetentionProvider | Yes — `snapshot_recommendation_quality` (#701) |
 | APIProvider | Yes — list, namespace/cluster summary, settings |
 | TermProvider | No — threshold-based age rules, not short/medium/long windows |
 

@@ -27,6 +27,7 @@ Package: [`internal/plugins/gpu`](https://github.com/pgarciaq/ros-ocp-backend/bl
 | APIEnricher | Yes — decorates container list/detail `gpu` map |
 | APIProvider | Yes — fleet summary, time-slicing list/detail, MIG list, history |
 | RetentionProvider | Yes — sweeps `gpu_container_digests`, `node_gpu_timeslicing_recommendations`, `node_gpu_timeslicing_recommendation_history`; also prunes `gpu_mig_recommendation_sets` via date-based DELETE |
+| HistoryRetentionProvider | Yes — `gpu_mig_recommendation_quality` (#701) |
 | TermProvider | Yes — short/medium/long (max 90 days) |
 
 ## Classification logic

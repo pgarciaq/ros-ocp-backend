@@ -111,6 +111,12 @@ func (p *VMPlugin) DefaultTerms() []plugin.TermConfig {
 	return engine.VMPluginTerms()
 }
 
+func (p *VMPlugin) HistoryRetentionTables() []string {
+	// #701: swept by the core history sweep at the days cutoff; the core
+	// list keeps this entry as the plugin-less fallback (overlap harmless).
+	return []string{"vm_recommendation_quality"}
+}
+
 func (p *VMPlugin) MaxWindowDays() int { return 90 }
 
 func (p *VMPlugin) RetentionTables() []string {

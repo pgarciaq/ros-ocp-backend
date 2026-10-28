@@ -91,6 +91,12 @@ func (p *PVCPlugin) RegisterRoutes(g *echo.Group) {
 	g.GET("/recommendations/openshift/pvcs/detail", rosapi.GetPVCRecommendationDetail)
 }
 
+func (p *PVCPlugin) HistoryRetentionTables() []string {
+	// #701: swept by the core history sweep at the days cutoff; the core
+	// list keeps this entry as the plugin-less fallback (overlap harmless).
+	return []string{"pvc_recommendation_quality"}
+}
+
 func (p *PVCPlugin) RetentionTables() []string {
 	return []string{"daily_pvc_digests"}
 }

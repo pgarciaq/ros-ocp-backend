@@ -51,6 +51,9 @@ var retainedTables = []string{
 
 // Tables retained by the separate ROS_HISTORY_RETENTION_DAYS setting
 // (history/quality grow faster: one row per container×term×engine per run).
+// Plugin-owned rows below are ALSO declared via HistoryRetentionProvider
+// (#701); each stays here as the plugin-less-binary fallback (overlap
+// harmless — DROP IF EXISTS; the documented digest-class pattern).
 var historyRetainedTables = []string{
 	"recommendation_history",
 	"recommendation_quality",
@@ -63,12 +66,14 @@ var historyRetainedTables = []string{
 	"hosted_api_bucket_rollups",
 	"hosted_worker_pressure",
 	// #393 thin W5: bounded per-cluster webhook rollups, same 90d sweep.
+	// No plugin home (service-level ingest functions own the writes).
 	"hosted_api_tax_rollups",
 	// #673 NodePool inventory: bounded per-HC pool snapshots, same sweep.
+	// No plugin home (service-level ingest functions own the writes).
 	"hosted_nodepool_rollups",
 	// #392 W4 fleet-capacity snapshots: bounded hourly rows per management
-	// cluster, same 90d sweep. The RetentionProvider trait contract cannot
-	// express a days-based cutoff (#701) — do not move this to a plugin.
+	// cluster, same sweep. Plugin-declared via HistoryRetentionProvider
+	// (#701) — swept at the days cutoff by construction.
 	"hcp_capacity_history",
 }
 
@@ -142,7 +147,30 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 	}
 	historyCutoff := time.Now().UTC().AddDate(0, 0, -historyDays)
 	historyCutoffYM := historyCutoff.Format("200601")
-	if err := SweepPartitionedTables(ctx, pool, historyRetainedTables, historyCutoffYM); err != nil {
+
+	// #701: history-class tables may be plugin-declared via
+	// HistoryRetentionProvider — swept HERE at the days cutoff, by
+	// construction (never the digest month cutoff). The core
+	// historyRetainedTables list is the plugin-less-binary fallback and
+	// keeps every entry; plugin declarations ADD to it (overlap harmless,
+	// DROP IF EXISTS — the documented digest-class pattern). Collection
+	// failure never skips the core fallback sweep.
+	historySweepTables := historyRetainedTables
+	for _, hp := range plugin.ByTrait[plugin.HistoryRetentionProvider]() {
+		for _, table := range hp.HistoryRetentionTables() {
+			duplicate := false
+			for _, existing := range historySweepTables {
+				if existing == table {
+					duplicate = true
+					break
+				}
+			}
+			if !duplicate {
+				historySweepTables = append(historySweepTables, table)
+			}
+		}
+	}
+	if err := SweepPartitionedTables(ctx, pool, historySweepTables, historyCutoffYM); err != nil {
 		logging.GetLogger().Warnf("retention: partitioned sweep (history): %v", err)
 		errs = append(errs, err)
 	}

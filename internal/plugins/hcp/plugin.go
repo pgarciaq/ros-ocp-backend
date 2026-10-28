@@ -16,9 +16,12 @@
 //   - [plugin.TermProvider] — configurable short/medium/long terms (max 90 days,
 //     same 1/7/15 defaults as other fast-moving plugins, independent rows)
 //
-// No RetentionProvider: the core history sweep owns hcp_capacity_history
-// (the RetentionProvider trait carries only the month cutoff — #701; a
-// plugin sweep would silently deliver 6 months instead of 90 days).
+// HistoryRetentionProvider (#701): hcp_capacity_history is swept by the
+// core history sweep at the days cutoff via this declaration — by
+// construction, never the digest month cutoff. (The pre-#701 refusal note:
+// the RetentionProvider trait's month cutoff would have silently delivered
+// the digest retention instead of the history retention; the split
+// declaration closed that trap.)
 package hcp
 
 import (
@@ -81,6 +84,12 @@ func (p *HCPPlugin) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Read
 
 // RegisterRoutes serves the dedicated HCP surface (#638). The no-route guard
 // test from #630 retired with this method: routes exist exactly when enabled.
+func (p *HCPPlugin) HistoryRetentionTables() []string {
+	// The core list keeps this entry as the plugin-less fallback
+	// (overlap harmless).
+	return []string{"hcp_capacity_history"}
+}
+
 func (p *HCPPlugin) RegisterRoutes(g *echo.Group) {
 	if plugin.EnabledFor(plugin.KruizePluginName) {
 		return

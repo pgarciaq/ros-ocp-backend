@@ -14,6 +14,8 @@
 //   - [APIProvider] — registers HTTP routes on the authenticated API group
 //   - [APIEnricher] — decorates responses produced by other handlers
 //   - [RetentionProvider] — declares tables and sweep logic for data retention
+//   - [HistoryRetentionProvider] — declares history-class tables swept at the
+//     days-based cutoff by the core history sweep (#701)
 //   - [TermProvider] — declares configurable recommendation time-window terms
 //   - [MigrationProvider] — reserved for future DDL ownership declaration
 //
@@ -144,6 +146,23 @@ type RetentionProvider interface {
 	// SweepRetention removes data older than olderThan from this plugin's tables.
 	// Implementations should use partition-based deletion where possible.
 	SweepRetention(ctx context.Context, pool *pgxpool.Pool, olderThan time.Time) error
+}
+
+// HistoryRetentionProvider declares history-class tables for the core
+// history sweep (#701). Tables declared here are swept by
+// engine.RunRetentionSweep at the ROS_HISTORY_RETENTION_DAYS cutoff
+// (default 90 days) — NEVER the digest month cutoff — by construction:
+// there is no code path where an implementer applies the months cutoff to
+// a history table. The core historyRetainedTables list remains the
+// plugin-less-binary fallback; plugin declarations ADD to it (overlap
+// harmless, DROP IF EXISTS — the documented digest-class pattern,
+// ADR-0107's fallback slice extended to the history class).
+type HistoryRetentionProvider interface {
+	Plugin
+	// HistoryRetentionTables returns the history-class table names this
+	// plugin owns; the core sweep drops their partitions older than the
+	// history cutoff.
+	HistoryRetentionTables() []string
 }
 
 // MigrationProvider is reserved for future use when plugins can declare DDL ownership

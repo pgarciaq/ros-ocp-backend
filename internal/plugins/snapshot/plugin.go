@@ -50,6 +50,12 @@ func init() {
 	plugin.Register(&SnapshotPlugin{})
 }
 
+func (p *SnapshotPlugin) HistoryRetentionTables() []string {
+	// #701: swept by the core history sweep at the days cutoff; the core
+	// list keeps this entry as the plugin-less fallback (overlap harmless).
+	return []string{"snapshot_recommendation_quality"}
+}
+
 func (p *SnapshotPlugin) Name() string { return "snapshot" }
 
 func (p *SnapshotPlugin) Enabled() bool { return plugin.EnabledFor(p.Name()) }

@@ -38,6 +38,12 @@ func init() {
 	plugin.Register(&SLOPlugin{})
 }
 
+func (p *SLOPlugin) HistoryRetentionTables() []string {
+	// #701: swept by the core history sweep at the days cutoff; the core
+	// list keeps both entries as the plugin-less fallback (overlap harmless).
+	return []string{"hosted_api_bucket_rollups", "hosted_worker_pressure"}
+}
+
 func (p *SLOPlugin) Name() string { return "slo" }
 
 func (p *SLOPlugin) Enabled() bool { return plugin.EnabledFor(p.Name()) }
