@@ -237,6 +237,20 @@ terms:
     min_data_days: 7
     decay_half_life_hours: 360
     replica_target_utilization_pct: 70
+                                  # terms: is CONTAINER-FAMILY-scoped (container, namespace,
+                                  # node, gpu). VM and PVC resolve their own documented tables.
+
+# Per-plugin term overrides (#705, ADR-0346). Any subset of the six term-bearing
+# plugins; unset plugins use their documented tables (container family 1/7/15,
+# VM 7/15/30, PVC 7/30/90). Nothing falls through between plugins.
+plugin_terms:
+  vm:
+    - name: short_term            # short/short_term spellings both accepted
+      window_days: 10
+      min_data_days: 5
+  # pvc:
+  #   - name: medium
+  #     window_days: 45
 
 sizing:                           # maps to types.SizingThresholdSettings
   cpu_cost_percentile: 0.60
@@ -293,9 +307,27 @@ business_hours:
 # snapshot: { ... }
 ```
 
-**Validation:** unknown keys are errors (no silent ignore). Percentiles must be in `(0, 1]`. `plugins` must be a known entity name. Empty `terms` is an error (do not silently use defaults if the key is present and empty). Empty `plugins:` (key present) is an error; omit the key to enable all shipped plugins.
+**Validation:** unknown keys are errors (no silent ignore). Percentiles must be in `(0, 1]`. `plugins` must be a known entity name. Empty `terms` is an error (do not silently use defaults if the key is present and empty). Empty `plugins:` (key present) is an error; omit the key to enable all shipped plugins. `plugin_terms:` accepts exactly the six term-bearing plugin keys (`container`, `namespace`, `node`, `gpu`, `vm`, `pvc`); any other key — typos and the term-less plugins alike (`quota`, `cluster-quota`, `snapshot`, `hcp` have no term windows by design) — is an error naming the six valid keys. Setting both `terms:` and `plugin_terms.container` is a hard error (ambiguous). Per-entry validation mirrors the server's Settings-API bounds: `window_days` in `1..PluginMaxWindowDays(plugin)` (VM 90, PVC 365, container family 90), `min_data_days` in `1..window_days`. An empty list under a present plugin key is an error (same rule as `terms:`).
 
 **`--plugins`:** comma-separated allowlist (`container`, `namespace`, `node`, `gpu`, `pvc`, `vm`, `quota`, `cluster_quota`, `snapshot`). Same idea as “enable recommenders,” **not** `internal/plugins` `init()` registration. **Default (no flag, no YAML `plugins:`)** is **all shipped plugins**. Implicit default **skips** a plugin when its dedicated CSV is missing (files) or its own digest table SELECT is empty (Path A). GPU additionally requires at least one container ROS row with `accelerator_model_name`. Snapshot additionally requires a classified snapshot **filename** (header-only inventory still counts; empty rows emit an empty sibling). An **explicit** list (`--plugins` or YAML `plugins:`) **errors** when that plugin’s input is missing. Path A plus **explicit** `snapshot` is a **hard error** (no snapshot digest table; implicit default drops snapshot). `--format csv` / `table` stay one entity per stream; a container ROS file also enables `node`, so pin `--plugins container` for those formats. Node and GPU still read **container ROS CSV** (no new file family). PVC reads a **storage** file family (`ros-openshift-storage-*`, `ocp_storage_usage`, `cm-openshift-storage-usage` classified **before** blanket `cm-openshift-*` → cost-only). VM reads **usage** (`ros-openshift-vm-usage-*`, `ocp_ros_vm_usage` classified **before** `ocp_ros_usage`) plus optional companions (`ros-openshift-vm-pvc-*` / `ocp_ros_vm_pvc`, `ros-openshift-vm-gpu-device-*` / `ocp_ros_vm_gpu_device`; missing/malformed companions degrade). Quota reads the **same namespace ROS CSV** as `--plugins namespace` (optional `quota_name` / `resource_quota_name`; named-quota `*_namespace_sum` columns are ResourceQuota hard). Cluster quota reads a **dedicated CRQ** file family (`ros-openshift-cluster-quota-*`, `ocp_ros_cluster_quota` classified **before** namespace). Snapshot reads **inventory** (`ros-openshift-snapshot-*`, `ocp_snapshot_inventory`, `cm-openshift-snapshot-inventory` classified **before** blanket `cm-openshift-*` → cost-only). Collapse hourly inventory to the latest row per `(namespace, snapshot_name)` by `interval_end`, then `interval_start`, then `creation_timestamp` before `ClassifySnapshotInventory`. YAML `node:` / `gpu:` / `pvc:` / `vm:` / `quota:` / `cluster-quota:` / `snapshot:` stay reserved (compiled defaults; quota/CRQ headroom 11000 BP; snapshot uses `DefaultSnapshotSettings` + CLI `now`, not product `InventoryFreshHours` or DB reconcile). Do **not** treat GPU timeslicing as a model for quota: namespace ResourceQuota (`quota`) and ClusterResourceQuota (`cluster_quota`) are separate plugins. Do **not** json-tag `snapshot.SnapshotRec`. Unmatched filenames are `KindUnknown` (not `KindOther`).
+
+### Per-plugin terms (`plugin_terms:`) — #705, ADR-0346
+
+Each term-bearing plugin resolves its windows independently:
+**`plugin_terms[plugin]` when configured, else the plugin's documented
+table** — the same resolution the server runs (tenant override ‖ plugin
+default) minus the tiers robne does not have (Settings API, admin env
+locks). Nothing falls through between plugins; the historical
+fall-through of container terms into VM/PVC was the #705 root cause.
+Documented tables (single-sourced in librobne; the server's plugin
+`DefaultTerms()` delegates to the same constants): container family
+short 1/medium 7/long 15 (min 1/3/7), VM short 7/medium 15/long 30
+(min 3/7/15, max 90), PVC short 7/medium 30/long 90 (min 3/14/30, max
+365). `terms:` remains valid and is **container-family-scoped**
+(back-compat; pre-fix it leaked into VM/PVC — pre-release break,
+documented). The Path-A digest SELECT window is the **maximum lookback
+across all effective tables** (configured or documented), not the
+container maximum.
 
 ---
 
@@ -592,7 +624,7 @@ If a row already exists for that `cluster_uuid` **and** `source_id = 'robne'`, u
 
 ### Reserved YAML keys until a settings schema lands
 
-`node`, `gpu`, `pvc`, `vm`, `quota`, `cluster_quota`, `snapshot` error if `enabled: true` (`reservedYAMLKeys`). **Keep those YAML-block errors** even after `--plugins` unlocks that entity (compiled defaults; overlay container `terms` for VM; snapshot uses `DefaultSnapshotSettings`). Unlock YAML **per entity in the same PR** that parses a dedicated settings schema. Namespace has **no** reserved `namespace:` YAML block — it reuses container `sizing` / `terms`. `--plugins namespace`, `node`, `gpu`, `pvc`, `vm`, `quota`, `cluster_quota`, `snapshot`, and `hcp` are unlocked. `business_hours:` is **not** a `--plugins` name; the typed YAML block is unlocked ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)).
+`node`, `gpu`, `pvc`, `vm`, `quota`, `cluster_quota`, `snapshot` error if `enabled: true` (`reservedYAMLKeys`). **Keep those YAML-block errors** even after `--plugins` unlocks that entity (compiled defaults; snapshot uses `DefaultSnapshotSettings`). **Amendment (#705, ADR-0346):** `plugin_terms:` is a deliberate partial unlock — per-plugin **term windows** only, ahead of the full entity settings schemas; the entity blocks above stay reserved and the future settings unlock supersedes/extends `plugin_terms` naturally. (The old "overlay container `terms` for VM" wording is superseded: VM resolves its own documented table unless `plugin_terms.vm` is set.) Unlock YAML **per entity in the same PR** that parses a dedicated settings schema. Namespace has **no** reserved `namespace:` YAML block — it reuses container `sizing` / `terms`. `--plugins namespace`, `node`, `gpu`, `pvc`, `vm`, `quota`, `cluster_quota`, `snapshot`, and `hcp` are unlocked. `business_hours:` is **not** a `--plugins` name; the typed YAML block is unlocked ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)).
 
 Same-cluster tarball with many file types is OK in 2b; do **not** concatenate two NISE `--ocp-cluster-id` runs (Phase 1 one-cluster error stays).
 

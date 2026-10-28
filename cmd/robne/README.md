@@ -151,6 +151,17 @@ robne recommend --input postgres://localhost:5432/robne?sslmode=disable \
 
 Shell completion: `./bin/robne completion bash` (also zsh, fish, powershell).
 
+## Term windows (#705, ADR-0346)
+
+Each term-bearing plugin resolves its windows independently: `plugin_terms:`
+in robne.yaml when configured, else the plugin's documented table — container
+family short 1 / medium 7 / long 15 days, VM 7/15/30, PVC 7/30/90. The
+top-level `terms:` list is container-family-scoped (it never reaches VM or
+PVC); a present `plugin_terms.<plugin>` entry replaces that plugin's whole
+table (specify every term; unknown plugins and the term-less plugins — quota,
+cluster-quota, snapshot, hcp — are errors). See the commented example in
+`robne.yaml.sample` and the spec's Per-plugin terms section.
+
 ## Manpages and markdown docs (#703)
 
 `make man` regenerates roff manpages (`docs/man/man1/robne.1`,

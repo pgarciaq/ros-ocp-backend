@@ -36,6 +36,8 @@ cluster_uuid: "local-cluster"     # stdout (a)(b): any string. postgres:// (c): 
 #   - snapshot
 
 terms:
+  # Container-family-scoped (container, namespace, node, gpu). VM and PVC
+  # resolve their own documented tables unless overridden below (#705).
   - name: short
     window_days: 1
     min_data_days: 1
@@ -51,6 +53,17 @@ terms:
     min_data_days: 7
     decay_half_life_hours: 360
     replica_target_utilization_pct: 70
+
+# Per-plugin term overrides (#705, ADR-0346). Any subset of the six
+# term-bearing plugins: container, namespace, node, gpu, vm, pvc.
+# Unset plugins use their documented tables (container family 1/7/15,
+# VM 7/15/30, PVC 7/30/90). A present entry replaces that plugin's whole
+# table — specify every term. Nothing falls through between plugins.
+# plugin_terms:
+#   vm:
+#     - name: short_term
+#       window_days: 10
+#       min_data_days: 5
 
 sizing:
   cpu_cost_percentile: 0.60

@@ -204,10 +204,32 @@ Engine knobs are a YAML file. **Sample:** [`cmd/robne/robne.yaml.sample`](https:
 
 This file is **not** the Settings API and **not** `ROS_*` admin locks. `--plugins` is an
 allowlist of recommenders (`container`, `namespace`, `node`, `gpu`, `pvc`, `vm`, `quota`, `cluster-quota`, `snapshot`, `hcp`), not `internal/plugins` registration.
+Per-plugin term overrides (#705):
+
+```yaml
+plugin_terms:
+  vm:
+    - name: short_term     # the entry replaces the VM table — specify every term
+      window_days: 10
+      min_data_days: 5
+```
 Unknown keys are errors. Omitted keys use librobne compiled defaults. **Default `--plugins` is all shipped plugins** (omit the flag and YAML `plugins:`). Implicit default skips a missing dedicated CSV / empty Path A table; an explicit list errors.
 
 **Business hours** (`business_hours:`) is cluster-wide YAML, not a `--plugins` name and not Settings JSON nesting. Omit the key for compiled default off. When `enabled: true`, robne always keeps an unweighted `all_hours` stream and adds a second `business_hours` stream (sample `interval_start` vs the YAML window in the YAML IANA zone; `--now` does not classify hours). JSON `version` is **10** for container/namespace BH siblings (`business_hours_recommendations`, `business_hours_namespace_recommendations`) and **11** when node, gpu, or vm is also on ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)). Node/GPU/timeslicing/VM keys (`business_hours_node_recommendations`, `business_hours_gpu_recommendations`, `business_hours_gpu_timeslicing_recommendations`, `business_hours_vm_recommendations`) are **full CLI DTOs** — not the product thin nest. Arrays, never `null`; omit a key when that plugin is off; empty after weighting is still `[]` (never copy all-hours into a BH key). BH rows with sizing set `notification_codes` to **79** / **80** / **81** / **82** only ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)); all-hours siblings omit the key. `container_recommendations` / `namespace_recommendations` stay all_hours. `--format csv` / `table` is a hard error (one entity and one schedule stream — use JSON). Overnight (`end_time < start_time`) is allowed; the window is local wall clock in the YAML IANA zone (not elapsed duration; DST may skip or repeat an hour). Equal start/end is not. Invalid IANA timezone is an error. Overlay replaces the whole `business_hours:` key. YAML `business_hours` with explicit `--plugins node` / `gpu` / `vm` is **allowed**. Remaining entity YAML blocks (`node:`, `gpu:`, `pvc:`, `vm:`, `quota:`, `cluster-quota:`, `snapshot:`) stay errors until
-that entity’s settings schema unlocks. `--plugins node` / `gpu` / `pvc` / `vm` / `quota` / `cluster-quota` / `snapshot` / `hcp` use compiled defaults
+that entity’s settings schema unlocks — with one deliberate exception
+(#705, ADR-0346): `plugin_terms:` exposes **term windows per plugin** ahead of
+the full settings schemas. Each term-bearing plugin resolves independently —
+`plugin_terms.<plugin>` when configured, else its documented table (container
+family 1/7/15, VM 7/15/30, PVC 7/30/90 days); a present entry replaces that
+plugin’s whole table (specify every term). The top-level `terms:` list stays
+**container-family-scoped** — it never reaches VM or PVC. Unknown plugin keys
+and the term-less plugins (quota, cluster-quota, snapshot, hcp) are errors;
+`terms:` plus `plugin_terms.container` together is an ambiguity error;
+validation mirrors the server’s Settings-API bounds. **Pre-release output
+change** (#705’s window): VM and PVC recommendations now follow their
+documented term tables — VM short widened from 1 to 7 days, PVC medium from 7
+to 30 (clamped to available), and VM long-term withholds below its 15-day
+minimum. `--plugins node` / `gpu` / `pvc` / `vm` / `quota` / `cluster-quota` / `snapshot` / `hcp` use compiled defaults
 without unlocking those YAML blocks. Namespace has no reserved `namespace:` block — it reuses container `sizing` / `terms`. Pre-release rename (#700): the plugin spelling is `cluster-quota` (flag and YAML key); an old `cluster_quota:` YAML block now hard-errors on the unknown key — rename it. The JSON sibling key `cluster_quota_recommendations` keeps its stable snake_case spelling.
 
 How files stack (replace vs merge): [Config overlay](#config-overlay-yaml-and-rate-card).

@@ -86,6 +86,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0342](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0342-label-wins-over-namespace-exclusion.md) | Explicit opt-in label wins over kube/openshift namespace exclusion (implements #694) | Labeled namespaces flow regardless of name; unlabeled defaults unchanged; quota excluded; no default include list may be compiled in |
 | [0343](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0343-management-overhead-scope.md) | Management-overhead scope — `filter[scope]=management` (implements #694); amended with the `management`/`incomplete` row-fact pairing (#695) | Topology class + not-HCP namespace; additive param, unknown values 400; dedicated routes and label-derived scope rejected |
 | [0344](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0344-empty-request-unset-sentinel.md) | Empty CSV request cells parse as the unset-zero sentinel (implements #697) | Request-less rows ingest (namespace-parser convention); recs come from usage; malformed values still skip; NULL plumbing and operator change rejected |
+| [0346](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0346-per-plugin-term-windows-shared-contract.md) | Per-plugin term windows as a shared librobne contract (fixes #705) | Single-source documented tables (server plugins delegate); effective-terms resolution with no fall-through; `plugin_terms` YAML per plugin; minimal/grouped/imported-resolver alternatives rejected |
 
 ## Domains covered
 

@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Per-plugin term windows ([#705](https://github.com/pgarciaq/ros-ocp-backend/issues/705), [ADR-0346](architecture/adrs.md)):**
+  robne resolves term windows per plugin — `plugin_terms:` in robne.yaml when
+  configured, else the plugin's documented table (container family 1/7/15,
+  VM 7/15/30, PVC 7/30/90 days). The top-level `terms:` list becomes
+  container-family-scoped (it never reached VM/PVC correctly before — that
+  fall-through was the #705 parity root cause); unknown plugin keys and the
+  term-less plugins are errors; `terms:` + `plugin_terms.container` is an
+  ambiguity error; validation mirrors the server's Settings-API bounds.
+  **Pre-release output change:** VM and PVC recommendations now follow their
+  documented tables (VM short 1→7 days, long-term withheld below 15 days of
+  data; PVC medium 7→30 days clamped to available).
+- **Term-table single source ([ADR-0346](architecture/adrs.md)):** the six
+  documented per-plugin term tables live in librobne (PVC's added;
+  container-family and VM's already there); the server plugins'
+  `DefaultTerms()` delegate to the same constants — behavior identical,
+  pinned by the existing term-config tests. robne's Path-A digest SELECT
+  window sizes from the maximum effective lookback (90d default) instead of
+  the container maximum (15d), so VM/PVC long-term data is no longer
+  truncated.
+
 - **HCP fleet-capacity advisory — W4 ([#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392), [ADR-0334](architecture/adrs.md) amended):**
   `GET /recommendations/openshift/hcp/fleet-capacity` (latest snapshot per
   authorized management cluster) and `GET .../hcp/fleet-capacity/history`

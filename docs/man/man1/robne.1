@@ -20,12 +20,36 @@ Engine knobs live in YAML (user file + cwd overlay). Dollar rates live in
 rate-card.json. ROBNE_NO_USER_CONFIG=1 skips home/XDG files only.
 
 .PP
+Term windows resolve per plugin (#705): each term-bearing plugin uses its
+documented table (container family 1/7/15, VM 7/15/30, PVC 7/30/90) unless
+plugin_terms: overrides it; the top-level terms: list is container-family-
+scoped.
+
+.PP
 Contract: docs/plans/robne-cli-spec.md
 
 
 .SH OPTIONS
 \fB-h\fP, \fB--help\fP[=false]
 	help for robne
+
+
+.SH EXAMPLE
+.EX
+  # Compute from a payload directory, defaults everywhere:
+  robne recommend --input ./csvs/ --format json
+
+  # A robne.yaml with per-plugin term overrides (copy robne.yaml.sample
+  # for the full knob set; search: ~/.config/robne/robne.yaml + ./robne.yaml):
+  plugin_terms:
+    vm:
+      - name: short_term
+        window_days: 10
+        min_data_days: 5
+
+  # Pin the clock for CI goldens:
+  robne recommend --input ./csvs/ --now 2026-08-01T02:00:00Z --format json
+.EE
 
 
 .SH SEE ALSO
