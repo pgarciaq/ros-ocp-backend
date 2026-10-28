@@ -944,6 +944,19 @@ NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended  # longer VM/GPU scenar
 NAMESPACE=cost-onprem ./scripts/run-pytest.sh --all    # full suite incl. extended (~538 tests)
 ```
 
+**E2E upload-scope gap (found in the #706 parity work):** the chart E2E flows
+package only the CSV files their own assertions consume — a flow's upload
+tarball omits file families the flow does not test (e.g. the snapshot flow's
+package carries no storage or CRQ CSVs even though the payload directory
+contains them). Any consumer that needs the server to have ingested a
+payload's *full* file set — cross-entity parity comparisons, debugging against
+a known upload — must inject those files manually with a fresh UUID cluster
+id rather than relying on a flow's upload. The recipe:
+`.cursor/skills/server-robne-parity/SKILL.md` (Generating Fresh Payloads →
+manual injection). Fixing the flows to package everything they generate would
+change what each flow's manifest asserts on; treat that as a deliberate chart
+change, not a drive-by.
+
 **Latest full-suite baseline (phase12 images, June 2026):** **501 passed, 2 failed, 35 skipped** with `--all`. Rebuild and push **new image tags** before every E2E run; never run raw `pytest` without `run-pytest.sh` (venv + env setup). Cluster rebuild/tag/log rules: [AGENTS.md](../../AGENTS.md) and [sno-cluster-operations](../agents/sno-cluster-operations.md). Chart pytest still lives in cost-onprem-chart until that harness is replaced.
 
 ### 4. IQE integration tests (iqe-cost-management-plugin)
