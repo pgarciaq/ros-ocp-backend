@@ -344,17 +344,33 @@ func TestExecuteRecommend_PathANodeGPUPVCVM(t *testing.T) {
 				FBUsageMaxMiB: 12000, GPUCount: 1,
 			}},
 		},
+		// 3 days of PVC rows: clears the documented PVC short minimum
+		// (#705); one day only cleared the buggy container-table minimum.
 		PVCDigests: map[pvc.PVCKey][]pvc.PVCDigestRow{
-			{Namespace: "production", PVC: "data-pvc"}: {{
-				BucketDate: day, Namespace: "production", PVC: "data-pvc",
-				CapacityBytes: 100 << 30, RequestBytes: 80 << 30, UsageBytesMin: 10, UsageBytesMax: 20 << 30, UsageBytesAvg: 15, SampleCount: 24,
-			}},
+			{Namespace: "production", PVC: "data-pvc"}: func() []pvc.PVCDigestRow {
+				var out []pvc.PVCDigestRow
+				for i := 0; i < 3; i++ {
+					out = append(out, pvc.PVCDigestRow{
+						BucketDate: day.AddDate(0, 0, i-2), Namespace: "production", PVC: "data-pvc",
+						CapacityBytes: 100 << 30, RequestBytes: 80 << 30, UsageBytesMin: 10, UsageBytesMax: 20 << 30, UsageBytesAvg: 15, SampleCount: 24,
+					})
+				}
+				return out
+			}(),
 		},
-		VMDigests: []vm.DailyVMDigest{{
-			VMName: "web-vm", Namespace: "vms", BucketDate: day, NodeName: "worker-1",
-			CPUUsageP95MC: 1500, CPURequestMC: 2000, SampleCount: 24,
-			Devices: []vm.GPUDeviceDigest{{UUID: "GPU-aaa", Model: "A100", UtilAvgBP: 1000}},
-		}},
+		// 3 days: clears the documented VM short_term minimum (#705);
+		// one day only cleared the buggy container-table minimum of 1.
+		VMDigests: func() []vm.DailyVMDigest {
+			var out []vm.DailyVMDigest
+			for i := 0; i < 3; i++ {
+				out = append(out, vm.DailyVMDigest{
+					VMName: "web-vm", Namespace: "vms", BucketDate: day.AddDate(0, 0, i-2), NodeName: "worker-1",
+					CPUUsageP95MC: 1500, CPURequestMC: 2000, SampleCount: 24,
+					Devices: []vm.GPUDeviceDigest{{UUID: "GPU-aaa", Model: "A100", UtilAvgBP: 1000}},
+				})
+			}
+			return out
+		}(),
 	}))
 	pathAEnv(t, orgID, cluster)
 

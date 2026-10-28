@@ -17,7 +17,7 @@ import (
 
 var allowedYAMLKeys = map[string]struct{}{
 	"org_id": {}, "cluster_uuid": {}, "now": {}, "plugins": {},
-	"terms": {}, "sizing": {}, "idle": {}, "staleness_hours": {},
+	"terms": {}, "plugin_terms": {}, "sizing": {}, "idle": {}, "staleness_hours": {},
 	"business_hours": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster-quota": {}, "snapshot": {},
 }
 
@@ -33,22 +33,26 @@ var knownPlugins = map[string]struct{}{
 }
 
 type fileConfig struct {
-	OrgID          string             `yaml:"org_id,omitempty"`
-	ClusterUUID    string             `yaml:"cluster_uuid,omitempty"`
-	Now            *string            `yaml:"now,omitempty"`
-	Plugins        []string           `yaml:"plugins,omitempty"`
-	Terms          []termYAML         `yaml:"terms,omitempty"`
-	Sizing         sizingYAML         `yaml:"sizing,omitempty"`
-	Idle           idleYAML           `yaml:"idle,omitempty"`
-	StalenessHours *float64           `yaml:"staleness_hours,omitempty"`
-	BusinessHours  *businessHoursYAML `yaml:"business_hours,omitempty"`
-	Node           map[string]any     `yaml:"node,omitempty"`
-	GPU            map[string]any     `yaml:"gpu,omitempty"`
-	PVC            map[string]any     `yaml:"pvc,omitempty"`
-	VM             map[string]any     `yaml:"vm,omitempty"`
-	Quota          map[string]any     `yaml:"quota,omitempty"`
-	ClusterQuota   map[string]any     `yaml:"cluster-quota,omitempty"`
-	Snapshot       map[string]any     `yaml:"snapshot,omitempty"`
+	OrgID       string     `yaml:"org_id,omitempty"`
+	ClusterUUID string     `yaml:"cluster_uuid,omitempty"`
+	Now         *string    `yaml:"now,omitempty"`
+	Plugins     []string   `yaml:"plugins,omitempty"`
+	Terms       []termYAML `yaml:"terms,omitempty"`
+	// PluginTerms holds per-plugin term overrides (#705, ADR-0346). Keys are
+	// the six term-bearing plugins; unset plugins use their documented
+	// tables. Validated strictly: unknown keys and term-less plugins error.
+	PluginTerms    map[string][]termYAML `yaml:"plugin_terms,omitempty"`
+	Sizing         sizingYAML            `yaml:"sizing,omitempty"`
+	Idle           idleYAML              `yaml:"idle,omitempty"`
+	StalenessHours *float64              `yaml:"staleness_hours,omitempty"`
+	BusinessHours  *businessHoursYAML    `yaml:"business_hours,omitempty"`
+	Node           map[string]any        `yaml:"node,omitempty"`
+	GPU            map[string]any        `yaml:"gpu,omitempty"`
+	PVC            map[string]any        `yaml:"pvc,omitempty"`
+	VM             map[string]any        `yaml:"vm,omitempty"`
+	Quota          map[string]any        `yaml:"quota,omitempty"`
+	ClusterQuota   map[string]any        `yaml:"cluster-quota,omitempty"`
+	Snapshot       map[string]any        `yaml:"snapshot,omitempty"`
 }
 
 type termYAML struct {
@@ -319,6 +323,9 @@ func validateFileConfig(cfg fileConfig) error {
 		if _, ok := knownPlugins[name]; !ok {
 			return fmt.Errorf("unknown plugin %q", name)
 		}
+	}
+	if err := validatePluginTerms(cfg); err != nil {
+		return err
 	}
 	return validateBusinessHours(cfg)
 }

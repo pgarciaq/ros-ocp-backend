@@ -496,7 +496,10 @@ func vmTwoDayCSV() string {
 	var b strings.Builder
 	b.WriteString(vmUsageHeader())
 	b.WriteByte('\n')
-	for day := 1; day <= 2; day++ {
+	// 4 days: clears the documented VM short_term minimum (3 days) under
+	// the per-plugin term tables (#705); the old 2-day fixture only cleared
+	// the buggy container-table minimum of 1.
+	for day := 1; day <= 4; day++ {
 		for h := 0; h < 24; h++ {
 			start := fmt.Sprintf("2026-05-%02dT%02d:00:00Z", day, h)
 			endH := h + 1
@@ -1326,7 +1329,9 @@ func weekdayVMCSV(ns, name string, day time.Time) string {
 	b.WriteString(vmUsageHeader())
 	b.WriteByte('\n')
 	day = day.UTC()
-	for d := 0; d < 2; d++ {
+	// 4 weekdays: clears the documented VM short_term minimum (3 days,
+	// #705); the old 2-day fixture only cleared the buggy minimum of 1.
+	for d := 0; d < 4; d++ {
 		cur := day.AddDate(0, 0, d)
 		next := cur.Add(24 * time.Hour)
 		date := cur.Format("2006-01-02")

@@ -285,8 +285,7 @@ func executePathA(ctx context.Context, f commonFlags) (recommendResult, error) {
 		}
 		return out, err
 	}
-	ec := engineConfigFromFile(loaded.cfg, loaded.cfg.OrgID, loaded.cfg.ClusterUUID, now)
-	start, end := digestWindow(ec.Terms, now)
+	start, end := digestWindow([]types.TermConfig{{WindowDays: maxEffectiveLookbackDays(loaded.cfg)}}, now)
 	fl := fileLoad{
 		cfg:             loaded.cfg,
 		plugins:         plugins,
@@ -526,8 +525,7 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 		if !maxDate.IsZero() && f.now == "" {
 			now = maxDate
 		}
-		ec := engineConfigFromFile(fl.cfg, fl.orgID, fl.clusterID, now)
-		start, end := digestWindow(ec.Terms, now)
+		start, end := digestWindow([]types.TermConfig{{WindowDays: maxEffectiveLookbackDays(fl.cfg)}}, now)
 		digests, err := pgdigest.ReadContainerDigests(ctx, pool, fl.orgID, fl.clusterID, start, end)
 		if err != nil {
 			return out, err
@@ -848,6 +846,7 @@ func recommendFromDigests(
 ) (recommendResult, error) {
 	var out recommendResult
 	ec := engineConfigFromFile(cfg, orgID, clusterID, now)
+	ec.Terms = effectiveEngineTerms("container", cfg)
 	// W1 guardrails (#584 Path 1): known HCP namespaces from the payload
 	// manifest route container groups to the controlplane floor profile.
 	// Nil manifest (single CSV) or empty facts = guardrails off, never error.
@@ -936,7 +935,7 @@ func recommendNamespacesWithSchedule(fl fileLoad, grouped map[namespace.Namespac
 		ClusterUUID:        fl.clusterID,
 		End:                fl.now,
 		ScheduleType:       scheduleType,
-		Terms:              ec.Terms,
+		Terms:              effectiveEngineTerms("namespace", fl.cfg),
 		Sizing:             ec.Sizing,
 		Now:                fl.now,
 		StalenessThreshold: ec.StalenessThreshold,
@@ -1145,9 +1144,8 @@ func recommendNodes(fl fileLoad) []node.Rec {
 
 func recommendNodesFrom(fl fileLoad, digests []node.DigestRow) []node.Rec {
 	th := node.DefaultThresholdSettings()
-	ec := engineConfigFromFile(fl.cfg, fl.orgID, fl.clusterID, fl.now)
 	topo, _ := resolveManifestTopology(fl.manifest)
-	recs := node.RecommendNodes(digests, node.RecConfigFromThresholds(th), th, ec.Terms, topo)
+	recs := node.RecommendNodes(digests, node.RecConfigFromThresholds(th), th, effectiveEngineTerms("node", fl.cfg), topo)
 	sort.Slice(recs, func(i, j int) bool {
 		if recs[i].Node != recs[j].Node {
 			return recs[i].Node < recs[j].Node
@@ -1166,7 +1164,6 @@ func recommendGPUs(fl fileLoad) ([]gpuRecRow, []gpu.TimeslicingRec) {
 
 func recommendGPUsFrom(fl fileLoad, grouped map[gpu.GPUContainerKey][]gpu.GPUDigestRow, nodeMap map[gpu.GPUContainerKey]string, nodeLastSeen map[string]time.Time) ([]gpuRecRow, []gpu.TimeslicingRec) {
 	settings := gpu.DefaultGPUThresholdSettings()
-	ec := engineConfigFromFile(fl.cfg, fl.orgID, fl.clusterID, fl.now)
 	byKey := make(map[gpu.GPUContainerKey][]*gpu.GPURec, len(grouped))
 	var rows []gpuRecRow
 	for key, days := range grouped {
@@ -1179,7 +1176,7 @@ func recommendGPUsFrom(fl fileLoad, grouped map[gpu.GPUContainerKey][]gpu.GPUDig
 				latest = d.IntervalStart
 			}
 		}
-		for _, tc := range ec.Terms {
+		for _, tc := range effectiveEngineTerms("gpu", fl.cfg) {
 			window := gpu.FilterGPUByWindow(days, latest, tc.WindowDays)
 			if len(window) < tc.MinDataDays {
 				continue
@@ -1236,7 +1233,7 @@ func recommendPVCs(fl fileLoad) ([]pvc.PVCRec, error) {
 	recs, err := pvc.RecommendPVCs(context.Background(), fl.pvcGrouped, pvc.EngineConfig{
 		OrgID:           fl.orgID,
 		ClusterUUID:     fl.clusterID,
-		Terms:           ec.Terms,
+		Terms:           effectiveEngineTerms("pvc", fl.cfg),
 		Settings:        pvc.DefaultThresholdSettings(),
 		NotifThresholds: types.NotificationThresholdsFromSizing(ec.Sizing),
 	})
@@ -1264,8 +1261,7 @@ func recommendVMsFrom(fl fileLoad, digests []vm.DailyVMDigest) ([]vm.VMRecommend
 		return nil, nil
 	}
 	cfg := vm.DefaultVMRecConfig()
-	ec := engineConfigFromFile(fl.cfg, fl.orgID, fl.clusterID, fl.now)
-	terms := vm.VMTermWindowsFromConfig(ec.Terms)
+	terms := vm.VMTermWindowsFromConfig(effectiveEngineTerms("vm", fl.cfg))
 	clusterUUID := parseClusterUUID(fl.clusterID)
 	all := make([]vm.Digest, len(digests))
 	for i, d := range digests {
@@ -1346,6 +1342,7 @@ func recommendContainerRecsNoSavings(fl fileLoad) ([]types.ContainerRec, error) 
 			}
 		}
 	}
+	ec.Terms = effectiveEngineTerms("container", fl.cfg)
 	var recs []types.ContainerRec
 	err := engine.RecommendWorkloads(context.Background(), fl.containerDigests, ec, func(batch []types.ContainerRec) error {
 		recs = append(recs, batch...)
