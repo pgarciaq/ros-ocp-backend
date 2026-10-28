@@ -34,7 +34,7 @@ func hcpCapacityCSV(rows ...string) string {
 }
 
 func TestParseHCPCapacityRows_Valid(t *testing.T) {
-	rows, skips, err := ParseHCPCapacityRows(strings.NewReader(hcpCapacityCSV(validHCPCapacityRow)))
+	rows, skips, _, err := ParseHCPCapacityRows(strings.NewReader(hcpCapacityCSV(validHCPCapacityRow)))
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	assert.Empty(t, skips)
@@ -92,7 +92,7 @@ func TestParseHCPCapacityRows_SkipMalformed(t *testing.T) {
 		{"short row", strings.Join(strings.Split(validHCPCapacityRow, ",")[:20], ","), "wrong field count skips", "columns"},
 	}
 	for _, tc := range cases {
-		rows, skips, err := ParseHCPCapacityRows(strings.NewReader(hcpCapacityCSV(tc.row)))
+		rows, skips, _, err := ParseHCPCapacityRows(strings.NewReader(hcpCapacityCSV(tc.row)))
 		require.NoError(t, err, tc.name)
 		assert.Empty(t, rows, "%s: %s", tc.name, tc.why)
 		require.Len(t, skips, 1, "%s: %s", tc.name, tc.why)
@@ -103,7 +103,7 @@ func TestParseHCPCapacityRows_SkipMalformed(t *testing.T) {
 }
 
 func TestParseHCPCapacityRows_HeaderMismatch(t *testing.T) {
-	_, _, err := ParseHCPCapacityRows(strings.NewReader("observed_at,operator_version\n2026-10-25T14:59:59Z,deadbeef\n"))
+	_, _, _, err := ParseHCPCapacityRows(strings.NewReader("observed_at,operator_version\n2026-10-25T14:59:59Z,deadbeef\n"))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "columns")
 }
@@ -115,7 +115,7 @@ func TestHCPCapacitySkewCheck(t *testing.T) {
 	now := time.Date(2026, 10, 25, 15, 0, 0, 0, time.UTC)
 	rowAt := func(offset time.Duration) HCPCapacityRow {
 		f := strings.Split(strings.Replace(validHCPCapacityRow, "2026-10-25T14:59:59Z", now.Add(offset).Format(time.RFC3339), 1), ",")
-		rows, _, err := ParseHCPCapacityRows(strings.NewReader(hcpCapacityCSV(strings.Join(f, ","))))
+		rows, _, _, err := ParseHCPCapacityRows(strings.NewReader(hcpCapacityCSV(strings.Join(f, ","))))
 		require.NoError(t, err)
 		require.Len(t, rows, 1)
 		return rows[0]
@@ -214,4 +214,51 @@ func TestLoad_CapacityOnlyHeaderOnly(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, got.HCPCapacityRows)
 	assert.Empty(t, got.Warnings)
+}
+
+// buildExtraColumnHeader appends a 26th name to the contract header.
+func buildExtraColumnHeader() string {
+	return hcpCapacityTestHeader + ",future_operator_column"
+}
+
+// TestParseHCPCapacityRows_ExtraColumnTolerated (#704 option 3): an
+// operator adding a 26th column must not break old readers — the row
+// parses, and the extra name is reported for the caller to warn.
+// Pre-fix (exact-sequence gate): the 26-name header was a file-level
+// rejection, fleet-wide.
+func TestParseHCPCapacityRows_ExtraColumnTolerated(t *testing.T) {
+	row := validHCPCapacityRow + ",42"
+	rows, _, extras, err := ParseHCPCapacityRows(strings.NewReader(buildExtraColumnHeader() + "\n" + row + "\n"))
+	require.NoError(t, err, "an extra column is tolerated (name-based, #704)")
+	require.Len(t, rows, 1)
+	assert.Equal(t, "deadbeef", rows[0].OperatorVersion, "values land by name, not position")
+	assert.Equal(t, []string{"future_operator_column"}, extras, "the extra name is reported")
+}
+
+// TestParseHCPCapacityRows_ReorderHarmless (#704 option 3): a reordered
+// header parses correctly — order-insensitive like every other ROS CSV
+// parser. Pre-fix: file-level rejection.
+func TestParseHCPCapacityRows_ReorderHarmless(t *testing.T) {
+	names := strings.Split(hcpCapacityTestHeader, ",")
+	vals := strings.Split(validHCPCapacityRow, ",")
+	// Swap two non-adjacent columns (operator_version <-> ocp_version).
+	names[2], names[3] = names[3], names[2]
+	vals[2], vals[3] = vals[3], vals[2]
+	rows, _, extras, err := ParseHCPCapacityRows(strings.NewReader(strings.Join(names, ",") + "\n" + strings.Join(vals, ",") + "\n"))
+	require.NoError(t, err, "a reordered header is harmless (name-based, #704)")
+	require.Len(t, rows, 1)
+	assert.Equal(t, "deadbeef", rows[0].OperatorVersion, "operator_version found by name after the swap")
+	assert.Empty(t, extras)
+}
+
+// TestParseHCPCapacityRows_MissingColumnNamesTheColumn (#704 option 3):
+// a missing or renamed required name is a named file-level error listing
+// what is absent — loud, never silent.
+func TestParseHCPCapacityRows_MissingColumnNamesTheColumn(t *testing.T) {
+	names := strings.Split(hcpCapacityTestHeader, ",")
+	names = append(names[:4], names[5:]...) // drop mce_version (index 4)
+	_, _, _, err := ParseHCPCapacityRows(strings.NewReader(strings.Join(names, ",") + "\n" + validHCPCapacityRow + "\n"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "mce_version", "the error names the missing column")
+	assert.Contains(t, err.Error(), "missing columns", "and the failure class")
 }

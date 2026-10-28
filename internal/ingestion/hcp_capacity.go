@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -187,9 +188,13 @@ func EnsureHCPCapacityPartitions(ctx context.Context, pool *pgxpool.Pool, monthS
 // are skipped with counters; a CalculateCapacity validation failure on an
 // internally inconsistent row skips that row, not the file.
 func ProcessHCPCapacityCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
-	parsed, parseSkips, err := libcsv.ParseHCPCapacityRows(r)
+	parsed, parseSkips, extras, err := libcsv.ParseHCPCapacityRows(r)
 	if err != nil {
 		return err
+	}
+	if len(extras) > 0 {
+		logging.GetLogger().WithField("cluster_uuid", clusterUUID).Warnf(
+			"ProcessHCPCapacityCSV: tolerating unrecognized extra column(s): %s", strings.Join(extras, ", "))
 	}
 	rows, skewDrops := libcsv.HCPCapacitySkewCheck(parsed, time.Now().UTC())
 	skipped := len(parseSkips) + len(skewDrops)

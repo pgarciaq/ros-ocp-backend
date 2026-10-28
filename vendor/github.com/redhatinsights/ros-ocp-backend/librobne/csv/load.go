@@ -340,7 +340,10 @@ func parseCSVReader(r io.Reader, name string, kind Kind) (LoadResult, error) {
 		// skips stay in RowsSkipped; the future-skew check is NOT
 		// applied here (Load has no clock — consumers apply
 		// HCPCapacitySkewCheck).
-		rows, skips, err := ParseHCPCapacityRows(r)
+		rows, skips, extras, err := ParseHCPCapacityRows(r)
+		if len(extras) > 0 {
+			fmt.Fprintf(os.Stderr, "warning: %s: unrecognized extra column(s) tolerated: %s\n", name, strings.Join(extras, ", "))
+		}
 		if err != nil {
 			return LoadResult{
 				Files:    []string{name},

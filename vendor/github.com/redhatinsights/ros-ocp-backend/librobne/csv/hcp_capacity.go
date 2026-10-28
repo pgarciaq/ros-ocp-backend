@@ -3,10 +3,10 @@ package csv
 import (
 	"encoding/csv"
 	"errors"
+	"strings"
 	"fmt"
 	"io"
 	"math"
-	"reflect"
 	"strconv"
 	"time"
 
@@ -116,33 +116,33 @@ func parseOptionalInt64(s string) (*int64, error) {
 
 // parseHCPCapacityRecord validates one 25-field record (time-independent
 // rules only); ok=false carries the skip reason.
-func parseHCPCapacityRecord(rec []string) (HCPCapacityRow, string, bool) {
+func parseHCPCapacityRecord(rec []string, idx hcpCapacityColumnIndex, want int) (HCPCapacityRow, string, bool) {
 	var r HCPCapacityRow
-	if len(rec) != len(HCPCapacityHeader) {
-		return r, fmt.Sprintf("wrong number of columns: got %d, want %d", len(rec), len(HCPCapacityHeader)), false
+	if len(rec) != want {
+		return r, fmt.Sprintf("wrong number of columns: got %d, want %d", len(rec), want), false
 	}
 	var err error
-	if r.ObservedAt, err = time.Parse(time.RFC3339, rec[0]); err != nil {
+	if r.ObservedAt, err = time.Parse(time.RFC3339, rec[idx.observedAt]); err != nil {
 		return r, "observed_at is not RFC3339", false
 	}
-	if rec[1] != "" {
-		t, err := time.Parse(time.RFC3339, rec[1])
+	if rec[idx.mceSampledAt] != "" {
+		t, err := time.Parse(time.RFC3339, rec[idx.mceSampledAt])
 		if err != nil {
 			return r, "mce_sampled_at is not RFC3339", false
 		}
 		r.MCESampledAt = &t
 	}
-	r.OperatorVersion = rec[2]
-	r.OCPVersion = rec[3]
-	r.MCEVersion = rec[4]
-	if rec[5] != hcpcapacity.ModelVersion {
-		return r, fmt.Sprintf("native_model_version %q does not match %q", rec[5], hcpcapacity.ModelVersion), false
+	r.OperatorVersion = rec[idx.operatorVersion]
+	r.OCPVersion = rec[idx.ocpVersion]
+	r.MCEVersion = rec[idx.mceVersion]
+	if rec[idx.nativeModelVersion] != hcpcapacity.ModelVersion {
+		return r, fmt.Sprintf("native_model_version %q does not match %q", rec[idx.nativeModelVersion], hcpcapacity.ModelVersion), false
 	}
-	r.NativeModelVersion = rec[5]
-	if r.CollectionIntervalMinutes, err = strconv.ParseInt(rec[6], 10, 64); err != nil {
+	r.NativeModelVersion = rec[idx.nativeModelVersion]
+	if r.CollectionIntervalMinutes, err = strconv.ParseInt(rec[idx.collectionIntervalMinutes], 10, 64); err != nil {
 		return r, "collection_interval_minutes is not an integer", false
 	}
-	if r.UploadCycleMinutes, err = strconv.ParseInt(rec[7], 10, 64); err != nil {
+	if r.UploadCycleMinutes, err = strconv.ParseInt(rec[idx.uploadCycleMinutes], 10, 64); err != nil {
 		return r, "upload_cycle_minutes is not an integer", false
 	}
 	// Cadence bounds: the staleness window is 2× max(cadence); zero or
@@ -152,67 +152,67 @@ func parseHCPCapacityRecord(rec []string) (HCPCapacityRow, string, bool) {
 		r.UploadCycleMinutes <= 0 || r.UploadCycleMinutes > HCPCapacityMaxCadenceMinutes {
 		return r, "cadence out of bounds (must be 1..86400 minutes)", false
 	}
-	if r.InventoryComplete, err = parseStrictBool(rec[8]); err != nil {
+	if r.InventoryComplete, err = parseStrictBool(rec[idx.inventoryComplete]); err != nil {
 		return r, "inventory_complete is not a strict boolean", false
 	}
-	if r.CurrentHCCount, err = strconv.ParseInt(rec[9], 10, 64); err != nil {
+	if r.CurrentHCCount, err = strconv.ParseInt(rec[idx.currentHCCount], 10, 64); err != nil {
 		return r, "current_hc_count is not an integer", false
 	}
-	if r.ReadyHCPCount, err = strconv.ParseInt(rec[10], 10, 64); err != nil {
+	if r.ReadyHCPCount, err = strconv.ParseInt(rec[idx.readyHCPCount], 10, 64); err != nil {
 		return r, "ready_hcp_count is not an integer", false
 	}
-	if r.ReadyHCPQPSKnown, err = parseStrictBool(rec[12]); err != nil {
+	if r.ReadyHCPQPSKnown, err = parseStrictBool(rec[idx.readyHCPQPSKnown]); err != nil {
 		return r, "ready_hcp_qps_known is not a strict boolean", false
 	}
 	if r.ReadyHCPQPSKnown {
-		q, err := strconv.ParseFloat(rec[11], 64)
+		q, err := strconv.ParseFloat(rec[idx.averageReadyHCPQPS], 64)
 		if err != nil || math.IsNaN(q) || math.IsInf(q, 0) || q < 0 {
 			return r, "average_ready_hcp_qps is not a non-negative finite number", false
 		}
 		r.AverageReadyHCPQPS = q
-	} else if rec[11] != "" {
+	} else if rec[idx.averageReadyHCPQPS] != "" {
 		return r, "average_ready_hcp_qps must be empty when ready_hcp_qps_known is false", false
 	}
-	r.HostedAvailabilityBasis = rec[13]
+	r.HostedAvailabilityBasis = rec[idx.hostedAvailabilityBasis]
 	switch r.HostedAvailabilityBasis {
 	case "", hcpcapacity.BasisHighlyAvailable, hcpcapacity.BasisMixed, hcpcapacity.BasisSingleReplica, hcpcapacity.BasisUnknown:
 	default:
-		return r, fmt.Sprintf("hosted_availability_basis %q is not a known enum value", rec[13]), false
+		return r, fmt.Sprintf("hosted_availability_basis %q is not a known enum value", rec[idx.hostedAvailabilityBasis]), false
 	}
-	if r.EligibleCPUMillicores, err = strconv.ParseInt(rec[14], 10, 64); err != nil {
+	if r.EligibleCPUMillicores, err = strconv.ParseInt(rec[idx.eligibleCPUMillicores], 10, 64); err != nil {
 		return r, "eligible_worker_cpu_allocatable_millicores is not an integer", false
 	}
-	if r.EligibleMemoryBytes, err = strconv.ParseInt(rec[15], 10, 64); err != nil {
+	if r.EligibleMemoryBytes, err = strconv.ParseInt(rec[idx.eligibleMemoryBytes], 10, 64); err != nil {
 		return r, "eligible_worker_memory_allocatable_bytes is not an integer", false
 	}
-	if r.EligibleMaxPods, err = strconv.ParseInt(rec[16], 10, 64); err != nil {
+	if r.EligibleMaxPods, err = strconv.ParseInt(rec[idx.eligibleMaxPods], 10, 64); err != nil {
 		return r, "eligible_worker_max_pods is not an integer", false
 	}
-	if r.WorkerPlacementKnown, err = parseStrictBool(rec[17]); err != nil {
+	if r.WorkerPlacementKnown, err = parseStrictBool(rec[idx.workerPlacementKnown]); err != nil {
 		return r, "worker_placement_known is not a strict boolean", false
 	}
-	switch rec[18] {
+	switch rec[idx.pressureState] {
 	case "pressured", "unknown":
-		r.PressureState = rec[18]
+		r.PressureState = rec[idx.pressureState]
 	default:
-		return r, fmt.Sprintf("pressure_state %q is not pressured/unknown (v1 never claims clear)", rec[18]), false
+		return r, fmt.Sprintf("pressure_state %q is not pressured/unknown (v1 never claims clear)", rec[idx.pressureState]), false
 	}
-	if r.SharedInfrastructure, err = parseStrictBool(rec[24]); err != nil {
+	if r.SharedInfrastructure, err = parseStrictBool(rec[idx.sharedInfrastructure]); err != nil {
 		return r, "shared_infrastructure is not a strict boolean", false
 	}
-	if r.MCERequestMaxHCs, err = parseOptionalInt64(rec[19]); err != nil {
+	if r.MCERequestMaxHCs, err = parseOptionalInt64(rec[idx.mceRequestMaxHCs]); err != nil {
 		return r, "mce_request_max_hcs is not an integer", false
 	}
-	if r.MCELowQPSMaxHCs, err = parseOptionalInt64(rec[20]); err != nil {
+	if r.MCELowQPSMaxHCs, err = parseOptionalInt64(rec[idx.mceLowQPSMaxHCs]); err != nil {
 		return r, "mce_low_qps_max_hcs is not an integer", false
 	}
-	if r.MCEAverageQPSMaxHCs, err = parseOptionalInt64(rec[21]); err != nil {
+	if r.MCEAverageQPSMaxHCs, err = parseOptionalInt64(rec[idx.mceAverageQPSMaxHCs]); err != nil {
 		return r, "mce_average_qps_max_hcs is not an integer", false
 	}
-	if r.MCEMediumQPSMaxHCs, err = parseOptionalInt64(rec[22]); err != nil {
+	if r.MCEMediumQPSMaxHCs, err = parseOptionalInt64(rec[idx.mceMediumQPSMaxHCs]); err != nil {
 		return r, "mce_medium_qps_max_hcs is not an integer", false
 	}
-	if r.MCEHighQPSMaxHCs, err = parseOptionalInt64(rec[23]); err != nil {
+	if r.MCEHighQPSMaxHCs, err = parseOptionalInt64(rec[idx.mceHighQPSMaxHCs]); err != nil {
 		return r, "mce_high_qps_max_hcs is not an integer", false
 	}
 	return r, "", true
@@ -222,7 +222,61 @@ func parseHCPCapacityRecord(rec []string) (HCPCapacityRow, string, bool) {
 // validation only (no skew check — Load has no clock). Header mismatch or
 // a CSV syntax error aborts and returns an error; row-level problems skip
 // with reasons.
-func ParseHCPCapacityRows(r io.Reader) (rows []HCPCapacityRow, skips []RowSkip, err error) {
+// hcpCapacityColumnIndex locates each contract column by header name
+// (#704 option 3: the family convention — name-based, order-insensitive).
+type hcpCapacityColumnIndex struct {
+	observedAt, mceSampledAt, operatorVersion, ocpVersion, mceVersion,
+	nativeModelVersion, collectionIntervalMinutes, uploadCycleMinutes,
+	inventoryComplete, currentHCCount, readyHCPCount, averageReadyHCPQPS,
+	readyHCPQPSKnown, hostedAvailabilityBasis, eligibleCPUMillicores,
+	eligibleMemoryBytes, eligibleMaxPods, workerPlacementKnown, pressureState,
+	mceRequestMaxHCs, mceLowQPSMaxHCs, mceAverageQPSMaxHCs, mceMediumQPSMaxHCs,
+	mceHighQPSMaxHCs, sharedInfrastructure int
+}
+
+// buildHCPCapacityColumnIndex maps header names to record positions
+// (case-insensitive, trimmed; duplicate names last-wins, mirroring the
+// snapshot parser). Returns the missing required names and the
+// unrecognized extra names: extras are tolerated (reported for the caller
+// to warn); missing names are the caller's file-level error.
+func buildHCPCapacityColumnIndex(header []string) (idx hcpCapacityColumnIndex, missing, extras []string) {
+	fields := [...](*int){
+		&idx.observedAt, &idx.mceSampledAt, &idx.operatorVersion, &idx.ocpVersion, &idx.mceVersion,
+		&idx.nativeModelVersion, &idx.collectionIntervalMinutes, &idx.uploadCycleMinutes,
+		&idx.inventoryComplete, &idx.currentHCCount, &idx.readyHCPCount, &idx.averageReadyHCPQPS,
+		&idx.readyHCPQPSKnown, &idx.hostedAvailabilityBasis, &idx.eligibleCPUMillicores,
+		&idx.eligibleMemoryBytes, &idx.eligibleMaxPods, &idx.workerPlacementKnown, &idx.pressureState,
+		&idx.mceRequestMaxHCs, &idx.mceLowQPSMaxHCs, &idx.mceAverageQPSMaxHCs, &idx.mceMediumQPSMaxHCs,
+		&idx.mceHighQPSMaxHCs, &idx.sharedInfrastructure,
+	}
+	byName := make(map[string]*int, len(HCPCapacityHeader))
+	for i, name := range HCPCapacityHeader {
+		byName[name] = fields[i]
+	}
+	seen := make(map[string]bool, len(header))
+	for i, col := range header {
+		name := strings.ToLower(strings.TrimSpace(col))
+		f, ok := byName[name]
+		if !ok {
+			extras = append(extras, name)
+			continue
+		}
+		*f = i
+		seen[name] = true
+	}
+	for _, name := range HCPCapacityHeader {
+		if !seen[name] {
+			missing = append(missing, name)
+		}
+	}
+	return idx, missing, extras
+}
+
+// ParseHCPCapacityRows parses the snapshot CSV with time-INDEPENDENT
+// validation only. Name-based (#704 option 3): column order does not
+// matter, extra columns are tolerated and reported in extras (callers
+// warn), and missing required names are a file-level error naming them.
+func ParseHCPCapacityRows(r io.Reader) (rows []HCPCapacityRow, skips []RowSkip, extras []string, err error) {
 	reader := csv.NewReader(r)
 	// Variable field count: a short or long row is a row-level problem
 	// (skip with reason), not a file abort — the length check in
@@ -230,10 +284,11 @@ func ParseHCPCapacityRows(r io.Reader) (rows []HCPCapacityRow, skips []RowSkip, 
 	reader.FieldsPerRecord = -1
 	header, err := reader.Read()
 	if err != nil {
-		return nil, nil, fmt.Errorf("hcp-capacity: reading header: %w", err)
+		return nil, nil, nil, fmt.Errorf("hcp-capacity: reading header: %w", err)
 	}
-	if !reflect.DeepEqual(header, HCPCapacityHeader) {
-		return nil, nil, fmt.Errorf("hcp-capacity: missing or unexpected columns (header must match the 25-column operator contract)")
+	idx, missing, extras := buildHCPCapacityColumnIndex(header)
+	if len(missing) > 0 {
+		return nil, nil, extras, fmt.Errorf("hcp-capacity: missing columns: %s (header must carry every name in the 25-column operator contract)", strings.Join(missing, ", "))
 	}
 	index := 0
 	for {
@@ -242,17 +297,17 @@ func ParseHCPCapacityRows(r io.Reader) (rows []HCPCapacityRow, skips []RowSkip, 
 			break
 		}
 		if err != nil {
-			return nil, nil, fmt.Errorf("hcp-capacity: reading row: %w", err)
+			return nil, nil, nil, fmt.Errorf("hcp-capacity: reading row: %w", err)
 		}
 		index++
-		row, reason, ok := parseHCPCapacityRecord(rec)
+		row, reason, ok := parseHCPCapacityRecord(rec, idx, len(header))
 		if !ok {
-			skips = append(skips, RowSkip{Index: index, ObservedAt: rec[0], Reason: reason})
+			skips = append(skips, RowSkip{Index: index, ObservedAt: rec[idx.observedAt], Reason: reason})
 			continue
 		}
 		rows = append(rows, row)
 	}
-	return rows, skips, nil
+	return rows, skips, extras, nil
 }
 
 // HCPCapacitySkewCheck applies the future-skew rule (>5 minutes ahead of
