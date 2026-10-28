@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"sync"
 	"sync/atomic"
 
@@ -39,8 +40,36 @@ func parallelIngestFiles(
 	rhAccount *model.RHAccount,
 	cluster *model.Cluster,
 ) (transientErr error, permanentFailed bool) {
+	// Files carry their original indices throughout (filename derivation
+	// reads Object_keys by index).
+	remaining := make([]vmFamilyFile, 0, len(kafkaMsg.Files))
+	for i, f := range kafkaMsg.Files {
+		remaining = append(remaining, vmFamilyFile{idx: i, file: f})
+	}
+
 	if useNativeCSVIngest {
 		ingestion.EnsureIngestPartitionsForWindow(ctx, pool)
+
+		// #707: VM-family files of one payload digest in a single batch —
+		// per-file passes clobbered same-day rows split across files (the
+		// full-replacement upsert kept only the last file's rows). Instance-
+		// types files and every other type keep the existing per-file paths.
+		if plugin.EnabledFor("vm") {
+			vmFiles, otherFiles := partitionVMFamilyFiles(remaining)
+			if len(vmFiles) > 0 {
+				tErr, pErr := processVMFileBatch(ctx, pool, log, kafkaMsg, manifestID, vmFiles)
+				if tErr != nil {
+					return tErr, permanentFailed
+				}
+				if pErr {
+					permanentFailed = true
+				}
+				remaining = otherFiles
+				if len(remaining) == 0 {
+					return nil, permanentFailed
+				}
+			}
+		}
 	}
 
 	appCfg := config.GetConfig()
@@ -50,9 +79,9 @@ func parallelIngestFiles(
 	}
 
 	// For a single file, skip the goroutine overhead entirely.
-	if len(kafkaMsg.Files) <= 1 {
-		for fileIdx, file := range kafkaMsg.Files {
-			tErr, pErr := processOneFile(ctx, pool, log, kafkaMsg, manifestID, useNativeCSVIngest, rhAccount, cluster, fileIdx, file)
+	if len(remaining) <= 1 {
+		for _, f := range remaining {
+			tErr, pErr := processOneFile(ctx, pool, log, kafkaMsg, manifestID, useNativeCSVIngest, rhAccount, cluster, f.idx, f.file)
 			if tErr != nil {
 				return tErr, permanentFailed
 			}
@@ -72,10 +101,10 @@ func parallelIngestFiles(
 	var transientOnce sync.Once
 	var firstTransient error
 
-	for fileIdx, file := range kafkaMsg.Files {
-		fileIdx, file := fileIdx, file
+	for _, f := range remaining {
+		f := f
 		eg.Go(func() error {
-			tErr, pErr := processOneFile(egCtx, pool, log, kafkaMsg, manifestID, useNativeCSVIngest, rhAccount, cluster, fileIdx, file)
+			tErr, pErr := processOneFile(egCtx, pool, log, kafkaMsg, manifestID, useNativeCSVIngest, rhAccount, cluster, f.idx, f.file)
 			if pErr {
 				permFailed.Store(true)
 			}
@@ -89,6 +118,111 @@ func parallelIngestFiles(
 
 	_ = eg.Wait()
 	return firstTransient, permFailed.Load()
+}
+
+// vmFamilyFile is a manifest file routed to the VM digest batch, carrying
+// its original index for filename derivation.
+type vmFamilyFile struct {
+	idx  int
+	file string
+}
+
+// partitionVMFamilyFiles splits the manifest's files into VM-family members
+// (usage / gpu-device / pvc, excluding the instance-types JSON) and the
+// rest. Classification mirrors processNativeFile's routing.
+func partitionVMFamilyFiles(files []vmFamilyFile) (vmFiles, otherFiles []vmFamilyFile) {
+	for _, f := range files {
+		if vm.IsClusterInstanceTypesFile(f.file) {
+			otherFiles = append(otherFiles, f)
+			continue
+		}
+		switch utils.DetermineCSVType(f.file) {
+		case types.PayloadTypeVM, types.PayloadTypeVMGPU, types.PayloadTypeVMPVC:
+			vmFiles = append(vmFiles, f)
+		default:
+			otherFiles = append(otherFiles, f)
+		}
+	}
+	return vmFiles, otherFiles
+}
+
+// processVMFileBatch digests all VM-family files of one payload in a single
+// accumulator (#707): same-day rows across files merge; per-file manifest
+// state and error isolation are preserved (a failed file takes the
+// per-file error path; batch-mates keep their rows). Cross-payload
+// replacement semantics are unchanged (KMO's monthly accumulator).
+func processVMFileBatch(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	log *logrus.Entry,
+	kafkaMsg types.KafkaMsg,
+	manifestID string,
+	vmFiles []vmFamilyFile,
+) (transientErr error, permanentFailed bool) {
+	if !plugin.EnabledFor("vm") {
+		// #650: skipping a disabled plugin's files is Done, not silence.
+		for _, f := range vmFiles {
+			filename := filenameForFileIndex(kafkaMsg, f.file, f.idx)
+			log.Warnf("vm plugin disabled, skipping %s without ingest (marking done)", filename)
+			markFileDone(ctx, pool, log, manifestID, filename)
+		}
+		return nil, false
+	}
+
+	orgID := kafkaMsg.Metadata.Org_id
+	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
+	batch, err := ingestion.NewVMDigestBatch(ctx, pool, orgID, clusterUUID)
+	if err != nil {
+		// Schedule-cache load failure is environmental: transient, nothing marked done.
+		log.Errorf("VM batch setup failed: %v", err)
+		return err, false
+	}
+
+	// Succeeded files are marked done only after the flush: a failed flush
+	// leaves them unmarked so the manifest retry re-processes them
+	// (ingest is idempotent).
+	var succeeded []string
+	for _, f := range vmFiles {
+		if err := ctx.Err(); err != nil {
+			return err, false
+		}
+		filename := filenameForFileIndex(kafkaMsg, f.file, f.idx)
+		if shouldSkipProcessedFile(ctx, pool, manifestID, filename) {
+			log.Infof("skipping already-processed file %s for manifest %s", filename, manifestID)
+			continue
+		}
+		markFileProcessing(ctx, pool, log, kafkaMsg, filename, string(types.PayloadTypeVM))
+		err := ingestCSVFromURL(ctx, f.file, orgID, clusterUUID, string(types.PayloadTypeVM),
+			func(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
+				_, err := batch.AddCSV(ctx, r)
+				return err
+			})
+		if err != nil {
+			if isTransientKafkaProcessingError(err) {
+				return err, false
+			}
+			handlePermanentFileError(ctx, pool, log, kafkaMsg, filename, string(types.PayloadTypeVM), err)
+			permanentFailed = true
+			continue
+		}
+		succeeded = append(succeeded, filename)
+	}
+
+	if err := batch.Flush(ctx); err != nil {
+		if isTransientKafkaProcessingError(err) {
+			return err, false
+		}
+		// Permanent flush failure fails the whole batch's succeeded files:
+		// none were marked done, and their data did not land.
+		for _, filename := range succeeded {
+			handlePermanentFileError(ctx, pool, log, kafkaMsg, filename, string(types.PayloadTypeVM), err)
+		}
+		return nil, true
+	}
+	for _, filename := range succeeded {
+		markFileDone(ctx, pool, log, manifestID, filename)
+	}
+	return nil, permanentFailed
 }
 
 // processOneFile handles a single file from the manifest. Returns a transient error

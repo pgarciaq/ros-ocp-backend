@@ -14,6 +14,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	libcsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 )
 
 // ingestGPUDeviceDigest holds per-GPU metrics for digest upsert (avoids model import cycle).
@@ -281,8 +282,7 @@ func finalizeVMDigest(key VMDigestKey, acc *vmDigestAccumulator) VMDigestResult 
 	d.MemUsageMaxKiB = roundFloat64ToInt64(maxFloat(acc.memUsage))
 	d.MemRequestKiB = roundFloat64ToInt64(acc.memRequest)
 
-	const minAgentSamplesForPercentile = 20
-	if acc.agentSampleCount >= minAgentSamplesForPercentile {
+	if acc.agentSampleCount >= libcsv.VMAgentMinSamplesForPercentile {
 		sortedAvail := sortedCopy(acc.memAvailable)
 		p50 := roundFloat64ToInt64(percentileFloat(sortedAvail, 0.50))
 		p95 := roundFloat64ToInt64(percentileFloat(sortedAvail, 0.95))
@@ -567,73 +567,124 @@ func digestResultsSlice(digestMap map[VMDigestKey]VMDigestResult) []VMDigestResu
 // It streams rows into digest accumulators and does not retain a []VMRow of
 // every 15-minute sample. Business-hours and hourly digests are accumulated
 // in the same pass when enabled.
-func ProcessVMCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
-	dailyGroups := make(map[VMDigestKey]*vmDigestAccumulator)
-	var bhGroups map[VMDigestKey]*vmDigestAccumulator
-	var hourlyGroups map[VMHourlyDigestKey]*vmHourlyAccumulator
+// VMDigestBatch accumulates VM CSV rows across the files of ONE payload
+// and flushes them as a single digest computation (#707). Per-file digest
+// passes with the full-replacement upsert lost same-day rows split across
+// files (last file won); the batch merges them. Cross-payload semantics
+// are unchanged: a later payload re-sending a fuller month still replaces.
+type VMDigestBatch struct {
+	pool        *pgxpool.Pool
+	orgID       string
+	clusterUUID string
 
-	var cache *bhschedule.Cache
+	dailyGroups  map[VMDigestKey]*vmDigestAccumulator
+	bhGroups     map[VMDigestKey]*vmDigestAccumulator
+	hourlyGroups map[VMHourlyDigestKey]*vmHourlyAccumulator
+	bhCache      *bhschedule.Cache
+	total        int
+}
+
+// NewVMDigestBatch creates the per-payload accumulator. Loads the business
+// hours schedule cache once for the whole payload.
+func NewVMDigestBatch(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) (*VMDigestBatch, error) {
+	b := &VMDigestBatch{
+		pool:        pool,
+		orgID:       orgID,
+		clusterUUID: clusterUUID,
+		dailyGroups: make(map[VMDigestKey]*vmDigestAccumulator),
+	}
 	if BusinessHoursAggregationEnabled() {
-		var loadErr error
-		cache, loadErr = bhschedule.LoadSchedules(ctx, pool, orgID, clusterUUID)
-		if loadErr != nil {
-			return fmt.Errorf("load business hours schedules for VM ingest: %w", loadErr)
+		var err error
+		b.bhCache, err = bhschedule.LoadSchedules(ctx, pool, orgID, clusterUUID)
+		if err != nil {
+			return nil, fmt.Errorf("load business hours schedules for VM ingest: %w", err)
 		}
-		if cache != nil && cache.ProducesBusinessHoursDigests() {
-			bhGroups = make(map[VMDigestKey]*vmDigestAccumulator)
+		if b.bhCache != nil && b.bhCache.ProducesBusinessHoursDigests() {
+			b.bhGroups = make(map[VMDigestKey]*vmDigestAccumulator)
 		}
 	}
 	if config.HourlyVMDigestsEnabled() {
-		hourlyGroups = make(map[VMHourlyDigestKey]*vmHourlyAccumulator)
+		b.hourlyGroups = make(map[VMHourlyDigestKey]*vmHourlyAccumulator)
 	}
+	return b, nil
+}
 
+// AddCSV parses one payload file's rows into the shared accumulators.
+// Returns the row count; a parse error fails only this file (the caller
+// routes it to the per-file error path — batch-mates keep their rows).
+func (b *VMDigestBatch) AddCSV(ctx context.Context, r io.Reader) (int, error) {
 	n := 0
 	_, err := forEachVMCSVRow(ctx, r, func(row VMRow) error {
-		addVMRowToDigestGroups(dailyGroups, row, nil)
-		if bhGroups != nil {
-			addVMRowToDigestGroups(bhGroups, row, VMBusinessHoursWeight(cache))
+		addVMRowToDigestGroups(b.dailyGroups, row, nil)
+		if b.bhGroups != nil {
+			addVMRowToDigestGroups(b.bhGroups, row, VMBusinessHoursWeight(b.bhCache))
 		}
-		if hourlyGroups != nil {
-			addVMRowToHourlyGroups(hourlyGroups, row)
+		if b.hourlyGroups != nil {
+			addVMRowToHourlyGroups(b.hourlyGroups, row)
 		}
 		n++
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("parsing VM CSV: %w", err)
+		return n, fmt.Errorf("parsing VM CSV: %w", err)
 	}
-	if n == 0 {
+	b.total += n
+	return n, nil
+}
+
+// Flush computes and upserts the digests once for the whole payload. Call
+// once, after every file has been added. An empty batch (no rows across
+// all files) is a logged no-op, matching the single-file behavior.
+func (b *VMDigestBatch) Flush(ctx context.Context) error {
+	orgID, clusterUUID := b.orgID, b.clusterUUID
+	if b.total == 0 {
 		logging.ForOrg(orgID, clusterUUID).Info("ProcessVMCSV: no VM rows found")
 		return nil
 	}
 
-	digests := digestResultsSlice(finalizeVMDigestGroups(dailyGroups))
-	if err := UpsertDailyVMDigests(ctx, pool, orgID, clusterUUID, digests); err != nil {
+	digests := digestResultsSlice(finalizeVMDigestGroups(b.dailyGroups))
+	if err := UpsertDailyVMDigests(ctx, b.pool, orgID, clusterUUID, digests); err != nil {
 		return fmt.Errorf("upserting VM digests: %w", err)
 	}
 	logging.ForOrg(orgID, clusterUUID).Infof("ProcessVMCSV: upserted %d VM digests", len(digests))
 
-	if BusinessHoursAggregationEnabled() && bhGroups == nil {
-		if err := bhschedule.PruneClusterVMBusinessHoursDigests(ctx, pool, orgID, clusterUUID); err != nil {
+	if BusinessHoursAggregationEnabled() && b.bhGroups == nil {
+		if err := bhschedule.PruneClusterVMBusinessHoursDigests(ctx, b.pool, orgID, clusterUUID); err != nil {
 			return err
 		}
-	} else if bhGroups != nil {
-		bhDigests := digestResultsSlice(finalizeVMDigestGroups(bhGroups))
+	} else if b.bhGroups != nil {
+		bhDigests := digestResultsSlice(finalizeVMDigestGroups(b.bhGroups))
 		if len(bhDigests) > 0 {
-			if err := UpsertDailyVMDigestsWithSchedule(ctx, pool, orgID, clusterUUID, string(ScheduleTypeBusinessHours), bhDigests); err != nil {
+			if err := UpsertDailyVMDigestsWithSchedule(ctx, b.pool, orgID, clusterUUID, string(ScheduleTypeBusinessHours), bhDigests); err != nil {
 				return fmt.Errorf("upserting VM business_hours digests: %w", err)
 			}
 			logging.ForOrg(orgID, clusterUUID).Infof("ProcessVMCSV: upserted %d VM business_hours digests", len(bhDigests))
 		}
 	}
 
-	if hourlyGroups != nil {
-		hourlyMap := finalizeHourlyVMGroups(hourlyGroups)
-		if err := UpsertHourlyVMDigests(ctx, pool, orgID, clusterUUID, hourlyMap); err != nil {
+	if b.hourlyGroups != nil {
+		hourlyMap := finalizeHourlyVMGroups(b.hourlyGroups)
+		if err := UpsertHourlyVMDigests(ctx, b.pool, orgID, clusterUUID, hourlyMap); err != nil {
 			return fmt.Errorf("upserting hourly VM digests: %w", err)
 		}
 		logging.ForOrg(orgID, clusterUUID).Infof("ProcessVMCSV: upserted %d hourly VM digests", len(hourlyMap))
 	}
 
 	return nil
+}
+
+// ProcessVMCSV digests one VM CSV file. Payloads with multiple VM files
+// must use VMDigestBatch instead (#707): this per-file path computes an
+// independent digest whose full-replacement upsert clobbers same-day rows
+// from other files of the same payload. Cross-payload re-sends (KMO's
+// monthly accumulator) keep using this replacement semantics correctly.
+func ProcessVMCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
+	batch, err := NewVMDigestBatch(ctx, pool, orgID, clusterUUID)
+	if err != nil {
+		return err
+	}
+	if _, err := batch.AddCSV(ctx, r); err != nil {
+		return err
+	}
+	return batch.Flush(ctx)
 }

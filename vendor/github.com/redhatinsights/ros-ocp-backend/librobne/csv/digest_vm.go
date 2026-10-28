@@ -10,7 +10,13 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/vm"
 )
 
-const vmMinAgentSamplesForPercentile = 20
+// VMAgentMinSamplesForPercentile is the minimum guest-agent sample count a
+// daily digest needs before mem_available percentiles are computed. Shared
+// contract (#707): the processor's digest builder and this in-memory builder
+// must withhold identically.
+const VMAgentMinSamplesForPercentile = 20
+
+const vmMinAgentSamplesForPercentile = VMAgentMinSamplesForPercentile
 
 type vmDigestKey struct {
 	VMName     string

@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **VM multi-file payload digest merging ([#707](https://github.com/pgarciaq/ros-ocp-backend/issues/707)):**
+  VM CSV files within one payload are now digested in a single pass — a day
+  split across files (row-limit splits, multi-part payloads) merges instead
+  of keeping only the last file's rows. Previously each file was digested
+  independently with a full-replacement upsert: same-day rows from earlier
+  files were lost, and a partial last file could fall below the 20-sample
+  guest-agent percentile minimum, silently degrading VM recommendations to
+  the usage branch. Cross-payload semantics are unchanged (a re-sent
+  monthly accumulator still replaces). The ≥20 agent-sample percentile
+  minimum is now a shared constant between the processor and the robne
+  in-memory digest builder.
+
 ### Added
 
 - **Per-plugin term windows ([#705](https://github.com/pgarciaq/ros-ocp-backend/issues/705), [ADR-0346](architecture/adrs.md)):**
