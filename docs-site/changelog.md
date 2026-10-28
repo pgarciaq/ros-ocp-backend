@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **HCP capacity header contract is name-based ([#704](https://github.com/pgarciaq/ros-ocp-backend/issues/704)):**
+  the capacity CSV parser now locates columns by header name (the family
+  convention used by every other ROS CSV parser) instead of requiring the
+  exact 25-column name sequence. A reordered header is harmless; an
+  operator adding an extra column is tolerated with a reported warning
+  (stderr on the CLI, log on ingestion) instead of rejecting the whole
+  file; a missing or renamed required column remains a file-level error
+  naming the absent columns; `native_model_version` keeps gating the math
+  model. KMO writers are unaffected — future column additions no longer
+  require coordinated reader changes.
+
 ### Fixed
 
 - **VM multi-file payload digest merging ([#707](https://github.com/pgarciaq/ros-ocp-backend/issues/707)):**

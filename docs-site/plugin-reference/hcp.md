@@ -17,7 +17,7 @@ it as capacity history rows via `internal/ingestion`.
 |----------|-------|
 | Name | `hcp` |
 | Requires | `container` (observer reads container rows) |
-| CSV types | `hcp-capacity` — `ros-openshift-hcp-capacity-*`, the 25-column operator contract (W4) |
+| CSV types | `hcp-capacity` — `ros-openshift-hcp-capacity-*` (the operator writes 25 columns; read name-based — order-insensitive, extra columns tolerated with a warning, missing names a named file-level error, #704) |
 | Terms | short 1d / medium 7d / long 15d (configurable, same defaults as sibling fast-moving plugins) |
 | Honors | `ROS_DISABLED_PLUGINS=hcp`, Kruize mutual exclusivity |
 
