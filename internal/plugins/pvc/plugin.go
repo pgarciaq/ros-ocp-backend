@@ -100,11 +100,8 @@ func (p *PVCPlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, olde
 }
 
 func (p *PVCPlugin) DefaultTerms() []plugin.TermConfig {
-	return []plugin.TermConfig{
-		{Name: "short", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 0},
-		{Name: "medium", WindowDays: 30, MinDataDays: 14, DecayHalfLifeHours: 0},
-		{Name: "long", WindowDays: 90, MinDataDays: 30, DecayHalfLifeHours: 0},
-	}
+	// Single source (ADR-0346): the PVC table in librobne.
+	return engine.PVCPluginTerms()
 }
 
 func (p *PVCPlugin) MaxWindowDays() int { return 365 }

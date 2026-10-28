@@ -16,6 +16,10 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
+	libengine "github.com/redhatinsights/ros-ocp-backend/librobne/engine"
+	libpvc "github.com/redhatinsights/ros-ocp-backend/librobne/pvc"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
+	libvm "github.com/redhatinsights/ros-ocp-backend/librobne/vm"
 )
 
 const termConfigCacheTTL = 60 * time.Second
@@ -148,6 +152,53 @@ func DefaultTermsForPlugin(recommendationType string) []TermConfig {
 		}
 	}
 	return DefaultTerms()
+}
+
+// ContainerFamilyPluginTerms returns the container-family documented table
+// (container, namespace, node, gpu share it) in the plugin trait shape.
+// Single source: librobne/engine.DefaultTerms() (ADR-0346).
+func ContainerFamilyPluginTerms() []plugin.TermConfig {
+	return librobneTermsToPlugin(libengine.DefaultTerms())
+}
+
+// VMPluginTerms returns the VM documented table (short 7 / medium 15 /
+// long 30) in the plugin trait shape. Single source:
+// librobne/vm.DefaultVMTermWindows() (ADR-0346).
+func VMPluginTerms() []plugin.TermConfig {
+	windows := libvm.DefaultVMTermWindows()
+	out := make([]plugin.TermConfig, len(windows))
+	for i, w := range windows {
+		out[i] = plugin.TermConfig{
+			Name:               w.Name,
+			WindowDays:         w.LookbackDays,
+			MinDataDays:        w.MinDataDays,
+			DecayHalfLifeHours: 0, // the VM engine does not decay-weight
+		}
+	}
+	return out
+}
+
+// PVCPluginTerms returns the PVC documented table (short 7 / medium 30 /
+// long 90) in the plugin trait shape. Single source:
+// librobne/pvc.DefaultTerms() (ADR-0346).
+func PVCPluginTerms() []plugin.TermConfig {
+	return librobneTermsToPlugin(libpvc.DefaultTerms())
+}
+
+// librobneTermsToPlugin converts librobne term configs to the plugin trait
+// shape (drops ReplicaTargetUtilizationPct, which the trait does not carry;
+// pluginTermsToEngine re-adds it from config on the load path).
+func librobneTermsToPlugin(ts []types.TermConfig) []plugin.TermConfig {
+	out := make([]plugin.TermConfig, len(ts))
+	for i, t := range ts {
+		out[i] = plugin.TermConfig{
+			Name:               t.Name,
+			WindowDays:         t.WindowDays,
+			MinDataDays:        t.MinDataDays,
+			DecayHalfLifeHours: t.DecayHalfLifeHours,
+		}
+	}
+	return out
 }
 
 // LoadTermConfig resolves effective terms for an org + recommendation type.

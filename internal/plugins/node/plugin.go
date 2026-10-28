@@ -124,11 +124,8 @@ func (p *NodePlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, old
 }
 
 func (p *NodePlugin) DefaultTerms() []plugin.TermConfig {
-	return []plugin.TermConfig{
-		{Name: "short", WindowDays: 1, MinDataDays: 1, DecayHalfLifeHours: 0},
-		{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168},
-		{Name: "long", WindowDays: 15, MinDataDays: 7, DecayHalfLifeHours: 360},
-	}
+	// Single source (ADR-0346): the container-family table in librobne.
+	return engine.ContainerFamilyPluginTerms()
 }
 
 func (p *NodePlugin) MaxWindowDays() int { return 90 }

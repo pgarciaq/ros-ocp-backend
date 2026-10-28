@@ -113,11 +113,8 @@ func (p *VMPlugin) RegisterRoutes(g *echo.Group) {
 }
 
 func (p *VMPlugin) DefaultTerms() []plugin.TermConfig {
-	return []plugin.TermConfig{
-		{Name: "short_term", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 0},
-		{Name: "medium_term", WindowDays: 15, MinDataDays: 7, DecayHalfLifeHours: 0},
-		{Name: "long_term", WindowDays: 30, MinDataDays: 15, DecayHalfLifeHours: 0},
-	}
+	// Single source (ADR-0346): the VM table in librobne.
+	return engine.VMPluginTerms()
 }
 
 func (p *VMPlugin) MaxWindowDays() int { return 90 }
