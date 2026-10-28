@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Zero user-visible change.** Retention periods stay 6 months (digests) / 90 days (history); no table's effective retention changes; no migration.
+- **Zero user-visible change.** Both cutoffs stay config-derived exactly as today — `ROS_RETENTION_MONTHS` (default 6) for digests, `ROS_HISTORY_RETENTION_DAYS` (default 90) for history — read from configuration at sweep time, never hardcoded; no table's effective retention changes; no migration. ("6-month / 90-day" elsewhere in this plan is shorthand for those defaults.)
 - **Unconditional sweep semantics preserved.** The history sweep runs even when no plugins are registered (tests/tools rely on this): the core fallback list keeps every current entry; plugin declarations ADD to it, overlap harmless (`DROP IF EXISTS` — the documented digest-class pattern).
 - **The trap dies by construction.** A table declared via `HistoryRetentionTables` is swept with the history cutoff by the core sweep — there is no code path where an implementer applies the month cutoff to a history table.
 - The two orphan rollup tables (`hosted_api_tax_rollups`, `hosted_nodepool_rollups`) stay core-listed — finding them plugin homes is out of scope.
@@ -22,10 +22,10 @@
 
 Input classes the fix must handle; each pinned by the named test in its owning task:
 
-1. **Plugin-declared history table gets the days cutoff** — a registered `HistoryRetentionProvider`'s table is swept at the 90-day cutoff, never the 6-month. Pinned by `TestHistoryRetention_PluginDeclarationUsesDaysCutoff` (Task 3; fails pre-fix — the trait doesn't exist).
+1. **Plugin-declared history table gets the days-config cutoff** — a registered `HistoryRetentionProvider`'s table is swept at the `HistoryRetentionDays` cutoff, never the `retentionMonths` cutoff. **Test discipline: configure non-default values** (e.g. `retentionMonths=3`, `historyDays=45`) and assert the class separation — 45 days for the history table, 3 months for digests — so the test pins which CONFIG feeds which class, not the default values (a literal-90 assertion would pass even against a regression that hardcodes 90). Pinned by `TestHistoryRetention_PluginDeclarationUsesDaysCutoff` (Task 3; fails pre-fix — the trait doesn't exist).
 2. **Zero-plugin fallback intact** — with no plugins registered, every current `historyRetainedTables` entry still sweeps at the history cutoff. Pinned by `TestHistoryRetention_ZeroPluginFallbackSweepsAllCoreTables` (Task 3).
 3. **No retention-period drift** — the digest cutoff is exactly `retentionMonths` and the history cutoff exactly `HistoryRetentionDays` for both paths; no table appears in both sweep classes. Pinned by `TestHistoryRetention_NoCrossClassDrift` (Task 4).
-4. **The W4 trap fixture** — a plugin implementing the trait for `hcp_capacity_history`-shaped data receives 90 days, not 6 months (the exact confusion caught in W4 planning). Pinned by `TestHistoryRetention_HcpCapacityHistoryGetsNinetyDays` (Task 4).
+4. **The W4 trap fixture** — a plugin implementing the trait for `hcp_capacity_history`-shaped data receives the days-config cutoff, not the months-config one (the exact confusion caught in W4 planning), verified under non-default config values per Review Focus 1's discipline. Pinned by `TestHistoryRetention_HcpCapacityHistoryUsesDaysConfig` (Task 4).
 
 ## Tasks
 
@@ -51,7 +51,7 @@ Input classes the fix must handle; each pinned by the named test in its owning t
 ### Task 4: Cross-class and trap fixtures
 
 - [ ] `TestHistoryRetention_NoCrossClassDrift` (Review Focus 3): digest tables and history tables are disjoint sets in both paths; the two cutoffs derive from their respective configs.
-- [ ] `TestHistoryRetention_HcpCapacityHistoryGetsNinetyDays` (Review Focus 4): the hcp declaration sweeps at 90 days — the W4 near-miss, now impossible by construction.
+- [ ] `TestHistoryRetention_HcpCapacityHistoryUsesDaysConfig` (Review Focus 4): the hcp declaration sweeps at the configured history cutoff under non-default values — the W4 near-miss, now impossible by construction.
 - [ ] `make test-short`; `make lint`.
 
 ### Task 5: Docs
