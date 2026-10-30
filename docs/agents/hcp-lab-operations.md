@@ -103,6 +103,15 @@ the Machine deletion — no guest-side intervention needed. Guest interventions
 Sleep reclaims worker capacity only — the CP keeps running and the physical
 node stays powered.
 
+Upstream status (checked 2026-10-30): the canary drain loop is a known bug,
+fixed in [openshift/hypershift#8338](https://github.com/openshift/hypershift/pull/8338)
+(OCPBUGS-84368) and backported to release-4.22 in
+[#9876](https://github.com/openshift/hypershift/pull/9876) (merged 2026-10-08);
+this lab's 4.22.17 operator build predates it. The PDB-blocking half is
+documented expected behavior (HyperShift NodePool lifecycle docs, "Scaling To
+Zero") — the finite `nodeDrainTimeout` is the officially recommended
+prevention, so keep it in any scale-to-zero regardless of the canary fix.
+
 ## MachineConfig / NTP
 
 - Ignition `contents.source` data URLs **must be quoted** — unquoted, the
