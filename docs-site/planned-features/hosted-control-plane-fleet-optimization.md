@@ -374,7 +374,7 @@ Wedges are **shippable product slices**. Research validates; implementation chil
 | **W5 — API tax (operators/webhooks)** | Top-N SA + slow webhook digests; both planes | G | Post-MVP; **R6 GO** (ADR-0335), but APIRequestCount slice is gated on source data/operator support (#657) | R6 [#390](https://github.com/pgarciaq/ros-ocp-backend/issues/390) ✅ |
 | **W6 — CP cost attribution** | $ per HC from management | H | Post-MVP / postponed (#627; #394 closed as its duplicate) | Backlog |
 | **W7 — CP pools / MachineSet** | Dedicated management pools | I | Post-MVP / postponed (#395) | Backlog |
-| **W8 — HC sleep schedules** | Business-hours non-prod | J | Post-MVP / postponed (#396); no native HCP hibernate claim | Backlog |
+| **W8 — HC sleep schedules** | Business-hours non-prod | J | In implementation (#396, promoted 2026-10-30: advisory v1 — [plan](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/superpowers/plans/2026-10-30-w8-nonprod-sleep-advisory.md); orchestration future = #714) | Implementation |
 | **W9 — Fleet placement share** | Shared index with VM placement | K | Coordinate | Link sibling feature |
 
 ### MVP ladder (carry now)
