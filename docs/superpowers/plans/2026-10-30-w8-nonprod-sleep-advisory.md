@@ -5,7 +5,7 @@
 **Goal:** Detect **declared** non-prod HostedClusters whose user workloads follow a business-hours usage signature (active during the org's configured business hours, idle outside) and emit a **high-confidence** advisory recommending an off-hours worker sleep schedule — **served to users via a new advisories endpoint**, which also surfaces the existing zombie/headroom/api-tax advisories for the first time. Copy complies with ADR-0333 (worker-capacity reclaim only; the control plane keeps running; wake ≈ 20 min full reprovision). **Advisory only — ROS never sleeps anything** (owner shape decision 2026-10-30: (a) now; (b) runbook+`oc` remote / in-cluster endpoint local; (c) service-mode bridge = #714).
 
 **Architecture, three layers:**
-1. **Declaration**: an admin labels the HostedCluster on the management cluster (`cost-management.io/hc-tier=non-prod`); the operator (KMO today, robne-operator after the soft-split) — which **already reads HostedCluster objects** for the topology CSV feeding `manifest_hcp_snapshots` — gains one column carrying the tier label; ROS ingests it as a new snapshot column.
+1. **Declaration**: an admin labels the HostedCluster on the management cluster (`insights.cost-management/hc-tier=non-prod` — the established ROS label family; KMO's collectors already read `insights.cost-management/optimizations` on namespaces, so admins and the operator chain know the prefix; owner decision 2026-10-30, valid unchanged upstream and downstream); the operator (KMO today, robne-operator after the soft-split) — which **already reads HostedCluster objects** for the topology CSV feeding `manifest_hcp_snapshots` — gains one column carrying the tier label; ROS ingests it as a new snapshot column.
 2. **Detection**: a new correlator pass in `internal/engine/correlate` (mirroring the zombie contract): enumerate fresh complete HC candidates, gate on the declared tier, evaluate the business-hours signature from the dual digests (`daily_container_digests`, `schedule_type` `all_hours` vs `business_hours`), write `hcp_correlation_advisories` rows with verdict `schedule_nonprod_sleep`, confidence `high` (declared + signature-confirmed). Rides `RunCycle` (hourly since #711); shares sweep, metrics, and the never-fail contract.
 3. **Serving**: `GET` endpoint reading `hcp_correlation_advisories` generically — all verdicts (zombie, headroom, api-tax, sleep) — behind the standard v1 identity/RBAC middleware, org-scoped, documented in `openapi.json`.
 
@@ -46,7 +46,7 @@
 
 ### Task 2: Operator topology CSV — tier label column (child: operator, cross-repo)
 
-- [ ] koku-metrics-operator: the HCP topology report gains the HostedCluster's `cost-management.io/hc-tier` label value (empty when absent); nise generator counterpart if the topology CSV has one. Contract: column name + semantics pinned in the child; fork-branch delivery per the fork strategy.
+- [ ] koku-metrics-operator: the HCP topology report gains the HostedCluster's `insights.cost-management/hc-tier` label value (empty when absent); nise generator counterpart if the topology CSV has one. Contract: column name + semantics pinned in the child; fork-branch delivery per the fork strategy.
 
 ### Task 3: ROS ingestion — snapshot tier column (child: backend advisory)
 
