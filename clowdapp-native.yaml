@@ -1,0 +1,399 @@
+---
+# Native robne ClowdApp for ros-perf dual-stack compare.
+# Deployed alongside legacy ros-ocp-backend + kruize (do not replace them).
+# - metadata.name / database.name must differ from legacy
+# - KAFKA_CONSUMER_GROUP_ID must differ from legacy default "ros-ocp"
+apiVersion: v1
+kind: Template
+metadata:
+  name: ros-ocp-native
+objects:
+- apiVersion: cloud.redhat.com/v1alpha1
+  kind: ClowdApp
+  metadata:
+    name: ros-ocp-native
+  spec:
+    envName: ${ENV_NAME}
+    featureFlags: true
+    dependencies:
+    - ingress
+    - rbac
+    - sources-api
+    deployments:
+    - name: processor
+      replicas: ${{PROCESSOR_REPLICA_COUNT}}
+      podSpec:
+        image: ${IMAGE}:${IMAGE_TAG}
+        command: ["sh"]
+        args: ["-c", "./rosocp db migrate up && ./rosocp start processor"]
+        resources:
+          requests:
+            cpu: ${CPU_REQUEST_ROSOCP}
+            memory: ${MEMORY_REQUEST_ROSOCP}
+          limits:
+            cpu: ${CPU_LIMIT_ROSOCP}
+            memory: ${MEMORY_LIMIT_ROSOCP}
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /status
+            port: 9000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 9000
+            scheme: HTTP
+          initialDelaySeconds: 3
+          periodSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+          timeoutSeconds: 3
+        startupProbe:
+          httpGet:
+            path: /readyz
+            port: 9000
+            scheme: HTTP
+          failureThreshold: 24
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+        env:
+          - name: CLOWDER_ENABLED
+            value: ${CLOWDER_ENABLED}
+          - name: KRUIZE_HOST
+            value: ${KRUIZE_HOST}
+          - name: KRUIZE_PORT
+            value: ${KRUIZE_PORT}
+          - name: KRUIZE_WAIT_TIME
+            value: ${KRUIZE_WAIT_TIME}
+          - name: SSL_CERT_DIR
+            value: ${SSL_CERT_DIR}
+          - name: SERVICE_NAME
+            value: "rosocp-native-processor"
+          - name: CW_LOG_STREAM_NAME
+            value: "rosocp-native"
+          - name: LOG_LEVEL
+            value: ${LOG_LEVEL}
+          - name: DISABLE_NAMESPACE_RECOMMENDATION
+            value: "${DISABLE_NAMESPACE_RECOMMENDATION}"
+          - name: UPDATE_KRUIZE_PERF_PROFILE
+            value: "${UPDATE_KRUIZE_PERF_PROFILE}"
+          - name: ROS_ENABLED_PLUGINS
+            value: "${ROS_ENABLED_PLUGINS}"
+          - name: ROS_SECURITY_ENFORCE
+            value: "${ROS_SECURITY_ENFORCE}"
+          - name: ROS_CSV_ALLOWED_HOSTS
+            value: "${ROS_CSV_ALLOWED_HOSTS}"
+          - name: KAFKA_CONSUMER_GROUP_ID
+            value: "${KAFKA_CONSUMER_GROUP_ID}"
+    - name: recommendation-poller
+      replicas: ${{POLLER_REPLICA_COUNT}}
+      podSpec:
+        image: ${IMAGE}:${IMAGE_TAG}
+        command: ["sh"]
+        args: ["-c", "./rosocp db migrate up && ./rosocp start recommendation-poller"]
+        resources:
+          requests:
+            cpu: ${CPU_REQUEST_ROSOCP}
+            memory: ${MEMORY_REQUEST_ROSOCP}
+          limits:
+            cpu: ${CPU_LIMIT_ROSOCP}
+            memory: ${MEMORY_LIMIT_ROSOCP}
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /status
+            port: 9000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 9000
+            scheme: HTTP
+          initialDelaySeconds: 3
+          periodSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+          timeoutSeconds: 3
+        startupProbe:
+          httpGet:
+            path: /readyz
+            port: 9000
+            scheme: HTTP
+          failureThreshold: 24
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+        env:
+          - name: CLOWDER_ENABLED
+            value: ${CLOWDER_ENABLED}
+          - name: KRUIZE_HOST
+            value: ${KRUIZE_HOST}
+          - name: KRUIZE_PORT
+            value: ${KRUIZE_PORT}
+          - name: KRUIZE_WAIT_TIME
+            value: ${KRUIZE_WAIT_TIME}
+          - name: SSL_CERT_DIR
+            value: ${SSL_CERT_DIR}
+          - name: SERVICE_NAME
+            value: "rosocp-native-recommendation-poller"
+          - name: CW_LOG_STREAM_NAME
+            value: "rosocp-native"
+          - name: LOG_LEVEL
+            value: ${RECOMMENDATION_POLLER_LOG_LEVEL}
+          - name: KAFKA_CONSUMER_GROUP_ID
+            value: "${KAFKA_CONSUMER_GROUP_ID}"
+    - name: api
+      replicas: ${{API_REPLICA_COUNT}}
+      # Public apiPath stays cost-management (app routes are /api/cost-management/v1).
+      # Dual-stack compare uses Service DNS, not the shared gateway path:
+      #   ros-ocp-native-api.<ns>.svc:8000  vs  ros-ocp-backend-api.<ns>.svc:8000
+      webServices:
+        public:
+          enabled: true
+          apiPath: cost-management
+      podSpec:
+        image: ${IMAGE}:${IMAGE_TAG}
+        command: ["sh"]
+        args: ["-c", "./rosocp db migrate up && ./rosocp start api"]
+        resources:
+          requests:
+            cpu: ${CPU_REQUEST_ROSOCP}
+            memory: ${MEMORY_REQUEST_ROSOCP}
+          limits:
+            cpu: ${CPU_LIMIT_ROSOCP}
+            memory: ${MEMORY_LIMIT_ROSOCP}
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /status
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 3
+          periodSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+          timeoutSeconds: 3
+        startupProbe:
+          httpGet:
+            path: /readyz
+            port: 8000
+            scheme: HTTP
+          failureThreshold: 24
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+        env:
+          - name: PATH_PREFIX
+            value: /api
+          - name: CLOWDER_ENABLED
+            value: ${CLOWDER_ENABLED}
+          - name: RBAC_ENABLE
+            value: "${RBAC_ENABLE}"
+          - name: DB_POOL_SIZE
+            value: ${DB_POOL_SIZE}
+          - name: DB_MAX_OVERFLOW
+            value: ${DB_MAX_OVERFLOW}
+          - name: SSL_CERT_DIR
+            value: ${SSL_CERT_DIR}
+          - name: SERVICE_NAME
+            value: "rosocp-native-api"
+          - name: CW_LOG_STREAM_NAME
+            value: "rosocp-native-api"
+          - name: LOG_LEVEL
+            value: ${LOG_LEVEL}
+          - name: ROS_ENABLED_PLUGINS
+            value: "${ROS_ENABLED_PLUGINS}"
+          - name: ROS_SECURITY_ENFORCE
+            value: "${ROS_SECURITY_ENFORCE}"
+          - name: ROS_CSV_ALLOWED_HOSTS
+            value: "${ROS_CSV_ALLOWED_HOSTS}"
+          - name: KAFKA_CONSUMER_GROUP_ID
+            value: "${KAFKA_CONSUMER_GROUP_ID}"
+    - name: housekeeper
+      replicas: ${{HOUSEKEEPER_REPLICA_COUNT}}
+      podSpec:
+        image: ${IMAGE}:${IMAGE_TAG}
+        command: ["sh"]
+        args: ["-c", "./rosocp db migrate up && ./rosocp start housekeeper --sources"]
+        resources:
+          requests:
+            cpu: ${CPU_REQUEST_ROSOCP}
+            memory: ${MEMORY_REQUEST_ROSOCP}
+          limits:
+            cpu: ${CPU_LIMIT_ROSOCP}
+            memory: ${MEMORY_LIMIT_ROSOCP}
+        env:
+          - name: CLOWDER_ENABLED
+            value: ${CLOWDER_ENABLED}
+          - name: SSL_CERT_DIR
+            value: ${SSL_CERT_DIR}
+          - name: SERVICE_NAME
+            value: "rosocp-native-housekeeper-sources"
+          - name: CW_LOG_STREAM_NAME
+            value: "rosocp-native-housekeeper"
+          - name: LOG_LEVEL
+            value: ${LOG_LEVEL}
+          - name: KRUIZE_HOST
+            value: ${KRUIZE_HOST}
+          - name: KRUIZE_PORT
+            value: ${KRUIZE_PORT}
+          - name: ROS_ENABLED_PLUGINS
+            value: "${ROS_ENABLED_PLUGINS}"
+          - name: ROS_SECURITY_ENFORCE
+            value: "${ROS_SECURITY_ENFORCE}"
+          - name: ROS_CSV_ALLOWED_HOSTS
+            value: "${ROS_CSV_ALLOWED_HOSTS}"
+          - name: KAFKA_CONSUMER_GROUP_ID
+            value: "${KAFKA_CONSUMER_GROUP_ID}"
+
+    jobs:
+      - name: delete-rosocp-partitions
+        schedule: ${PARTITION_DELETE_INTERVAL}
+        podSpec:
+          name: rosocpnativecronjob
+          image: ${IMAGE}:${IMAGE_TAG}
+          imagePullPolicy: Always
+          restartPolicy: OnFailure
+          command: ["sh"]
+          args: ["-c", "./rosocp db migrate up && ./rosocp start housekeeper --partitions"]
+          env:
+            - name: CLOWDER_ENABLED
+              value: ${CLOWDER_ENABLED}
+            - name: SSL_CERT_DIR
+              value: ${SSL_CERT_DIR}
+            - name: SERVICE_NAME
+              value: "rosocp-native-housekeeper-partition"
+            - name: CW_LOG_STREAM_NAME
+              value: "rosocp-native-housekeeper"
+            - name: LOG_LEVEL
+              value: ${LOG_LEVEL}
+
+    database:
+      # Separate from legacy "rosocp" — App-SRE must provision matching DB secret
+      name: rosocp-native
+      version: 16
+    kafkaTopics:
+      - topicName: hccm.ros.events
+        partitions: 1
+      - topicName: rosocp.kruize.recommendations
+        partitions: 1
+      - topicName: platform.sources.event-stream
+        partitions: 1
+    testing:
+      iqePlugin: ros-ocp
+
+parameters:
+- description : ClowdEnvironment name
+  name: ENV_NAME
+  required: true
+- description: Replica count for processor pod
+  name: PROCESSOR_REPLICA_COUNT
+  value: "1"
+- description: Replica count for recommendation-poller pod (native: 0)
+  name: POLLER_REPLICA_COUNT
+  value: "0"
+- description: Image NAME
+  name: IMAGE
+  required: true
+  value: quay.io/aupadhye/robne
+- description: Image tag
+  name: IMAGE_TAG
+  required: true
+  value: ee-native-1
+- description: Kruize server host (unused when poller=0; kept for template parity)
+  name: KRUIZE_HOST
+  required: true
+  value: "kruize-recommendations"
+- description: Kruize server port
+  name: KRUIZE_PORT
+  required: true
+  value: "10000"
+- description: Initial cpu request.
+  displayName: CPU Request
+  name: CPU_REQUEST_ROSOCP
+  required: true
+  value: 500m
+- description: Initial amount of memory the container will request.
+  displayName: Memory Request
+  name: MEMORY_REQUEST_ROSOCP
+  required: true
+  value: 1Gi
+- description: Maximum amount of memory the container can use.
+  displayName: Memory Limit
+  name: MEMORY_LIMIT_ROSOCP
+  required: true
+  value: 1Gi
+- description: Maximum amount of CPU the build container can use.
+  displayName: CPU Limit
+  name: CPU_LIMIT_ROSOCP
+  required: true
+  value: '1'
+- description: Is clowder enabled
+  name: CLOWDER_ENABLED
+  value: "True"
+- name: SSL_CERT_DIR
+  value: '/etc/ssl/certs:/etc/pki/tls/certs:/system/etc/security/cacerts:/cdapp/certs'
+- description: Replica count for api pod
+  name: API_REPLICA_COUNT
+  value: "1"
+- description: Replica count for recommender pod
+  name: RECOMMENDER_REPLICA_COUNT
+  value: "1"
+- description: Replica count for recommender pod
+  name: HOUSEKEEPER_REPLICA_COUNT
+  value: "1"
+- description: Time to wait before hitting listRecommendation API
+  name: KRUIZE_WAIT_TIME
+  value: "120"
+- description: Enable the RBAC
+  name: RBAC_ENABLE
+  value: "true"
+- name: LOG_LEVEL
+  value: 'INFO'
+- name: RECOMMENDATION_POLLER_LOG_LEVEL
+  value: 'INFO'
+- description: "Deprecated: namespace recs are enabled by default. Use Unleash flag rosocp.namespace_disabled to disable per-org."
+  name: DISABLE_NAMESPACE_RECOMMENDATION
+  value: "false"
+- description: Update Kruize performance profile flag
+  name: UPDATE_KRUIZE_PERF_PROFILE
+  value: "false"
+- description: "Plugin allowlist (CSV). Native compare: container,namespace"
+  name: ROS_ENABLED_PLUGINS
+  value: "container,namespace"
+- description: "Security enforcement. Prefer true on perf; set false only if CSV/TLS constraints require it."
+  name: ROS_SECURITY_ENFORCE
+  value: "true"
+- description: "CSV download host allowlist (comma-separated). Perf MinIO: ros-perf-minio.ros-perf.svc"
+  name: ROS_CSV_ALLOWED_HOSTS
+  value: ""
+- description: "Kafka consumer group. MUST differ from legacy default ros-ocp so both stacks see every hccm.ros.events message."
+  name: KAFKA_CONSUMER_GROUP_ID
+  value: "ros-ocp-native"
+- description: Legacy API DB pool size (maps to ROS_DB_MAX_CONNS). Must be a valid integer.
+  name: DB_POOL_SIZE
+  value: "20"
+- description: Legacy API DB max overflow. Must be a valid integer when set.
+  name: DB_MAX_OVERFLOW
+  value: "30"
+- name: PARTITION_DELETE_INTERVAL
+  value: "0 0 */15 * *" # Runs at 12:00 AM, every 15 days.
