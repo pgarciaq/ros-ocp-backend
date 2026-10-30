@@ -64,6 +64,45 @@ Do not duplicate either here — link to them.
   bad ISO need `destroy` + `start` (reboot may not re-read it); diagnose
   headlessly with `virsh screenshot <vm> /tmp/x.ppm`.
 
+## Hibernate / resume a hosted cluster
+
+Verified live on hc03 (SingleReplica/SingleReplica, Agent, 4.22.17) —
+[#396](https://github.com/pgarciaq/ros-ocp-backend/issues/396#issuecomment-6512876365).
+`spec.pausedUntil` alone does NOT scale the Agent-platform data plane (the
+NodePool controller reconciles "unchanged"); a full sleep is two steps, and
+the drain needs a finite timeout:
+
+```bash
+K=<mgmt-kubeconfig>
+# Sleep (~30 min): pause, then scale the pool with a finite drain timeout.
+KUBECONFIG=$K oc patch hostedcluster <hc> -n <hc-ns> --type=merge \
+  -p '{"spec":{"pausedUntil":"<past RFC3339 timestamp>"}}'
+KUBECONFIG=$K oc patch nodepool <hc> -n <hc-ns> --type=merge \
+  -p '{"spec":{"nodeDrainTimeout":"60s"}}'      # 0s means UNLIMITED, not zero
+KUBECONFIG=$K oc scale nodepool <hc> -n <hc-ns> --replicas=0
+# Asleep signal: DataPlaneConnectionAvailable=Unknown (NoWorkerNodesAvailable).
+# CP keeps running (all pods); Available stays stale-True; guest API answers
+# with zero nodes; Agent unclaims (role resets to auto-assign).
+
+# Resume (~18-20 min: Agent reclaim -> full reprovision, not a quick rejoin):
+KUBECONFIG=$K oc patch hostedcluster <hc> -n <hc-ns> --type=merge \
+  -p '{"spec":{"pausedUntil":null}}'
+KUBECONFIG=$K oc scale nodepool <hc> -n <hc-ns> --replicas=1
+KUBECONFIG=$K oc patch nodepool <hc> -n <hc-ns> --type=merge \
+  -p '{"spec":{"nodeDrainTimeout":"0s"}}'       # restore
+# Resume signal: DataPlaneConnectionAvailable=True (AsExpected).
+```
+
+Gotchas measured live: with `nodeDrainTimeout: 0s` the scale-down drain
+livelocks on the mgmt-reconciled `kas-connection-checker` canary (guest-side
+scale-to-0 is reverted in ~4 min; replacements land on the draining node on
+single-node pools) and on ordinary PDB-protected single-replica workloads
+(e.g. `kube-storage-version-migrator`). The finite timeout force-completes
+the Machine deletion — no guest-side intervention needed. Guest interventions
+(canary scaled, pods force-deleted, migrator scaled) all self-heal on resume.
+Sleep reclaims worker capacity only — the CP keeps running and the physical
+node stays powered.
+
 ## MachineConfig / NTP
 
 - Ignition `contents.source` data URLs **must be quoted** — unquoted, the
