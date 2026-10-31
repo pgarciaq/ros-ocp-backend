@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Zombie activity measure: p50 → p95, server and robne ([#747](https://github.com/pgarciaq/ros-ocp-backend/issues/747)):**
+  the zombie idle leg's activity measure is now the daily **p95** per
+  workload on both sides. The p50 read partial-day activity (daytime
+  active, night idle) as idle — the median sample is an off-hours one —
+  so on non-BH orgs both sides could fire `review_unused_hosted_cluster`
+  on a cluster used 8 hours a day. The p95 reads the active window: a
+  used cluster is never a zombie, with or without a business-hours
+  stream. Constant-usage and truly-idle workloads are measure-invariant
+  (p95 == p50 for constants; 0 for idle) — every existing fixture and
+  its expected value carries over unchanged. The floor now means "any
+  ~5% of the day above it counts as activity."
 - **robne CLI: zombie activity measure aligned with the server ([#746](https://github.com/pgarciaq/ros-ocp-backend/issues/746)):**
   the zombie idle leg now sums BOTH digest streams when the
   business-hours stream is present (robne's `business_hours` config

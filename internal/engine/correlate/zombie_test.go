@@ -334,3 +334,60 @@ func TestEvalZombieIdle_SyncedExclusion(t *testing.T) {
 	assert.True(t, idle, "synced admin CPU never counts as user activity")
 	assert.Equal(t, int64(9), peak)
 }
+
+// seedZombieP95Day writes one workload-day with DISTINCT p50/p95 — the
+// partial-day-activity discriminator shape (#747): p50 reads the
+// off-hours median, p95 the active window.
+func seedZombieP95Day(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, cluster, day string, rows map[nswl][2]int64) {
+	t.Helper()
+	for k, v := range rows {
+		_, err := pool.Exec(ctx, `
+			INSERT INTO daily_container_digests (
+				bucket_date, org_id, cluster_uuid, namespace, workload,
+				workload_type, container_name, cpu_usage_p95_mc, cpu_usage_p50_mc, cpu_request_p50_mc
+			) VALUES ($1,$2,$3,$4,$5,'Deployment','c0',$6,$7,100)
+			ON CONFLICT DO NOTHING`,
+			day, orgID, cluster, k.ns, k.wl, v[0], v[1])
+		require.NoError(t, err)
+	}
+}
+
+// TestZombie_SilentOnPartialDayActivity (#747): a workload whose p50 is 0
+// (the off-hours median) but whose p95 is the active window reads ACTIVE
+// under the p95 measure — the zombie stays silent without any BH stream.
+// Under the old p50 measure this fixture fired (the shared hole).
+func TestZombie_SilentOnPartialDayActivity(t *testing.T) {
+	org := testutil.TestOrgID + "-z-p95"
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	start, _ := zombieWindow()
+	months := map[string]time.Time{}
+	for i := 0; i < zombieWindowDays; i++ {
+		d := start.AddDate(0, 0, i)
+		ms := time.Date(d.Year(), d.Month(), 1, 0, 0, 0, 0, time.UTC)
+		months[ms.Format("200601")] = ms
+	}
+	for _, ms := range months {
+		require.NoError(t, ingestion.EnsureDigestPartitionMonth(ctx, pool, ms))
+	}
+	for i := 0; i < zombieWindowDays; i++ {
+		day := start.AddDate(0, 0, i).Format("2006-01-02")
+		seedZombieP95Day(t, ctx, pool, org, zHC1, day, map[nswl][2]int64{
+			{"demo-app", "web"}:        {350, 0}, // p95=350 (active window), p50=0
+			{"kube-system", "coredns"}: {2000, 2000},
+		})
+	}
+	seedZombieRun(t, ctx, pool, org, zMgmt1, zHC1, "clusters-hc9", nil, map[int]map[nswl]zombieWorkloadDay{
+		0: {{"clusters-hc9", "kube-apiserver"}: {usage: 50, req: 500}},
+	})
+	seedZombieSnapshot(t, ctx, pool, org, zMgmt1, zHC1, "clusters-hc9", "z-p95-manifest", time.Now().UTC().Add(-time.Hour))
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, org)
+		_, _ = pool.Exec(ctx, `DELETE FROM manifest_hcp_snapshots WHERE org_id = $1`, org)
+		_, _ = pool.Exec(ctx, `DELETE FROM hcp_correlation_advisories WHERE org_id = $1`, org)
+	})
+	fired, err := RunZombieCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fired, "partial-day activity reads active via p95 — no BH stream needed (#747)")
+	assert.Empty(t, zombieAdvisories(t, ctx, pool, org))
+}

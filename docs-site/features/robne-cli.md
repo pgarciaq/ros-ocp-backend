@@ -342,12 +342,13 @@ context payload's digests. Days without digests read unknown, never
 idle-by-absence; a fresh (72h) complete association snapshot is required.
 Missing CP proof fires `medium`; present-but-zero CP is silence.
 
-**Activity measure (#746)**: with the business-hours stream present
-(robne's `business_hours` config matching the org schedule), the idle
-leg sums BOTH digest streams — a daytime-active workload is not a
-zombie. Without a BH config, the all-hours p50 alone reads partial-day
-activity as idle (a known shared limitation of the p50 measure,
-tracked as #747).
+**Activity measure (#746/#747)**: the idle leg reads the daily
+**p95** per workload, summed over BOTH digest streams when the
+business-hours stream is present (robne's `business_hours` config
+matching the org schedule). Partial-day activity — daytime active,
+night idle — reads p95 at the active-window level, so a used cluster
+is never a zombie, with or without a BH stream; the floor means "any
+~5% of the day above it counts as activity."
 
 **Copy constraint (ADR-0333, applies to any human-readable rendering):**
 scaling to zero saves **worker cost only — the control plane keeps

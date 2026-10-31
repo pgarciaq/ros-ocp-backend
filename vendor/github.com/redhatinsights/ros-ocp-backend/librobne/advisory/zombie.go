@@ -93,19 +93,23 @@ type ZombieInput struct {
 }
 
 // ZombieDaySums groups the hosted digests into per-(day, ns, workload)
-// CPU p50 sums (millicores) — the idle leg's input. A present row is
+// CPU p95 sums (millicores) — the idle leg's input. A present row is
 // measured; the offline digests carry values, never NULLs.
 //
-// The activity measure is the SUM over BOTH digest streams when the BH
-// stream exists (robne's BH config matching the org schedule): a
-// daytime-active workload reads all_hours p50 0 + business_hours p50
-// <active level> >= floor -> active -> veto — the server's contract
-// (#746 option 3: the server's loadZombieDayCPU reads the table without
-// a schedule_type filter, summing the streams; conservative by design —
-// the double-count vetoes more, the rule's precision-first stance).
-// Without a BH stream (non-BH org / robne without a BH config), the
-// all-hours p50 alone reads partial-day activity as idle — the shared
-// p50-measure hole, tracked as #747.
+// The activity measure is the p95 (#747): partial-day activity (daytime
+// active, night idle) reads p50 = 0 — the median sample is off-hours —
+// but p95 = the active window, so a used cluster is never a zombie,
+// with or without a BH stream. Constant and truly-idle workloads are
+// measure-invariant (p95 == p50 for constants; 0 for idle). The floor's
+// meaning: any ~5% of the day above it counts as activity (the
+// borderline — sub-5%-of-a-day usage still reads idle — is documented
+// on #747; the floor is tenant-tunable).
+//
+// The measure SUMS over BOTH digest streams when the BH stream exists
+// (robne's BH config matching the org schedule) — the server's contract
+// (#746: loadZombieDayCPU reads the table without a schedule_type
+// filter; conservative by design — the double-count vetoes more, the
+// rule's precision-first stance).
 func ZombieDaySums(all, bh []types.KeyedDigest) map[string]map[DayKey]int64 {
 	out := map[string]map[DayKey]int64{}
 	add := func(digests []types.KeyedDigest) {
@@ -115,7 +119,7 @@ func ZombieDaySums(all, bh []types.KeyedDigest) map[string]map[DayKey]int64 {
 				out[day] = map[DayKey]int64{}
 			}
 			k := DayKey{NS: kd.Key.Namespace, WL: kd.Key.Workload}
-			out[day][k] += kd.Row.CPUUsageP50MC
+			out[day][k] += kd.Row.CPUUsageP95MC
 		}
 	}
 	add(all)

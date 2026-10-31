@@ -28,11 +28,20 @@ const (
 	zMgmtHC  = "aaaaaaaa-1111-1111-1111-111111111111"
 )
 
-// zDay builds one hosted digest row (namespace, workload) on a day.
+// zDay builds one hosted digest row (namespace, workload) on a day with
+// CONSTANT usage (p95 == p50 — the server seed convention; the existing
+// fixtures are measure-invariant).
 func zDay(day time.Time, ns, wl string, usage, request int64) types.KeyedDigest {
+	return zDayP95(day, ns, wl, usage, usage, request)
+}
+
+// zDayP95 builds one row with DISTINCT p50/p95 — the partial-day-activity
+// discriminator shape (#747): p50 reads the off-hours median, p95 reads
+// the active window.
+func zDayP95(day time.Time, ns, wl string, p50, p95, request int64) types.KeyedDigest {
 	return types.KeyedDigest{
 		Key: types.ContainerKey{Namespace: ns, Workload: wl, WorkloadType: "Deployment", ContainerName: "c0"},
-		Row: types.DigestRow{BucketDate: day, CPUUsageP50MC: usage, CPURequestP50MC: request},
+		Row: types.DigestRow{BucketDate: day, CPUUsageP50MC: p50, CPUUsageP95MC: p95, CPURequestP50MC: request},
 	}
 }
 
@@ -343,14 +352,14 @@ func TestZombie_SilentOnBHShapedWorkloadWithBHStream(t *testing.T) {
 	now := time.Now()
 	end := now.UTC().Truncate(24 * time.Hour)
 	start := end.AddDate(0, 0, -14)
-	// The all-hours p50 of a BH-shaped workload is 0 (the median sample
-	// is an off-hours one) — the W8 fixture's actual digest shape.
+	// The BH-shaped digest shape: the all-hours stream reads p50 0 / p95
+	// 350 (the median is off-hours; the 95th percentile is the window).
 	var all []types.KeyedDigest
 	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
-		all = append(all, zDay(d, "demo-app", "web", 0, 100))
+		all = append(all, zDayP95(d, "demo-app", "web", 0, 350, 100))
 		all = append(all, zDay(d, "kube-system", "coredns", 2000, 2000))
 	}
-	// The BH stream's p50 captures the in-hours activity.
+	// The BH stream's percentiles capture the in-hours activity.
 	var bh []types.KeyedDigest
 	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
 		bh = append(bh, zDay(d, "demo-app", "web", 350, 100))
@@ -361,22 +370,38 @@ func TestZombie_SilentOnBHShapedWorkloadWithBHStream(t *testing.T) {
 		"a daytime-active workload is not a zombie when the BH stream is present (the server's both-streams contract)")
 }
 
-// TestZombie_FiresOnBHShapedWithoutBHStream pins the non-BH contract: no
-// BH stream (robne run without a BH config, or an org with no schedule)
-// -> all-hours p50 only -> a BH-shaped workload reads 0 -> idle -> fires.
-// Both sides are wrong the same way here (the p50 measure's shared hole,
-// tracked as #747) — pinned explicitly so the behavior is a documented
-// contract, not an accident.
-func TestZombie_FiresOnBHShapedWithoutBHStream(t *testing.T) {
+// TestZombie_SilentOnPartialDayActivityWithoutBHStream is the #747 fix,
+// pinned: no BH stream (robne without a BH config / an org with no
+// schedule), a partial-day-active workload (p50 = 0 — the off-hours
+// median; p95 = 350 — the active window) reads ACTIVE via the all-hours
+// p95 -> the zombie is silent. The p50 measure's shared hole, closed.
+func TestZombie_SilentOnPartialDayActivityWithoutBHStream(t *testing.T) {
 	now := time.Now()
 	end := now.UTC().Truncate(24 * time.Hour)
 	start := end.AddDate(0, 0, -14)
 	var all []types.KeyedDigest
 	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
-		all = append(all, zDay(d, "demo-app", "web", 0, 100))
+		all = append(all, zDayP95(d, "demo-app", "web", 0, 350, 100))
+		all = append(all, zDay(d, "kube-system", "coredns", 2000, 2000))
+	}
+	in := zInput(now, all, zMgmtOn(now, 14, 500))
+	assert.Nil(t, EvaluateZombieStandard(in),
+		"#747: partial-day activity reads active via the all-hours p95 — no BH stream needed")
+}
+
+// TestZombie_StillFiresWhenP95BelowFloor pins the floor's p95 semantics:
+// a workload whose p95 stays below the floor is idle (any less-than-5%-of-
+// the-day activity does not count — the borderline documented on #747).
+func TestZombie_StillFiresWhenP95BelowFloor(t *testing.T) {
+	now := time.Now()
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	var all []types.KeyedDigest
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		all = append(all, zDayP95(d, "demo-app", "web", 0, 9, 100))
 		all = append(all, zDay(d, "kube-system", "coredns", 2000, 2000))
 	}
 	in := zInput(now, all, zMgmtOn(now, 14, 500))
 	assert.NotNil(t, EvaluateZombieStandard(in),
-		"non-BH contract: the all-hours p50 reads partial-day activity as idle (#747 tracks the measure fix)")
+		"p95 below the floor is idle: the floor applies to the p95 measure")
 }

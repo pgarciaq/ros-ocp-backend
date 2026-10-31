@@ -161,21 +161,27 @@ type zombieDayCPU struct {
 // measured flags rows with at least one real sample so all-NULL days
 // read as unmeasurable, never zero.
 //
-// ACTIVITY CONTRACT (#746 option 3, pinned 2026-10-31): the query
-// deliberately carries NO schedule_type filter — with business hours
-// enabled the table holds both streams and the per-workload daily sum
-// is all_hours p50 + business_hours p50. A daytime-active workload
-// reads 0 + <active level> >= floor -> active -> veto: a cluster used
-// during business hours is not an unused cluster. The double-count is
-// conservative by design (the rule's precision-first stance). Without
-// a BH stream (non-BH org) the all-hours p50 alone reads partial-day
-// activity as idle — the p50 measure's shared hole, tracked as #747.
-// robne's ZombieDaySums mirrors this sum (librobne/advisory/zombie.go).
+// ACTIVITY CONTRACT (#746 pinned, #747 measure): the activity measure
+// is the p95 — partial-day activity (daytime active, night idle) reads
+// p50 = 0 (the median sample is off-hours) but p95 = the active window,
+// so a used cluster is never a zombie, with or without a BH stream.
+// Constant and truly-idle workloads are measure-invariant (p95 == p50
+// for constants; 0 for idle — the #664 natural-zero rationale carries
+// over). The floor's meaning: any ~5% of the day above it counts as
+// activity; sub-5%-of-a-day usage still reads idle (documented on
+// #747; the floor is tenant-tunable).
+//
+// The query deliberately carries NO schedule_type filter — with
+// business hours enabled the table holds both streams and the
+// per-workload daily sum is all_hours p95 + business_hours p95. The
+// double-count is conservative by design (the rule's precision-first
+// stance). robne's ZombieDaySums mirrors this measure and sum
+// (librobne/advisory/zombie.go).
 func loadZombieDayCPU(ctx context.Context, pool *pgxpool.Pool, orgID, hostedCluster string, startDate, endDate time.Time) ([]zombieDayCPU, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT bucket_date, namespace, workload,
-			SUM(cpu_usage_p50_mc) AS wcpu,
-			COUNT(cpu_usage_p50_mc) AS nmeas
+			SUM(cpu_usage_p95_mc) AS wcpu,
+			COUNT(cpu_usage_p95_mc) AS nmeas
 		FROM daily_container_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date < $4
