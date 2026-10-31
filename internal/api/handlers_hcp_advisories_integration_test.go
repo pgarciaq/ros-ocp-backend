@@ -224,3 +224,86 @@ func TestGetHCPAdvisories_UpsertInvariant_Integration(t *testing.T) {
 	require.Len(t, forHC, 1, "one advisory per (org, HC, window) — ADR-0349 §3")
 	assert.Equal(t, "review_unused_hosted_cluster", forHC[0].Verdict, "last writer wins")
 }
+
+// TestGetHCPAdvisories_UnmappedVerdict_Integration pins ADR-0349 §1's
+// additive-only contract: a verdict with no typed mapping yet still
+// serves, with the raw evidence carrying everything and an empty details
+// object (never an error, never dropped) — future verdicts extend rows,
+// not schemas, and the endpoint must not gate on the mapping table.
+func TestGetHCPAdvisories_UnmappedVerdict_Integration(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+
+	signals := []string{"hc:hc-future", "novel_signal:42", "another:raw"}
+	_, err := pool.Exec(ctx, `
+		INSERT INTO hcp_correlation_advisories (
+			org_id, hc_cluster_id, management_cluster_uuid, window_start, window_end,
+			verdict, confidence, h_p99_s, h_threshold_s, c_ratio, n_signals, expires_at
+		) VALUES ($1, 'hc-future', '44444444-4444-4444-4444-444444444444'::uuid, '2026-10-16T00:00:00Z', '2026-10-30T00:00:00Z',
+			'future_capacity_verb', 'medium', 7.5, 2.0, NULL, $2, now() + interval '24 hours')`,
+		testutil.TestOrgID, signals)
+	require.NoError(t, err)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/hcp/advisories", api.GetHCPAdvisories)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/hcp/advisories", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "an unmapped verdict serves, never errors: %s", rec.Body.String())
+	var resp api.HCPAdvisoriesResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Meta.Count)
+	row := resp.Data[0]
+	assert.Equal(t, "future_capacity_verb", row.Verdict)
+	require.NotNil(t, row.HostedClusterID)
+	assert.Equal(t, "hc-future", *row.HostedClusterID)
+	assert.Equal(t, signals, row.Evidence, "the raw evidence carries everything for unmapped verdicts")
+	assert.Empty(t, row.Details, "no typed mapping yet: details is empty, never synthesized")
+}
+
+// TestGetHCPAdvisories_RowCap_Integration pins the documented response
+// cap (hcpAdvisoriesMaxRows = 500): a runaway org serves at most 500
+// rows, silently truncated per the contract (no pagination, no error).
+func TestGetHCPAdvisories_RowCap_Integration(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+
+	// One batched insert (generate_series): 501 live rows, one past the cap.
+	_, err := pool.Exec(ctx, `
+		INSERT INTO hcp_correlation_advisories (
+			org_id, hc_cluster_id, management_cluster_uuid, window_start, window_end,
+			verdict, confidence, h_p99_s, h_threshold_s, c_ratio, n_signals, expires_at
+		) SELECT $1, 'hc-cap-' || g, '55555555-5555-5555-5555-555555555555'::uuid,
+			'2026-10-16T00:00:00Z', '2026-10-30T00:00:00Z',
+			'review_unused_hosted_cluster', 'high', 1, 1, NULL, '{}', now() + interval '24 hours'
+		FROM generate_series(1, 501) AS g`,
+		testutil.TestOrgID)
+	require.NoError(t, err)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/hcp/advisories", api.GetHCPAdvisories)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/hcp/advisories", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp api.HCPAdvisoriesResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 500, resp.Meta.Count, "the cap truncates silently: 501 seeded, 500 served")
+	require.Len(t, resp.Data, 500)
+}
