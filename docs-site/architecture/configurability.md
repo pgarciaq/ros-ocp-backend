@@ -1,6 +1,6 @@
 # Configurability Reference
 
-> **Last verified:** 2026-10-01
+> **Last verified:** 2026-10-31
 
 Complete environment variable reference for ROS-OCP Backend recommendation engines,
 classification thresholds, retention, and platform settings.
@@ -670,6 +670,9 @@ Thin cross-plane correlator policy (`hcp-correlation` domain, #645). **`GET/PUT/
 | Zombie short window (days) <br><em>Trailing window for the pool-zero fast lane: every pool at spec==0 and status==0 sustained, then dual legs over this window instead of the idle window. Range 1–90 validated at or below the idle window. Absolute zero is exact (declared + observed integer counts) — no epsilon; mid-transition, flapping, and missing rows read as unknown.</em> | 3 | `ROS_HCP_ZOMBIE_SHORT_WINDOW_DAYS` | `/settings/hcp-correlation` | `z_short_window_days` | Yes |
 | Zombie short required days <br><em>Covered pool-evidence days required inside the short window. Must not exceed the short window (cross-validated). Loosening tolerates gaps — documented precision cost, tenant's explicit choice.</em> | 3 | `ROS_HCP_ZOMBIE_SHORT_REQUIRED_DAYS` | `/settings/hcp-correlation` | `z_short_required_days` | Yes |
 | Zombie idle window (days) <br><em>Trailing window for the standard unused-hosted-cluster rule. Default 14: the smallest round window exceeding the longest legitimate one-off silence. Shortening reintroduces false fires — e.g. an 11-day Christmas–New Year shutdown reads as a zombie in a 10-day window, while weekends alone never fire at any window since any busy weekday vetoes. Lengthening delays true positives to the retention bound. Change only with measured idle/active distributions for your fleet, never by feel.</em> | 14 | `ROS_HCP_ZOMBIE_IDLE_WINDOW_DAYS` | `/settings/hcp-correlation` | `z_idle_window_days` | Yes |
+| Sleep signature window (days) <br><em>Trailing window for the W8 non-prod sleep-candidate evaluation: business-hours signature over this many days. Default 14, matching the zombie idle window the rule is partitioned from. Every covered day must show both digest streams (business-hours and all-hours) — partial coverage reads unknown, never zero-activity.</em> | 14 | `ROS_HCP_SLEEP_WINDOW_DAYS` | `/settings/hcp-correlation` | `sleep_window_days` | Yes |
+| Sleep BH-activity floor (mC/day) <br><em>Daily per-workload business-hours CPU at or above which a user workload counts as active in hours (the W8 signature's active leg). Lower = more clusters qualify as sleep candidates (aggressive); the default matches the zombie active floor. Use with measured BH/outside distributions, never by feel.</em> | 10 | `ROS_HCP_SLEEP_BH_ACTIVITY_FLOOR_MC` | `/settings/hcp-correlation` | `sleep_bh_activity_floor_mc` | Yes |
+| Sleep outside-BH idle floor (mC/day) <br><em>Daily per-workload CPU outside business hours at or above which the W8 signature breaks (the idle-outside leg — the overnight-quiet guard). Raising it admits clusters with more overnight activity; keep it low: the whole point is that only genuinely quiet-at-night clusters qualify.</em> | 10 | `ROS_HCP_SLEEP_OUTSIDE_BH_IDLE_FLOOR_MC` | `/settings/hcp-correlation` | `sleep_outside_bh_idle_floor_mc` | Yes |
 
 \* Configurable via `PUT /settings/hcp-correlation` unless the matching `ROS_HCP_*` env var is set (field locked).
 

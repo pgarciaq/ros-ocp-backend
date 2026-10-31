@@ -1,6 +1,6 @@
 # Hosted Control Plane Recommendations
 
-> **Last verified:** 2026-10-27
+> **Last verified:** 2026-10-31
 
 !!! success "Status: Shipped"
     Per-hosted-cluster rightsizing for OpenShift HyperShift control planes:
@@ -129,6 +129,78 @@ unknown clusters are non-disclosing (200 with empty data). Design record:
 (amended); status and roadmap on the
 [planned-features page](../planned-features/hosted-control-plane-fleet-optimization.md).
 
+## HCP advisories (W2/W3/W5/W8; first served surface)
+
+The correlator's advisories are served by
+**`GET /recommendations/openshift/hcp/advisories`** — every verdict in one
+org-scoped list, with typed per-verdict `details` plus the raw correlator
+`evidence` (key:value signals). One advisory exists per hosted cluster per
+window (the rules are predicate-partitioned — an idle-always cluster routes
+to the zombie rule, never the sleep rule, and vice versa). The response is
+unpaginated with a 500-row cap; rows expire per the correlator's `expiry_h`.
+
+| Verdict | Meaning |
+|---|---|
+| `do_not_add_workers_first` | Headroom (W2): hosted API latency and control-plane saturation say add workers before workloads. Details: `hosted_api_p99_seconds`, `hosted_api_threshold_seconds`, `control_plane_capacity_ratio`. |
+| `tune_noisy_webhook` | API-tax (W5): a webhook storms the shared API plane. Management-cluster-scoped — `hosted_cluster_id` is null on these rows. Details: `webhook`, `webhook_p99_seconds`, `webhook_p99_threshold_seconds`, `webhook_rejected_rate`. |
+| `review_unused_hosted_cluster` | Zombie (W3): the hosted cluster looks unused while its control plane keeps costing. Details: `peak_user_cpu_mc`, `idle_floor_cpu_mc`, `control_plane_cpu_request_mc`, `api_max_daily_requests` (omitted when unknown). |
+| `schedule_nonprod_sleep` | Non-prod sleep candidate (W8) — the section below. |
+
+The field vocabulary evolves additively only — fields may appear, never
+rename or disappear. Design record:
+[ADR-0349](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0349-hcp-advisories-serving-api-contract.md);
+API reference: the served `openapi.json`.
+
+## Non-prod sleep advisory (W8; implemented, pending lab verification)
+
+Could this hosted cluster's workers sleep outside business hours? The
+advisory fires when **both** gates pass — a declaration and a usage
+signature — and recommends the validated two-step sleep (scale the
+NodePool to zero plus pause, with a finite drain timeout; see the
+provider's runbook). It never acts: ROS recommends, the administrator
+decides.
+
+- **Declaration.** The HostedCluster carries the label
+  `insights.cost-management/hc-tier=non-prod`:
+  `oc label hostedcluster <name> -n <namespace> insights.cost-management/hc-tier=non-prod`.
+  The label joins the established ROS label family
+  (`insights.cost-management/optimizations` on namespaces) and is carried
+  by the metrics operator's topology report. Label changes and label
+  removal take effect on the next collection cycle (the latest
+  observation wins).
+- **Signature.** User workloads are active during the org's business
+  hours and idle outside them (the dual business-hours/all-hours
+  digests). A day counts only when both digest streams exist — partial
+  coverage reads unknown, never zero-activity.
+
+**Why the declaration is required (and what the signature does *not*
+mean):** a production cluster that happens to be quiet at night produces
+usage data *identical* to a development cluster — the digests cannot
+tell them apart. Only an administrator's declaration can. That is why v1
+advises only labeled clusters, worded definitively, and why
+inference-based discovery for unlabeled clusters ("this one *looks*
+non-prod") is a planned follow-up rather than shipped behavior.
+Conversely, the declaration does not override the data: a labeled
+cluster running overnight workloads gets **no** advisory — sleeping it
+would break those workloads. The declaration classifies; the usage data
+proves sleeping is safe.
+
+**Schedule constraint:** the signature resolves against the org-wide or
+cluster-level business-hours schedule only. Namespace-scoped schedules
+never define a hosted cluster's hours (with per-namespace windows, "the
+cluster's business hours" is ill-defined); an org with no org/cluster
+schedule gets no sleep advisories.
+
+**What the advisory says (and does not):** the reclaim is **worker
+capacity only — the control plane keeps running**; the pause mechanism
+is never framed as the saving (it pauses reconciliation, not the control
+plane); waking takes ~20 minutes of full reprovision, not a quick
+rejoin; the estimate is node-hours per week (worker nodes × non-business
+hours), never dollars. Design record:
+[ADR-0348](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0348-w8-nonprod-sleep-advisory.md);
+status and the orchestration roadmap on the
+[planned-features page](../planned-features/hosted-control-plane-fleet-optimization.md).
+
 ## Correlator policy settings
 
 Thin cross-plane policy via **`GET/PUT/DELETE /settings/hcp-correlation`**.
@@ -149,6 +221,9 @@ the next hourly run (at most one cycle of delay, no recalculation):
 | `z_short_window_days` | 3 (pool-zero fast lane; validated ≤ idle window) | `ROS_HCP_ZOMBIE_SHORT_WINDOW_DAYS` |
 | `z_short_required_days` | 3 (covered pool-evidence days; validated ≤ short window) | `ROS_HCP_ZOMBIE_SHORT_REQUIRED_DAYS` |
 | `z_idle_window_days` | 14 (standard lane; Christmas-docs in guide — shorten with care) | `ROS_HCP_ZOMBIE_IDLE_WINDOW_DAYS` |
+| `sleep_window_days` | 14 (W8 sleep-candidate signature window) | `ROS_HCP_SLEEP_WINDOW_DAYS` |
+| `sleep_bh_activity_floor_mc` | 10 (daily per-workload BH CPU counting as active in hours) | `ROS_HCP_SLEEP_BH_ACTIVITY_FLOOR_MC` |
+| `sleep_outside_bh_idle_floor_mc` | 10 (daily per-workload CPU outside BH that breaks the signature) | `ROS_HCP_SLEEP_OUTSIDE_BH_IDLE_FLOOR_MC` |
 
 Fixed methodological floors (not tunable): 30-minute minimum data per window,
 36-hour node-recency calibration. `ROS_SETTINGS_LOCKED_HCP` freezes tenant
