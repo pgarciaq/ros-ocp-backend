@@ -14,7 +14,7 @@ section. **[Visual Insights](../features/visual-insights.md)** and the
 | Page | Topic |
 |------|-------|
 | Recommendation explanations and GPU time-slicing persistence | Shipped with Phase 14 (`?include=explanation`, timeslicing persistence) — see [What's New](../whats-new.md) |
-| [machineset-recommendations.md](machineset-recommendations.md) | MachineSet replica and instance-type right-sizing (Tier 1 list API **shipped**; Tier 2 engine planned) |
+| [machineset-recommendations.md](machineset-recommendations.md) | MachineSet node-count and instance-type recommendations (Tier 1 list API **shipped**; Tier 2 engine planned) |
 | [autoscaler-optimization.md](autoscaler-optimization.md) | MachineAutoscaler min/max bounds and scaling behavior (Tier 3) |
 | [seasonality.md](seasonality.md) | Seasonality detection and proactive recommendations |
 | [java-jvm.md](java-jvm.md) | Java/JVM heap, GC, and thread pool tuning (Liberty, Quarkus, Spring) |

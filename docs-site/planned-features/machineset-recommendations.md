@@ -1,15 +1,17 @@
 # MachineSet Recommendations (Tier 2)
 
 !!! warning "Status: Planned / Future Work"
-    Tier 1 **aggregation** at `GET .../machinesets` is **shipped**. Tier 2a (replica
-    engine, persistence, detail API) is **specified and ready to implement**. Tier 2b
-    (instance type from cloud catalog) follows after catalog integration.
+    Tier 1 **aggregation** at `GET .../machinesets` is **shipped**. Tier 2a
+    (advisory node-count target, persistence, detail/history, notifications) is
+    **specified; implementation is blocked on KMO MachineSet API snapshot,
+    RBAC, and coverage reporting**. Tier 2b (instance type from cloud catalog)
+    is independent and remains blocked on catalog integration.
 
 !!! info "Quick Facts"
-    **Scope:** OpenShift MachineSet replica and instance-type right-sizing (IPI clusters)  
+    **Scope:** OpenShift MachineSet node-count and instance-type recommendations (currently supported scope: IPI clusters)<br>
     **Plugin:** `machineset` (Phase 3 Optimize)  
     **Shipped today:** `GET /api/cost-management/v1/recommendations/openshift/machinesets` (Tier 1 aggregation)  
-    **Tier 2a (next):** Persisted recommendations, detail endpoint, history, notifications 77–79  
+    **Tier 2a (next):** Advisory node-count targets, persisted recommendations, detail/history, planned notification IDs 88–90<br>
     **Tier 2b (later):** Instance family/size from cloud catalog (REQ-8c.6)  
     **Internal spec:** [machineset-recommendations.md](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/features/machineset-recommendations.md)
 
@@ -19,18 +21,21 @@
 
 ## Tier overview
 
-Three tiers differ by **how much automation is safe**, not by whether recommendations exist.
+Three tiers add different recommendation capabilities. **All ROS recommendations
+remain advisory and require human review; none automatically changes a
+MachineSet.**
 
 | Tier | Status | Purpose | Automation posture | Primary API |
 |------|--------|---------|-------------------|-------------|
 | **1** | **Shipped** | Per-node classification, sizing, **advisory** fleet consolidation | **Human review required** — no PDB/scheduling simulation | `GET .../recommendations/openshift/nodes` |
-| **2** | Planned (partial: machinesets list) | MachineSet replica + instance-family right-sizing; **PDB/scheduling-aware** consolidation | **Safe to auto-execute** (with guardrails) once simulation ships | `GET .../recommendations/openshift/machinesets` (+ catalog-driven engine) |
-| **3** | Planned | MachineAutoscaler min/max and scaling behavior | **Autonomous scaling** — tune autoscaler bounds/policies | Extension of machinesets API or dedicated endpoint |
+| **2a** | Planned (partial: machinesets list) | Advisory MachineSet node-count targets, persistence, detail/history, notifications | **Human review required** — no PDB/placement simulation or auto-apply | `GET .../recommendations/openshift/machinesets` |
+| **2b** | Planned | Catalog-driven instance-family/size and cost comparison | Advisory; human review required | Extension of `GET .../recommendations/openshift/machinesets` |
+| **3** | Planned | MachineAutoscaler min/max and scaling behavior | Future, separately designed capability | Extension of machinesets API or dedicated endpoint |
 
 | Tier | Actionable unit | Est. remaining effort |
 |------|-----------------|----------------------|
 | **1** | Individual node (+ fleet grouping for advisory `node_count_reduction`) | — |
-| **2** | MachineSet | **~2–3 weeks** for catalog + replica engine (aggregation API **done**) |
+| **2a/2b** | MachineSet | Previously estimated together; estimates need refresh against the KMO snapshot/RBAC dependency and split scope |
 | **3** | MachineSet + MachineAutoscaler | **~4–6 weeks** after Tier 2 |
 
 ### Tier 1 — Advisory consolidation with safety gates (shipped)
@@ -42,24 +47,35 @@ Three tiers differ by **how much automation is safe**, not by whether recommenda
 
 See [Node consolidation (Tier 1)](../features/node-recommendations.md#fleet-consolidation-advisory-only-tier-1) for full Tier 1 behavior.
 
-### Tier 2 — PDB/scheduling-aware (“safe to auto-execute”)
+### Tier 2a — Advisory MachineSet node-count recommendations
 
-- **Goal:** Recommendations that account for whether workloads **can** reschedule after node removal while respecting PDBs, taints, and affinity.
-- **Adds:** Operator collection of PDB/toleration/affinity snapshots; engine placement simulation (~O(pods × nodes) per candidate); MachineSet **replica count** and catalog-driven instance family/size changes.
-- **Outcome:** Consolidation and replica reductions can be exposed with a **safe-to-apply** (or equivalent) confidence tier for automation integrations — still subject to org change control.
+- **Goal:** Persist a customer-requested target for the number of Machine/node instances managed by each eligible MachineSet, with detail, history, confidence, and notifications.
+- **Engine:** Reuse the existing MachineSet-first `node_count_reduction` model and pod-headroom gate. This is advisory; it does not simulate scheduler placement or guarantee PDB compliance.
+- **Data gate:** Require a fresh MachineSet API snapshot and complete, fresh node-recommendation coverage. Withhold a target when Machine API reads fail, counts disagree, or any member lacks eligible data. Expose per-cluster collection state in list metadata so empty results distinguish no recommendation from unsupported/incomplete data.
+- **KMO dependency:** Collect MachineSet desired/status counts through the API and grant read-only `list` for `machines` and `machinesets` in both RBAC source and OLM permissions.
+- **Outcome:** Human-reviewed node-count guidance. It is not “safe to apply” and ROS does not apply changes.
+
+### Separate research: PDB and placement feasibility
+
+PDB eviction feasibility and scheduler placement (affinity/anti-affinity and
+related constraints) are not Tier 2a requirements. Their feasibility and data
+requirements are being investigated separately in [#709](https://github.com/pgarciaq/ros-ocp-backend/issues/709)
+and [#710](https://github.com/pgarciaq/ros-ocp-backend/issues/710). These
+investigations do not commit ROS to a simulator or automated action.
 
 ### Tier 3 — Autoscaler integration (“autonomous scaling”)
 
 - **Goal:** Tune **MachineAutoscaler** `minReplicas` / `maxReplicas` (and optionally policy hints) from historical replica vs utilization time series.
-- **Depends on:** Tier 2 MachineSet identity and operator metrics (`machineset_replicas`, desired/available, HPA/autoscaler state).
+- **Depends on:** Tier 2 MachineSet identity and historical MachineSet API snapshots (desired/observed/available counts), plus MachineAutoscaler bounds/state.
 - **Outcome:** Bound recommendations and saturation/idle/flapping notifications suitable for policy-driven or semi-autonomous scaling — highest risk; conservative heuristics and manual-review messaging expected first.
 
 See [Autoscaler optimization](autoscaler-optimization.md) for Tier 3 design.
 
 ```mermaid
 flowchart LR
-  T1[Tier 1: Advisory recs + headroom gate] --> T2[Tier 2: PDB/scheduling simulation + MachineSet recs]
-  T2 --> T3[Tier 3: Autoscaler bounds and behavior]
+  T1[Tier 1: Advisory node recs + headroom gate] --> T2[Tier 2a: Persisted advisory MachineSet node counts]
+  T2 --> T2b[Tier 2b: Catalog-based type/cost guidance]
+  T2 --> T3[Tier 3: Autoscaler bounds; separate automation design]
   Op[koku-metrics-operator] --> T1
   Op --> T2
   Op --> T3
@@ -70,32 +86,42 @@ flowchart LR
 ## What Tier 2 will do
 
 MachineSet recommendations move fleet optimization from per-node signals to
-**actionable MachineSet-level guidance** — the unit cluster admins change in
-IPI-provisioned OpenShift (replica count, instance type).
+**MachineSet-level node-count guidance** — the unit cluster admins change in
+supported IPI-provisioned OpenShift environments.
+
+> In a MachineSet, `.spec.replicas` is the desired number of **Machine objects
+> that become cluster nodes**. It does not mean replicas of an application Pod.
+> ROS presents the recommendation as a desired **node count** (for example,
+> “set this MachineSet to 3 nodes”).
 
 | Capability | Tier | Example |
 |------------|------|---------|
-| **Replica recommendations** | 2a | “Reduce `worker-us-east-1a` from 5 → 3 nodes” |
+| **Node-count recommendations** | 2a | “Reduce `worker-us-east-1a` from 5 → 3 nodes” |
 | **Dedicated persistence** | 2a | `machineset_recommendations` table with lifecycle |
 | **Detail + history** | 2a | `GET .../machinesets/{name}` with trend data |
-| **Fleet health notifications** | 2a | Heterogeneous capacity, scale-down, optimal |
+| **Fleet health notifications** | 2a | Heterogeneous capacity, scale-down, no reduction recommended |
 | **Instance family/size** | 2b | “Switch `m5.4xlarge` → `m5.2xlarge`” from catalog |
-| **Cost comparison** | 2b | Dollar savings for type + replica changes |
-| **PDB conflicts** | 2a/2b | Notification when PDBs affect workloads (manual review) |
+| **Cost comparison** | 2b | Dollar savings for type + node-count changes |
+| **PDB/placement feasibility** | Separate research | #709 and #710 investigate data and feasibility; not a Tier 2a gate |
 
-Individual node recommendations (Tier 1) remain informational. Nodes without
-`machineset_name` (bare metal, SNO, manual) stay Tier 1 only.
+Individual node recommendations (Tier 1) remain available when MachineSet
+data is not applicable. BareMetalHost (BMO) inventory can describe physical
+host state and hardware, but it does not supply MachineSet membership or a
+desired node-count baseline and is not used as a fallback.
 
 ### Goal
 
-Group nodes by **MachineSet** (not only by `instance_type`) and recommend **replica count** and **instance family/size** changes at the MachineSet level — the unit cluster admins actually change in IPI clusters.
+Group nodes by **MachineSet** (not only by `instance_type`) and recommend a
+desired **node count** and, in Tier 2b, instance family/size changes at the
+MachineSet level.
 
 ### Prerequisites and implementation steps
 
-1. **Operator (koku-metrics-operator)** — **done for Tier 1 / Tier 2a identity**
-   - Map each node to its owning MachineSet via the OpenShift **Machine API** (`machine.openshift.io/v1beta1` `Machine` → `MachineSet` owner reference). When the Machine API is unavailable, `machineset_name` is empty (bare metal, SNO, UPI).
-   - Emit `machineset_name` on ROS container CSV (production path). **Nise** also generates `machineset_name` and `node_capacity_pods` for test data.
-   - **Not yet collected:** MachineSet replica counts (`machineset_replicas`, `desired`/`available`) — required before Tier 3 autoscaler work.
+1. **Operator (koku-metrics-operator)** — **partial; Tier 2a dependency remains**
+   - Existing code attempts to map each node to its owning MachineSet through `Machine.status.nodeRef` and the Machine owner reference. The checked-in RBAC source and OLM permissions do not currently grant `machine.openshift.io` reads, so the mapping can be empty unless separately granted.
+   - Emit a timestamped MachineSet API snapshot with `.spec.replicas`, `.status.replicas`, `.status.availableReplicas`, namespace/name/UID, and collection state. Add read-only `list` permission only for Machines and MachineSets in RBAC source and OLM permissions; scope API lists to `openshift-machine-api`. Individual `get` is not required by the list-based collector.
+   - Do not assume `machine_api_machine_set_spec_replicas` is a standard Prometheus series. Direct API data is the desired-count source; verified MAO status series may be used for history.
+   - If the API is absent, mark MachineSet recommendations not applicable; if reads fail or data/coverage is incomplete, withhold the target rather than treating the set as having zero excess.
 
 2. **Ingestion (ros-ocp-backend)** — **done for Tier 1**
    - Parse `machineset_name` / `node_capacity_pods` from ROS CSV into `daily_node_digests`.
@@ -104,7 +130,7 @@ Group nodes by **MachineSet** (not only by `instance_type`) and recommend **repl
 3. **Engine**
    - New **`machineset` plugin** (or extension of node plugin phase):
      - Group digests by `(org_id, cluster_uuid, machineset_name)`.
-     - Compute fleet-level CPU/memory P95, replica recommendation, instance type from catalog.
+      - Compute fleet-level CPU/memory P95, node-count recommendation, and (in Tier 2b) instance type from catalog.
    - Reuse Tier 1 stranded-resource signals for family recommendations.
    - Integrate **cloud instance catalog** (REQ-8c.6): `cloud_instance_catalog` table, public pricing/spec APIs (AWS bulk JSON, Azure Retail Prices, GCP `machineTypes.list`), optional EC2 API when IAM allows.
 
@@ -116,13 +142,14 @@ Group nodes by **MachineSet** (not only by `instance_type`) and recommend **repl
 
 ### Limitations
 
-- **Machine API / MachineSets only:** Helps IPI-provisioned clusters using MachineSets. Does **not** help bare metal, single-node OpenShift (SNO), or UPI/manual nodes without `machineset_name` (those nodes stay Tier 1 only; `machineset_name` is `NULL` → skip Tier 2/3 for that node).
-- **PDB / drain safety:** Tier 2 recommends counts; PDB-aware automation is notification-only (see REQ-8c.5 in [requirements.md](../architecture/requirements.md)).
-- **HA floor:** Configurable minimum replicas (`ROS_MIN_MACHINESET_REPLICAS`, default 1 — never recommend 0).
+- **Machine API / MachineSets required:** Current supported topology scope remains IPI until other topologies are tested. UPI is an installation method and does not by itself establish whether Machine API resources are present. If the required API is absent, ROS emits no MachineSet target; node-level recommendations continue.
+- **Collection completeness:** Desired, observed, available, and linked Node counts must agree and all member nodes need fresh eligible recommendations. Otherwise ROS withholds the target.
+- **HA floor:** Configurable minimum (`ROS_MIN_MACHINESET_REPLICAS`, default 1 — never recommend 0); this floor alone does not guarantee HA.
+- **No BMO fallback:** BareMetalHost inventory is physical-host context, not a MachineSet or desired-node-count signal.
 
 ### Relationship to Tier 1 today
 
-Tier 1 already groups fleet consolidation by **`instance_type`** when the operator provides it. Tier 2 replaces that grouping key with **MachineSet** for clusters where labels exist, and adds replica + catalog-driven instance changes. Nodes without `machineset_name` continue to use Tier 1 behavior only.
+Tier 1 already groups fleet consolidation by **`instance_type`** when the operator provides it. Tier 2a adds a persisted MachineSet **node-count** target for supported clusters; Tier 2b adds catalog-driven instance-type changes. Nodes without usable MachineSet data continue to receive Tier 1 node recommendations only.
 
 ---
 
@@ -146,6 +173,11 @@ Also supported today: **keyset pagination** (`after` cursor), **CSV export**
 This is **not** the Tier 2 engine — no persistence, no MachineSet-specific
 notifications, no detail endpoint, no instance-type catalog recommendations.
 
+Tier 1 `current_node_count` counts only nodes with recommendation rows. Tier 2a
+uses verified linked Node inventory and adds distinct desired, observed, and
+available count fields. This pre-release API transition must be reflected in
+IQE and other consumers before public launch.
+
 ---
 
 ## Consolidation model — current scope and limitations
@@ -162,29 +194,14 @@ Tier 1 consolidation (`applyInstanceTypeConsolidation` in [recommend_nodes.go](h
 - **Action path:** platform team reviews recommendation → checks PDBs/constraints manually → scales down MachineSet or removes nodes
 - Aligns with FinOps advisory tools (AWS Compute Optimizer, Kubecost, CAST AI recommendations) — none perform PDB/scheduling simulation in Tier-1-style products
 
-### PDB/scheduling-aware consolidation (Tier 2 — safe to auto-execute)
+### Separate investigations: PDB and placement feasibility
 
-Additional data required:
-
-| Data | Source | Storage estimate |
-|------|--------|------------------|
-| PodDisruptionBudgets | `policy/v1` PDB resources | ~1 KB per PDB × namespaces |
-| Node taints | `node.spec.taints` | Already in node labels CSV |
-| Pod tolerations | `pod.spec.tolerations` | ~100 B per pod × pods |
-| Node/pod affinity rules | `pod.spec.affinity` | ~200 B per pod with affinity |
-| DaemonSet pod list | `apps/v1` DaemonSet resources | ~50 B per DS × nodes |
-
-Processing estimate:
-
-- For each candidate node removal, simulate whether non-DaemonSet pods can reschedule to remaining nodes while respecting PDBs, taints, and affinity
-- Essentially a **scheduling simulation** (mini kube-scheduler) — ~O(pods × nodes) per candidate
-- Example: 100-node cluster, 5000 pods → ~500K placement checks per consolidation evaluation
-- Latency: seconds per evaluation (acceptable at recommendation time, not real-time)
-
-**Storage:** ~50 MB additional per large cluster (PDB/affinity/toleration snapshots)
-**Processing:** ~5–10 s additional per cluster recommendation cycle
-
-**Verdict:** Feasible for Tier 2 but requires operator enhancements (collect PDB + affinity data) and significant engine work. This is the tier that unlocks **safe-to-auto-execute** consolidation; Tier 1 intentionally stops at advisory signals plus the pod headroom gate.
+PDB eviction feasibility and scheduler placement are not part of Tier 2a and
+are not prerequisites for advisory node-count recommendations. Issues
+[#709](https://github.com/pgarciaq/ros-ocp-backend/issues/709) and
+[#710](https://github.com/pgarciaq/ros-ocp-backend/issues/710) investigate
+available data, safe interpretation, and bounded feasibility. No simulation
+or “safe to apply” claim is committed by this roadmap entry.
 
 ---
 
@@ -212,33 +229,47 @@ Not implemented in Tier 1. A full catalog path would:
 - Factor in on-demand and reserved **pricing** for cost-optimized family/size changes
 - Require **provider-specific** catalog loaders and refresh jobs
 
-Tier 2 MachineSet recommendations will reuse catalog data for replica and instance family changes; Tier 1 fleet-only suggestions avoid catalog dependency and stay accurate for homogeneous on-prem / single-family clusters.
+Tier 2b MachineSet recommendations will reuse catalog data for node-count and instance-family changes; Tier 1 fleet-only suggestions avoid catalog dependency and stay accurate for homogeneous single-family clusters.
 
 ---
 
 ## Two-phase delivery
 
-### Tier 2a — No cloud catalog (implementable now)
+### Tier 2a — No cloud catalog (implementation blocked on operator data)
 
-Replica guidance, persistence, API depth, and fleet-health signals — **no
-dependency on cloud pricing APIs**.
+Advisory node-count guidance, persistence, detail/history, and fleet-health
+signals — **no dependency on cloud pricing APIs**, but dependent on KMO
+MachineSet API collection, RBAC, and coverage reporting.
 
-#### Replica count engine
+#### Node-count recommendation
 
 Tier 2a reuses Tier 1 fleet consolidation output (`node_count_reduction` per
-node). The formula matches the shipped list API:
+node). Use a timestamped MachineSet API snapshot for desired/status counts;
+do not treat recommendation-row counts as authoritative membership:
 
 ```
-current_replicas     = count of nodes in the MachineSet
-excess               = sum of node_count_reduction across those nodes
-recommended_replicas = current_replicas - excess
+desired_node_count      = MachineSet.spec.replicas
+observed_machine_count  = MachineSet.status.replicas
+available_machine_count = MachineSet.status.availableReplicas
+current_node_count      = distinct Nodes linked from Machines owned by this MachineSet
+
+if desired_node_count, observed_machine_count, available_machine_count, and
+   current_node_count disagree, or any member lacks a fresh eligible node
+   recommendation for the requested term/engine:
+    withhold target; report collection as unavailable/incomplete
+
+excess                 = sum of node_count_reduction across all members
+recommended_node_count = max(current_node_count - excess, configured_floor)
 ```
 
 | Rule | Value |
 |------|-------|
-| Minimum replicas | Never 0 (configurable floor, default 1) |
-| No change | When `excess = 0`, `recommended_replicas = current_replicas` |
-| Scale-down | When `recommended_replicas < current_replicas` |
+| Desired count | `.spec.replicas`; number of desired Machine/node instances, not application-Pod replicas |
+| Observed/available counts | Keep MachineSet status counts distinct from linked Node inventory |
+| Minimum node count | Never 0 (configurable floor, default 1); this does not guarantee HA |
+| No reduction | When `excess = 0`, `recommended_node_count = current_node_count` |
+| Scale-down | When `recommended_node_count < current_node_count` |
+| Missing/stale/inconsistent input | Do not emit a target or a zero-reduction result |
 
 #### MachineSet-level confidence
 
@@ -252,17 +283,20 @@ flagged as uncertain.
 #### Heterogeneous fleet detection
 
 When nodes in the same MachineSet have CPU or memory capacity differing by
-more than 10%, the recommendation is marked heterogeneous and emits
-notification **77** (`MACHINESET_HETEROGENEOUS_FLEET`).
+more than 10%, the recommendation is marked heterogeneous and may emit planned
+notification candidate **88** (`MACHINESET_HETEROGENEOUS_CAPACITY`).
 
-#### Notification codes (Tier 2a)
+#### Notification candidates (Tier 2a)
+
+Codes 88–90 are not registered definitions. Verify uniqueness across consumers
+and allocate them in the coordinated implementation/migration work.
 
 | Code | Name | When |
 |------|------|------|
 | **76** | `NODE_FLEET_CONSOLIDATION` | Per-**node** rows only (Tier 1, shipped) |
-| **77** | `MACHINESET_HETEROGENEOUS_FLEET` | Mixed capacities within MachineSet |
-| **78** | `MACHINESET_SCALE_DOWN_RECOMMENDED` | `recommended_replicas < current_replicas` |
-| **79** | `MACHINESET_OPTIMAL` | No replica change needed |
+| **88** | `MACHINESET_HETEROGENEOUS_CAPACITY` | Mixed capacities within MachineSet |
+| **89** | `MACHINESET_SCALE_DOWN_RECOMMENDED` | `recommended_node_count < current_node_count` |
+| **90** | `MACHINESET_NO_REDUCTION_RECOMMENDED` | No reduction under current model and complete eligible data; not a claim of “optimal” |
 
 #### API surface (Tier 2a)
 
@@ -282,15 +316,19 @@ GET /api/cost-management/v1/recommendations/openshift/machinesets/{machineset_na
 | `cluster_uuid` | When ambiguous | Same name in multiple clusters |
 | `filter[term]` | No | Default `medium_term` |
 
-Response includes: replica counts, savings, confidence, notifications,
+Response includes: desired/current node counts, observed/available Machine
+counts, savings, confidence, notifications,
 `member_nodes[]` with per-node utilization and reduction, and `history[]`
 (30 most recent snapshots).
+
+`desired_node_count` maps to MachineSet `.spec.replicas`: the desired number of
+Machine/node instances. It does not refer to application workload replicas.
 
 #### List filters (Tier 2a additions)
 
 | Filter | Values |
 |--------|--------|
-| `filter[recommendation_type]` | `scale_down`, `optimal`, `heterogeneous_warning` |
+| `filter[recommendation_type]` | `scale_down`, `no_reduction`, `heterogeneous_warning` |
 | `filter[term]` | `short_term`, `medium_term`, `long_term` |
 
 #### Sorting (`order_by`)
@@ -299,12 +337,12 @@ Response includes: replica counts, savings, confidence, notifications,
 |-------|-------------------|
 | `estimated_savings` | DESC (default) |
 | `machineset_name` | ASC |
-| `recommended_replicas` | ASC |
-| `current_replicas` | DESC |
+| `recommended_node_count` | ASC |
+| `current_node_count` | DESC |
 
 #### History
 
-Recommendation history tracks how `recommended_replicas` changes over time
+Recommendation history tracks how `recommended_node_count` changes over time
 (daily snapshots on recalc). Detail endpoint returns up to 30 history entries.
 
 ---
@@ -331,12 +369,12 @@ shapes from the catalog.
 #### Cost comparison
 
 ```
-current monthly cost  = current_replicas × hourly_rate(current_type)  × 730
-recommended monthly   = recommended_replicas × hourly_rate(recommended_type) × 730
+current monthly cost  = current_node_count × hourly_rate(current_type)  × 730
+recommended monthly   = recommended_node_count × hourly_rate(recommended_type) × 730
 savings               = current - recommended
 ```
 
-When the catalog is unavailable, Tier 2a replica recommendations still work;
+When the catalog is unavailable, Tier 2a node-count recommendations still work;
 instance-type fields remain empty.
 
 #### Catalog sources
@@ -385,9 +423,9 @@ flowchart LR
 |-------|--------|------|
 | **1 — Produce** | `node` | Per-node classification, `node_count_reduction` |
 | **1 — Produce** (2b) | `instance-type` | Catalog refresh, smallest-fit lookup |
-| **3 — Optimize** | `machineset` | MachineSet aggregation, replica + instance recs (depends on `node`; Tier 2b adds `instance-type`) |
+| **3 — Optimize** | `machineset` | MachineSet aggregation, node-count + instance recs (depends on `node`; Tier 2b adds `instance-type`) |
 
-A separate **`binpacking`** plugin (Phase 3, future) targets placement-aware fragmentation — it is **not** a Tier 2a prerequisite for replica guidance. See [Plugin Execution Phases](../architecture/plugin-phases.md).
+A separate **`binpacking`** plugin (Phase 3, future) targets placement-aware fragmentation — it is **not** a Tier 2a prerequisite for node-count guidance. See [Plugin Execution Phases](../architecture/plugin-phases.md).
 
 ---
 
@@ -399,8 +437,8 @@ MachineSet recommendations are **advisory** in all deployment modes:
 2. Platform teams review in the Optimizations UI or REST API.
 3. Teams apply via `oc scale machineset`, Machine API, or GitOps.
 
-ROS does not patch MachineSets automatically. PDB-aware consolidation
-(safe-to-auto-execute) is a later enhancement.
+ROS does not patch MachineSets automatically. PDB/placement simulation remains
+separate research (#709/#710); no automatic-apply capability is promised.
 
 ---
 
@@ -408,11 +446,12 @@ ROS does not patch MachineSets automatically. PDB-aware consolidation
 
 ### Tier 2a
 
-- Replica counts match Tier 1 aggregation formula
-- Never recommend 0 replicas
+- Node-count target matches Tier 1 `node_count_reduction` math when MachineSet counts are stable and coverage is complete
+- Withhold a target on absent/failed/stale Machine API data or incomplete member-node recommendations
+- Never recommend zero nodes; default floor 1 does not guarantee HA
 - Detail endpoint returns member nodes and history
 - Confidence = min across members; heterogeneous detection at >10% variance
-- Notifications 77/78/79 on appropriate conditions
+- Planned notification candidates 88/89/90 are uniqueness-checked before registration
 - List filters and `order_by` work with persisted table
 
 ### Tier 2b
@@ -420,7 +459,7 @@ ROS does not patch MachineSets automatically. PDB-aware consolidation
 - Smallest-fit and family migration from catalog
 - 20% savings hysteresis for instance changes
 - Graceful fallback when catalog unavailable
-- On-prem without catalog: Tier 2a only
+- Supported Machine API clusters without catalog: Tier 2a only
 
 Full criteria: [internal implementation spec](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/features/machineset-recommendations.md).
 

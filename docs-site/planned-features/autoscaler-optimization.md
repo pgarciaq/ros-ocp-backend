@@ -1,7 +1,7 @@
 # MachineAutoscaler Optimization (Tier 3)
 
 !!! warning "Status: Planned / Future Work"
-    Tier 3 depends on **Tier 2** MachineSet identity, grouping, and replica metadata.
+    Tier 3 depends on **Tier 2** MachineSet identity, grouping, and desired/observed/available count metadata.
     Bounds-only recommendations are expected first; full policy tuning is research-heavy.
 
 !!! info "Quick Facts"
@@ -47,13 +47,16 @@ Tier 3 is **more research-oriented** than Tiers 1–2: recommendations depend on
 
 ## Tier context
 
-Tier 3 is the third automation tier in the node/MachineSet recommendation roadmap:
+Tier 2 MachineSet node-count and catalog guidance remains advisory and requires
+human review; this roadmap page does not imply that those recommendations are
+safe to apply automatically. Tier 3 is a separate, higher-risk autoscaler
+recommendation direction:
 
 | Tier | Automation posture | Primary focus |
 |------|-------------------|---------------|
 | **1** (shipped) | Human review required | Per-node advisory consolidation |
-| **2** (planned) | Safe to auto-execute (with guardrails) | MachineSet replica + instance-family right-sizing |
-| **3** (planned) | Autonomous scaling | MachineAutoscaler bounds and behavior |
+| **2a/2b** (planned) | Advisory; human review required | MachineSet node-count and catalog-based instance-type guidance |
+| **3** (planned) | Higher-risk autoscaler recommendations; automation is not committed | MachineAutoscaler bounds and behavior |
 
 See [Tier overview](machineset-recommendations.md#tier-overview) for the full three-tier model and effort estimates.
 

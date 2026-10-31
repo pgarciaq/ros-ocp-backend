@@ -188,7 +188,7 @@ This table provides a **feature-level** view of the entire project. Each row is 
 | # | Feature | Description | Phase | REQs | Operator? | Status | Impl | vs Legacy | Clarifications |
 |---|---------|-------------|-------|------|-----------|--------|------|-----------|----------------|
 | F43 | **Node utilization visibility (Tier 1)** | Underutilized (<30% both CPU+mem), overcommitted (>150% request/allocatable), stranded resources (CPU vs memory imbalance). Per-node p50/p95 utilization, trend slope. | 8c | REQ-8c.1, REQ-8c.2, REQ-8c.2b, REQ-8c.3, REQ-8c.8, REQ-8c.9, REQ-8c.11 | Yes (routing existing + 2 new queries) | Active | **YES** | **Net-new** — Legacy pipeline has node data in CSV (node labels, capacity) but only as a dimension for container recs, not as a recommendation target. | Enabled by default. On-prem = capacity planning; cloud = scale-down. |
-| F44 | **MachineSet right-sizing (Tier 2)** | Aggregate utilization across MachineSet nodes. Replica count recommendation (`rec = ceil(current × util / target)`). Instance type recommendation from cloud catalog (smallest-fit). Stranded resource → family switch. PDB notification. | 8c | REQ-8c.4, REQ-8c.5, REQ-8c.6, REQ-8c.11 | Yes (3-5 queries) | Active | **NO** | **Net-new** | Go heuristic (not PL/pgSQL). 20% minimum savings hysteresis. 2-replica HA floor. |
+| F44 | **MachineSet node-count guidance (Tier 2a) + catalog sizing (Tier 2b)** | Tier 2a persists an advisory node-count target from the existing MachineSet-first `node_count_reduction` result. Tier 2b adds instance-family/size and cost comparisons from the catalog. PDB/placement work is separately investigated in #709/#710. | 8c | REQ-8c.4, REQ-8c.5, REQ-8c.6, REQ-8c.11 | Yes (Machine API snapshot/RBAC) | Active | **NO** | **Net-new** | Tier 2a requires stable MachineSet counts and complete node coverage; default floor 1 is not an HA guarantee. Advisory only; no auto-apply. |
 | F45 | **MachineAutoscaler optimization (Tier 3)** | Saturated/idle/flapping/missing autoscaler detection. Suggested min/max adjustments. | 8c | REQ-8c.7 | Yes (2 queries, optional) | Active | **NO** | **Net-new** | Cloud-only (bare metal N/A). |
 | F46 | **Cloud instance type catalog** | Live catalog from AWS Bulk Pricing JSON, Azure Retail Prices API, GCP machineTypes API. Daily refresh. In-memory cache. | 8c | REQ-8c.6 | No | Active | **NO** | **Net-new** | AWS Tier 1: public JSON (no auth). Tier 2: optional `ec2:DescribeInstanceTypes` if customer adds IAM perm. |
 | F47 | **Node/MachineSet API endpoints** | `/nodes`, `/nodes/:node`, `/machinesets`, `/machinesets/:name`. Filter by utilization, instance type, stranded resource. | 8c | REQ-8c.10 | No | Active | **PARTIAL** | **Net-new** — Node utilization exists (**`GET /recommendations/openshift/nodes`**; deprecated alias **`GET /recommendations/openshift/nodes/utilization`**). GPU time-slicing moved to **`GET /recommendations/openshift/gpu/timeslicing`**. MachineSet list endpoint (**`GET /machinesets`**) shipped as Tier 1 aggregation. Detail endpoint (**`GET /machinesets/{name}`**) and catalog-driven engine are Tier 2. |
@@ -1674,11 +1674,11 @@ All queries MUST filter by `kubevirt_vmi_info{phase='running'}` to exclude stopp
 
 ## 12c. Phase 8c: Node & MachineSet Recommendations (Weeks 14–20)
 
-**Operator dependency:** Phase 8c requires the new operator to ship 2 new `ros:node_requests_*` queries (REQ-8c.2b) and 3–5 MachineSet queries (REQ-8c.4). The operator changes must be completed and deployed BEFORE Phase 8c backend work can be validated end-to-end. Plan operator changes in weeks 12–14 (overlap with Phase 8 completion) so that node CSV data is available by week 14 when backend Phase 8c development starts. Without the operator changes, Phase 8c development can proceed using mock CSV data for unit/integration testing, but end-to-end validation requires real operator data.
+**Operator dependency:** Phase 8c requires the new operator to ship 2 new `ros:node_requests_*` queries (REQ-8c.2b) and a timestamped MachineSet API snapshot (REQ-8c.4). The operator must also grant read-only `list` access to `machines` and `machinesets` in both its RBAC source and OLM permissions. These changes must be deployed before Phase 8c can be validated end-to-end. Without the data, backend development can use mock CSVs for tests, but it must not emit a MachineSet target from incomplete data.
 
 This phase adds infrastructure-level right-sizing recommendations — the counterpart to container-level recommendations. While container recs tell developers "your pod is oversized," node/MachineSet recs tell cluster admins "your cluster has excess capacity" or "your instance types are wrong for your workload mix." Industry data (Flexera, Densify) shows 20-40% of cloud compute is wasted at the node/VM layer — often more than at the container layer. Phase 8c can be developed in parallel with Phases 8, 8b, and 9.
 
-**Key design decision:** In OpenShift, the actionable unit for node management is the **MachineSet** (a group of identical machines), not the individual node. Cluster admins change instance types, replica counts, and autoscaler bounds at the MachineSet level. Individual node recommendations are informational; MachineSet recommendations are actionable.
+**Key design decision:** In supported OpenShift topologies, the MachineSet is the unit used to configure a desired pool size. MachineSet `.spec.replicas` is the desired number of Machine objects that become cluster nodes; it is not application-Pod replicas. ROS presents the customer-facing action as a desired **node count**. Recommendations are advisory and require human review.
 
 **Source:** Industry analysis — Kubecost, Cast AI, Spot.io, Densify all provide node-level recommendations as a core FinOps feature.
 
@@ -1687,7 +1687,8 @@ This phase adds infrastructure-level right-sizing recommendations — the counte
 | Tier | Scope | New Queries | Effort | Value |
 |---|---|---|---|---|
 | Tier 1 | Node utilization visibility | 0 (uses existing `cost:node_*`) | Low | High |
-| Tier 2 | MachineSet right-sizing | 3–5 | Moderate | Very High |
+| Tier 2a | Advisory MachineSet node-count guidance | MachineSet API snapshot + RBAC | Moderate | High |
+| Tier 2b | Catalog-based instance-type guidance | Catalog APIs | Moderate | High |
 | Tier 3 | MachineAutoscaler optimization | 2–3 | Moderate | High (cloud only) |
 
 ### Cloud vs On-prem Applicability
@@ -1695,7 +1696,7 @@ This phase adds infrastructure-level right-sizing recommendations — the counte
 | | Cloud OpenShift (ROSA/ARO/OCP-on-cloud) | On-prem OpenShift (bare metal) |
 |---|---|---|
 | **Node utilization (Tier 1)** | Actionable — informs scale-down decisions | Actionable — capacity planning |
-| **MachineSet right-sizing (Tier 2)** | Actionable — change instance type / replica count | Informational — "you'd need X if re-provisioning" |
+| **MachineSet guidance (Tier 2a)** | Advisory desired node count when Machine API data is complete | No target when Machine API is absent or collection is incomplete |
 | **MachineAutoscaler (Tier 3)** | Actionable — adjust min/max bounds | N/A (no cloud autoscaler) |
 
 ### REQ-8c.1: Operator — Node ROS Prometheus queries [HIGH]
@@ -1715,7 +1716,7 @@ This phase adds infrastructure-level right-sizing recommendations — the counte
 
 **New CSV:** `ros-openshift-node-usage-<YYYYMM>.csv` with columns: `timestamp`, `node`, `cpu_allocatable_mc`, `cpu_capacity_mc`, `cpu_usage_mc`, `memory_allocatable_kib`, `memory_capacity_kib`, `memory_usage_kib`, `pod_count`, `pod_capacity`, `instance_type`, `machineset_name`, `region`, `zone`.
 
-**Node-to-MachineSet mapping:** Extracted from `kube_node_labels` via the `label_machine_openshift_io_machine_set` label. If the label is absent (bare-metal, manually provisioned), `machineset_name` is `NULL` and Tier 2/3 recommendations are skipped for that node.
+**Node-to-MachineSet mapping:** The Koku Metrics Operator maps a Node through its owning Machine (`Machine.status.nodeRef` plus the MachineSet owner reference). This requires read-only `list` access to Machine API `machines`; add that grant to both KMO RBAC source and OLM permissions. If the Machine API is absent, `machineset_name` is not inferred and no MachineSet target is produced.
 
 **Instance type extraction:** From `kube_node_labels` via the `label_node_kubernetes_io_instance_type` label (e.g., `m5.4xlarge`, `Standard_D8s_v3`, `n2-standard-8`).
 
@@ -1776,62 +1777,95 @@ These are lightweight gauge-based queries against kube-state-metrics (no `rate()
 
 **Output:** Stored in `node_recommendations` table via `INSERT ... ON CONFLICT DO UPDATE`.
 
-### REQ-8c.4: Operator — MachineSet Prometheus queries [HIGH] — NOT IMPLEMENTED
+### REQ-8c.4: Operator — MachineSet API snapshot and membership [HIGH] — NOT IMPLEMENTED
 
-**Required:** 3–5 new Prometheus queries:
+**Required behavior:** Collect a timestamped snapshot directly from the OpenShift
+Machine API (`machine.openshift.io/v1beta1`), not by assuming a standard
+Prometheus desired-count series exists. For each MachineSet, collect:
 
-```promql
-ros:machineset_replicas:
-  max by (namespace, name) (machine_api_machine_set_status_replicas{namespace="openshift-machine-api"})
+- cluster ID, namespace, name, UID, and snapshot time;
+- `.spec.replicas` as desired Machine/node count;
+- `.status.replicas` as observed Machine count;
+- `.status.availableReplicas` as available Machine count;
+- Machine `status.nodeRef` and owner references needed to join each MachineSet to
+  its current Nodes.
 
-ros:machineset_available_replicas:
-  max by (namespace, name) (machine_api_machine_set_status_available_replicas{namespace="openshift-machine-api"})
+The operator already attempts the Machine-to-MachineSet lookup, but checked-in
+RBAC does not grant `machine.openshift.io` access. Add least-privilege read-only
+`list` permission for `machines` and `machinesets` to both the KMO RBAC source
+and OLM permissions, and scope API list calls to `openshift-machine-api`. The
+collector uses list operations; do not add `get` or broad wildcard permissions.
+If OLM cannot express a namespace-scoped binding, resolve and review the
+least-privilege alternative before implementation.
 
-ros:machineset_desired_replicas:
-  max by (namespace, name) (machine_api_machine_set_spec_replicas{namespace="openshift-machine-api"})
-```
+The cluster-level collection state must distinguish API/resource absence
+(not applicable) from read/authorization failure (incomplete). Neither state
+may be ingested as a successful zero-count snapshot. The ROS consumer must
+withhold MachineSet targets on incomplete or stale snapshots. Emit this state even
+when no MachineSet rows are present. Node-level recommendations continue.
 
-Optional (Tier 3):
-```promql
-ros:machineautoscaler_min:
-  max by (namespace, name) (machine_autoscaler_min_replicas)
+Expose per-cluster collection state in MachineSet list metadata, keyed by
+`cluster_uuid`, so empty `data` distinguishes “no recommendation” from
+unsupported/incomplete collection. An unavailable cluster must not hide valid
+MachineSet rows from other clusters. Pin the exact JSON property in OpenAPI
+and contract tests before implementation.
 
-ros:machineautoscaler_max:
-  max by (namespace, name) (machine_autoscaler_max_replicas)
-```
+Serialize an allowlisted projection only: MachineSet identity/counts/timestamp
+and the Machine-to-Node mapping needed by ROS. Do not upload full
+Machine/MachineSet `providerSpec`, user-data, or credential references.
 
-**New CSV columns** (appended to node CSV or separate `ros-openshift-machineset-<YYYYMM>.csv`): `machineset_name`, `machineset_replicas`, `machineset_available_replicas`, `machineset_desired_replicas`, `autoscaler_min`, `autoscaler_max`.
+OpenShift Machine API Operator documentation lists status series including
+`mapi_machine_set_status_replicas`,
+`mapi_machine_set_status_replicas_available`, and
+`mapi_machine_set_status_replicas_ready`; these may support historical status
+trends when verified in the target monitoring stack. The current requirement
+does **not** depend on an unverified `machine_api_machine_set_spec_replicas`
+series for desired count. Optional MachineAutoscaler bounds remain Tier 3.
 
-### REQ-8c.5: Tier 2 — MachineSet right-sizing [HIGH] — NOT IMPLEMENTED
+### REQ-8c.5: Tier 2a — Advisory MachineSet node-count recommendations [HIGH] — NOT IMPLEMENTED
 
-**Required:** MachineSet Prometheus queries (REQ-8c.4) + instance type catalog (REQ-8c.6).
+**Required:** REQ-8c.4 MachineSet snapshot/membership and complete fresh
+node-recommendation coverage. The cloud catalog (REQ-8c.6) is **not** a Tier 2a
+prerequisite; it is required only for Tier 2b instance-type/cost comparisons.
 
-**Algorithm (Go heuristic):** MachineSet recommendations involve cross-node aggregation and instance type catalog lookups — implemented in Go alongside Tier 1 node logic.
+**Algorithm:** Reuse the existing MachineSet-first node-consolidation output
+and pod-headroom gate; do not introduce the conflicting utilization-ratio
+formula for Tier 2a.
 
-1. **Group nodes by MachineSet** (from `machineset_name` column in `daily_node_digests`).
-2. **Aggregate utilization across all nodes in the MachineSet:**
-   - `machineset_cpu_util = sum(cpu_usage across nodes) / sum(cpu_allocatable across nodes)`
-   - `machineset_mem_util = sum(memory_usage) / sum(memory_allocatable)`
-   - Use p95 from daily digest tables for peak utilization.
-3. **Replica count recommendation:**
-   - If `machineset_cpu_util_p95 < 0.50` sustained: recommend fewer replicas.
-   - Formula: `rec_replicas = ceil(current_replicas × max(cpu_util_p95, mem_util_p95) / target_util)` where `target_util = 0.70` (configurable).
-   - Minimum: 2 replicas for HA (configurable `ROS_MIN_MACHINESET_REPLICAS`).
-4. **Instance type recommendation (cloud only):**
-   - Read current instance type from node labels.
-   - Compute per-node resource need: `cpu_need = p95(cpu_usage) × 1.2` (20% headroom), same for memory.
-   - Lookup the smallest instance type in the catalog whose vCPUs ≥ `cpu_need` and memory ≥ `mem_need`.
-   - If the recommended type differs from current AND is ≥1 size smaller: recommend the change.
-   - Hysteresis: only recommend downsizing if savings ≥ 20% (avoid churn).
-5. **Stranded resource fix:**
-   - If Tier 1 detected stranded resources, Tier 2 recommends switching to the appropriate instance family:
-     - CPU-bound + memory stranded → CPU-optimized family (e.g., `c5` instead of `m5`)
-     - Memory-bound + CPU stranded → memory-optimized family (e.g., `r5` instead of `m5`)
-6. **PDB awareness (notification, not algorithmic):**
-   - Query `kube_poddisruptionbudget_status_pod_disruptions_allowed` (available via kube-state-metrics) to detect PDBs affecting pods on the MachineSet's nodes.
-   - If PDBs are present, emit `PDB_CAVEAT` (code 4): "N PodDisruptionBudgets affect workloads on nodes in this MachineSet — manual review recommended before scaling down."
-   - PDB data does NOT algorithmically change the replica count recommendation (mapping PDB → pods → nodes → MachineSets is a multi-hop join that risks incorrect recommendations). Instead, the notification alerts the operator to review manually.
-   - **Known limitation:** PDB-aware replica count adjustment is deferred. PDB compliance is complex (namespace-scoped PDBs vs cluster-scoped MachineSets, multiple PDBs per node) and incorrect enforcement could prevent valid scale-down operations.
+1. Group the linked current Node members by `(cluster_uuid, namespace,
+   machineset_name)` and the selected term/engine.
+2. Define `current_node_count` from distinct linked Nodes;
+   `desired_node_count` from `.spec.replicas`;
+   `observed_machine_count` from `.status.replicas`; and
+   `available_machine_count` from `.status.availableReplicas`.
+3. Emit a target only when the desired, observed, available, and linked Node
+   counts agree and every member has a fresh eligible node recommendation.
+   Otherwise withhold the target and report the MachineSet input as
+   unsupported/incomplete; do not treat missing member rows as zero excess.
+4. For a complete stable set:
+   - `excess_nodes = sum(member.node_count_reduction)`;
+   - `recommended_node_count = max(current_node_count - excess_nodes,
+     ROS_MIN_MACHINESET_REPLICAS)`;
+   - `ROS_MIN_MACHINESET_REPLICAS` defaults to 1; this floor prevents a zero
+     target but does not guarantee HA.
+5. Persist the recommendation and history because confirmed customer demand
+   includes detail/history/notifications; do not justify persistence with an
+   unmeasured performance claim about Tier 1 query aggregation.
+6. Keep Tier 2a advisory. It does not simulate PDB eviction, affinity,
+   topology spread, or placement and does not automatically apply changes.
+   PDB and placement feasibility are investigated separately in #709 and #710.
+
+Tier 2a’s notification candidates are 88 (heterogeneous capacity), 89
+(node-count reduction recommended), and 90 (no reduction recommended under the
+current model). They are not registered catalog entries until uniqueness is
+verified and implementation adds the coordinated definitions/migration. Do
+not call a no-reduction result “optimal.”
+
+#### Tier 2b scope (part of REQ-8c.5)
+
+Tier 2b adds instance-family/size and cost comparisons using REQ-8c.6. It is
+independent of Tier 2a and does not change the Tier 2a node-count source or
+algorithm.
 
 ### REQ-8c.6: Instance type catalog — Cloud API integration [MEDIUM] — NOT IMPLEMENTED
 
@@ -1922,7 +1956,9 @@ Customers may be running on instance types that are no longer listed in cloud pr
 
 **Logical outputs** (mapped to `node_recommendations` columns): `node`; `cpu_util_p50` / `cpu_util_p95`; `mem_util_p50` / `mem_util_p95`; `cpu_overcommit_ratio`; `is_underutilized` / `is_overcommitted`; `stranded_resource` (`'cpu'`, `'memory'`, or NULL); `trend_slope` (from linear regression on daily means in Go).
 
-Tier 2 and Tier 3 (MachineSet right-sizing, autoscaler) also run in **Go** — they require cross-node aggregation, instance type catalog lookups, and MachineAutoscaler logic.
+Tier 2a (MachineSet node-count guidance) and Tier 2b (catalog-based type/cost
+guidance) run in **Go** after Tier 1 node recommendations. Tier 3 adds
+MachineAutoscaler analysis separately.
 
 ### REQ-8c.9: Batch entry point — extend `recommendAllWorkloads()` [HIGH]
 
@@ -1938,7 +1974,7 @@ Tier 2 and Tier 3 (MachineSet right-sizing, autoscaler) also run in **Go** — t
 |---|---|---|---|
 | GET | `/api/cost-management/v1/recommendations/openshift/nodes` | Node utilization recommendations (all nodes in cluster) | 1 |
 | GET | `/api/cost-management/v1/recommendations/openshift/nodes/:node` | Individual node detail | 1 |
-| GET | `/api/cost-management/v1/recommendations/openshift/machinesets` | MachineSet right-sizing recommendations | 2 |
+| GET | `/api/cost-management/v1/recommendations/openshift/machinesets` | Advisory MachineSet node-count recommendations | 2a |
 | GET | `/api/cost-management/v1/recommendations/openshift/machinesets/:name` | Individual MachineSet detail | 2 |
 
 2. Support filtering by `cluster_uuid`, `node`, `machineset_name`, `instance_type`, `is_underutilized`, `is_overcommitted`, `stranded_resource`.
@@ -1971,11 +2007,20 @@ CREATE TABLE node_recommendations (
 CREATE TABLE machineset_recommendations (
     org_id                  TEXT NOT NULL,
     cluster_uuid            UUID NOT NULL,
+    machineset_namespace    TEXT NOT NULL,
     machineset_name         TEXT NOT NULL,
+    machineset_uid          TEXT NOT NULL,
+    machineset_snapshot_at  TIMESTAMPTZ NOT NULL,
+    recommendation_fingerprint TEXT NOT NULL,
+    term                    TEXT NOT NULL,
+    engine                  TEXT NOT NULL,
     current_instance_type   TEXT,
     rec_instance_type       TEXT,       -- NULL if no change recommended
-    current_replicas        BIGINT,
-    rec_replicas            BIGINT,     -- NULL if no change recommended
+    current_node_count      BIGINT,
+    desired_node_count      BIGINT,     -- MachineSet .spec.replicas
+    observed_machine_count  BIGINT,     -- MachineSet .status.replicas
+    available_machine_count BIGINT,     -- MachineSet .status.availableReplicas
+    recommended_node_count  BIGINT,     -- desired node-count target
     cpu_util_p95            REAL,       -- aggregate across all nodes
     mem_util_p95            REAL,
     autoscaler_min          BIGINT,     -- NULL if no autoscaler
@@ -1987,12 +2032,17 @@ CREATE TABLE machineset_recommendations (
     is_flapping             BOOLEAN,
     savings_vcpus           BIGINT,     -- total vCPU reduction
     savings_memory_gib      BIGINT,     -- total memory GiB reduction
-    estimated_savings_cents REAL, -- from Koku cost data
+    estimated_savings_cents BIGINT, -- integer cents from Koku cost data
     notification_codes      SMALLINT[],
     updated_at              TIMESTAMPTZ DEFAULT now(),
-    PRIMARY KEY (org_id, cluster_uuid, machineset_name)
+    PRIMARY KEY (org_id, cluster_uuid, machineset_namespace, machineset_name, term, engine)
 );
 ```
+
+MachineSet recommendation history must retain source UID and snapshot time and
+use a deterministic fingerprint/idempotency key. A retry of the same input
+snapshot must not create duplicate history rows; `recorded_at DEFAULT NOW()` is
+not an idempotency key.
 
 ### Node Recommendation Response Format
 
@@ -2042,13 +2092,17 @@ CREATE TABLE machineset_recommendations (
     "machineset_name": "worker-us-east-1a",
     "current": {
       "instance_type": "m5.4xlarge",
-      "replicas": 6,
+      "current_node_count": 6,
+      "desired_node_count": 6,
+      "observed_machine_count": 6,
+      "available_machine_count": 6,
+      "machineset_snapshot_at": "2026-05-28T14:00:00Z",
       "total_vcpus": 96,
       "total_memory_gib": 384
     },
     "recommended": {
       "instance_type": "m5.2xlarge",
-      "replicas": 5,
+      "recommended_node_count": 5,
       "total_vcpus": 40,
       "total_memory_gib": 160
     },
@@ -2076,6 +2130,12 @@ CREATE TABLE machineset_recommendations (
   }]
 }
 ```
+
+`desired_node_count` maps to MachineSet `.spec.replicas`: the number of desired
+Machine objects that become nodes, not application-Pod replicas.
+`observed_machine_count` and `available_machine_count` are Machine status
+counts; recommendations are emitted only when those counts agree with the
+linked Node inventory and complete fresh recommendation coverage.
 
 ---
 
@@ -2292,7 +2352,7 @@ All operator changes are in the `koku-metrics-operator` repository. Each is a se
 | 8b | VM disk allocation + info | 2 | Reuse existing `kubevirt_*` series | High |
 | 8c | Node labels (ROS routing) | 1 | `instance_type`, `machineset_name`, `region`, `zone` | High |
 | 8c | Node CPU/memory usage (ROS routing) | 0 (reuse `cost:node_*`) | Reuse existing series at ROS granularity | High |
-| 8c | MachineSet replica counts | 3 | `machineset_replicas`, `machineset_available`, `machineset_desired` | High |
+| 8c | MachineSet snapshot | 0 Prometheus queries required for desired count | `desired_node_count`, `observed_machine_count`, `available_machine_count`, MachineSet UID/timestamp | High |
 | 8c | MachineAutoscaler bounds (Tier 3) | 2 | `autoscaler_min`, `autoscaler_max` | Medium |
 | — | Python/.NET detection | 2 | `python_version`, `dotnet_version` | Low |
 
@@ -2419,7 +2479,7 @@ All new endpoints follow the same patterns as existing recommendation endpoints:
 | GET | `/api/cost-management/v1/recommendations/openshift/virtual-machines/:id` | Individual VM recommendation detail | 8b |
 | GET | `/api/cost-management/v1/recommendations/openshift/nodes` | Node utilization recommendations (Tier 1) | 8c |
 | GET | `/api/cost-management/v1/recommendations/openshift/nodes/:node` | Individual node recommendation detail | 8c |
-| GET | `/api/cost-management/v1/recommendations/openshift/machinesets` | MachineSet right-sizing + autoscaler recommendations (Tier 2+3) | 8c |
+| GET | `/api/cost-management/v1/recommendations/openshift/machinesets` | Advisory MachineSet node-count guidance; autoscaler fields are later Tier 3 | 8c |
 | GET | `/api/cost-management/v1/recommendations/openshift/machinesets/:name` | Individual MachineSet recommendation detail | 8c |
 | GET | `/api/cost-management/v1/recommendations/openshift/quality` | Recommendation quality metrics (OOM rate, stability, adoption rate) | 10 |
 | GET | `/api/cost-management/v1/recommendations/openshift/fleet-summary` | Cross-cluster aggregated savings, adoption rates, top opportunities by org_id (REQ-7.6) | 7 |
@@ -2806,11 +2866,20 @@ CREATE TABLE node_recommendations (
 CREATE TABLE machineset_recommendations (
     org_id                      TEXT NOT NULL,
     cluster_uuid                UUID NOT NULL,
+    machineset_namespace        TEXT NOT NULL,
     machineset_name             TEXT NOT NULL,
+    machineset_uid              TEXT NOT NULL,
+    machineset_snapshot_at      TIMESTAMPTZ NOT NULL,
+    recommendation_fingerprint TEXT NOT NULL,
+    term                        TEXT NOT NULL,
+    engine                      TEXT NOT NULL,
     current_instance_type       TEXT,
     rec_instance_type           TEXT,
-    current_replicas            BIGINT,
-    rec_replicas                BIGINT,
+    current_node_count          BIGINT,
+    desired_node_count          BIGINT,     -- MachineSet .spec.replicas
+    observed_machine_count      BIGINT,     -- MachineSet .status.replicas
+    available_machine_count     BIGINT,     -- MachineSet .status.availableReplicas
+    recommended_node_count      BIGINT,
     cpu_util_p95                REAL,
     mem_util_p95                REAL,
     autoscaler_min              BIGINT,
@@ -2822,10 +2891,10 @@ CREATE TABLE machineset_recommendations (
     is_flapping                 BOOLEAN,
     savings_vcpus               BIGINT,
     savings_memory_gib          BIGINT,
-    estimated_savings_cents REAL,
+    estimated_savings_cents BIGINT,
     notification_codes          SMALLINT[],
     updated_at                  TIMESTAMPTZ DEFAULT now(),
-    PRIMARY KEY (org_id, cluster_uuid, machineset_name)
+    PRIMARY KEY (org_id, cluster_uuid, machineset_namespace, machineset_name, term, engine)
 );
 
 -- Phase 8c: Node recommendations (Tier 1) — Go recommendNodes(); reads daily_node_digests (REQ-8c.3, REQ-8c.8).
@@ -3000,8 +3069,7 @@ All thresholds, percentile targets, safety margins, and half-life values must be
 | `ROS_COST_CACHE_TTL` | 3600 | Cost rate cache TTL in seconds |
 | `ROS_NODE_UNDERUTIL_THRESHOLD` | 0.30 | Node underutilization threshold (Tier 1) |
 | `ROS_NODE_OVERCOMMIT_THRESHOLD` | 1.50 | Node overcommit ratio threshold (Tier 1) |
-| `ROS_MACHINESET_TARGET_UTIL` | 0.70 | MachineSet target utilization for replica sizing |
-| `ROS_MIN_MACHINESET_REPLICAS` | 2 | Minimum replica count for HA |
+| `ROS_MIN_MACHINESET_REPLICAS` | 1 | Minimum desired Machine/node count; floor 1 does not guarantee HA |
 | `ROS_STALE_DATA_THRESHOLD_HOURS` | 48 | Mark recommendation stale after this many hours without data |
 | `ROS_STALE_CLEANUP_DAYS` | 30 | Delete stale recommendations older than N days |
 | `ROS_ENABLE_EPHEMERAL_STORAGE` | false | Ephemeral storage recs (informational only — cadvisor metrics unreliable through OCP 4.21) |
@@ -3309,7 +3377,7 @@ Phase 10 (Weeks 18–22): ros-ocp-backend + cost-onprem-chart (remove Kruize)
 | Go percentile computation | 95% | `slices.Sort()` on `[]int64`, exact percentile selection by index, daily digest upsert, `INSERT ... ON CONFLICT DO UPDATE` idempotency |
 | Idle/PVC detection | 90% | Threshold edge cases, zero-usage detection |
 | Node utilization engine | 90% | Underutilized/overcommitted thresholds, stranded resource detection, trend slope |
-| MachineSet right-sizing | 85% | Replica count formula, instance type catalog lookup, hysteresis, bare-metal skip |
+| MachineSet node-count guidance | 85% | Existing node-consolidation formula, Machine API data/coverage gate, catalog-independent Tier 2a |
 | MachineAutoscaler analysis | 85% | Saturated/idle/flapping detection, missing autoscaler handling |
 | CSV parsing | 90% | Integer types, float fallback, missing columns, malformed data |
 | COPY FROM ingestion | 80% | Batch sizing, integer conversion, error handling, null columns |
@@ -3482,8 +3550,8 @@ Risks identified during the 2026-03-26 review, with their resolutions.
 | REQ-8c.1 Node ROS Prometheus queries | Industry analysis | 8c | High | Yes (routing) | No | No |
 | REQ-8c.2 Node digest table | Industry analysis | 8c | High | No | Yes | No |
 | REQ-8c.3 Node utilization (Tier 1) | Industry analysis | 8c | High | No | Yes | No |
-| REQ-8c.4 MachineSet Prometheus queries | Industry analysis | 8c | High | Yes | No | No |
-| REQ-8c.5 MachineSet right-sizing (Tier 2) | Industry analysis | 8c | High | No | No | No |
+| REQ-8c.4 MachineSet API snapshot/RBAC | Customer-confirmed node-count baseline | 8c | High | Yes | No | No |
+| REQ-8c.5 Advisory MachineSet node-count recommendations | Customer demand; ADR-0347 | 8c | High | No | No | No |
 | REQ-8c.6 Instance type catalog | Industry analysis | 8c | Medium | No | No | No |
 | REQ-8c.7 MachineAutoscaler opt (Tier 3) | Industry analysis | 8c | Medium | Yes | No | No |
 | REQ-8c.8 recommendNodes() (Go) | Industry analysis | 8c | High | No | Yes | No |

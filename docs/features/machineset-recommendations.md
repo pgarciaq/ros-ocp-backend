@@ -1,6 +1,6 @@
 # MachineSet Recommendations (Tier 2) — Implementation Spec
 
-**Status:** Tier 1 aggregation **shipped**; Tier 2a engine **ready to implement**; Tier 2b **blocked on catalog**  
+**Status:** Tier 1 aggregation **shipped**; Tier 2a customer demand **confirmed**, design **aligned**, implementation **blocked on KMO MachineSet snapshot/RBAC, collection state, coverage reporting, and retry-safe history identity**; Tier 2b **blocked on catalog**<br>
 **Public doc:** [docs-site/planned-features/machineset-recommendations.md](../../docs-site/planned-features/machineset-recommendations.md)  
 **Requirements:** [REQ-8c.4–8c.6](../archive/requirements.md)  
 **Roadmap:** [machineset-recommendations.md](../../docs-site/planned-features/machineset-recommendations.md), [autoscaler-optimization.md](../../docs-site/planned-features/autoscaler-optimization.md)
@@ -9,10 +9,12 @@
 
 ## Summary
 
-Tier 2 adds a **`machineset` engine plugin** (Phase 3 Optimize) that persists
+Tier 2 adds advisory **MachineSet node-count recommendations** in a
+**`machineset` engine plugin** (Phase 3 Optimize), persists
 **`machineset_recommendations`**, exposes **`GET .../machinesets/{name}`** with
 history, and replaces runtime `GROUP BY` aggregation on the list endpoint.
-Delivery is split into **Tier 2a** (no cloud catalog — implementable now) and
+Delivery is split into **Tier 2a** (no cloud catalog; requires the KMO
+MachineSet snapshot/RBAC dependency) and
 **Tier 2b** (catalog-driven instance family/size and cost comparison).
 
 **Shipped today:** [`GetMachineSetRecommendations`](../../internal/api/handlers_machinesets.go)
@@ -35,15 +37,15 @@ aggregates `node_recommendations` by `machineset_name` — not the Tier 2 engine
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    Tier 2a — machineset plugin (Phase 3)                │
 │                                                                         │
-│  Input: node_recommendations WHERE machineset_name IS NOT NULL          │
+│  Input: MachineSet API snapshot + complete node recommendations         │
 │         + daily_node_digests (capacity, utilization)                    │
 │                                                                         │
 │  Engine:                                                                │
 │    1. Group by (org_id, cluster_uuid, machineset_name, term, engine)  │
-│    2. Replica count engine (sum node_count_reduction)                 │
+│    2. Node-count engine (sum node_count_reduction)                     │
 │    3. Confidence = min(member confidence_level)                       │
 │    4. Heterogeneous fleet detection (capacity variance > 10%)           │
-│    5. Notifications 77–79                                             │
+│    5. Planned notification candidates 88–90                           │
 │                                                                         │
 │  Output: UPSERT machineset_recommendations                              │
 │          INSERT machineset_recommendation_history (on change)           │
@@ -68,7 +70,7 @@ aggregates `node_recommendations` by `machineset_name` — not the Tier 2 engine
 
 | Component | Tier | Package / file (planned) |
 |-----------|------|--------------------------|
-| Replica count engine | 2a | `internal/plugins/machineset/replica.go` |
+| Node-count engine | 2a | `internal/plugins/machineset/replica.go` |
 | Heterogeneous detection | 2a | `internal/plugins/machineset/heterogeneous.go` |
 | Plugin orchestration | 2a | `internal/plugins/machineset/plugin.go` |
 | Persistence | 2a | `internal/engine/machineset_rec.go` |
@@ -82,9 +84,62 @@ aggregates `node_recommendations` by `machineset_name` — not the Tier 2 engine
 
 ## Tier 2a — No Catalog (Implementation Spec)
 
-Tier 2a can ship independently. It reuses Tier 1 fleet consolidation output
+Tier 2a can ship independently of Tier 2b. It reuses Tier 1 fleet consolidation output
 (`node_count_reduction` from [`applyInstanceTypeConsolidation`](../../librobne/node/recommend.go))
 and does **not** require `cloud_instance_catalog`.
+
+### MachineSet source and readiness gate
+
+MachineSet recommendations require a timestamped snapshot of the
+`machine.openshift.io/v1beta1` MachineSet API, collected by
+`koku-metrics-operator`. Persist its namespace/name/UID and
+`machineset_snapshot_at` with each recommendation/history snapshot. Use
+`.spec.replicas` as the desired node-count
+baseline; keep `.status.replicas` and `.status.availableReplicas` as distinct
+observed/availability signals. Include MachineSet namespace, name, UID, and
+collection time. The standard MAO status metrics may be used for history only
+after their availability is verified; do not assume a standard
+`machine_api_machine_set_spec_replicas` Prometheus series exists.
+
+The KMO data path must add read-only `list` permission only for `machines`
+and `machinesets` in `machine.openshift.io` in both its RBAC source and OLM
+permissions. Scope API list calls to `openshift-machine-api`; the current
+supported IPI scope uses that namespace. The collector uses list operations;
+do not grant `get` unless an implementation adds individual-object reads. If
+OLM cannot express a namespace-scoped binding, resolve and review the
+least-privilege alternative before implementation. The existing best-effort
+Machine-to-MachineSet lookup does not have the list permission in checked-in
+manifests and can otherwise return an empty mapping.
+
+The KMO report must carry a **cluster-level collection state** even when there
+are no MachineSet rows: `available`, `not_applicable` (API/resource absent), or
+`incomplete` (read/authorization/coverage failure). Do not treat an incomplete
+collection as a successful empty snapshot. Serialize an allowlisted projection
+only: MachineSet identity/counts/timestamp and Machine node reference/owner
+mapping. Do not export full Machine or MachineSet `providerSpec`, user-data, or
+credential references to ROS.
+
+The list API must expose per-cluster collection state in list metadata, keyed
+by `cluster_uuid`, so an empty `data` array distinguishes no eligible
+recommendation from unsupported/incomplete collection. An unsupported or
+incomplete cluster must not suppress valid MachineSet rows from other clusters.
+Pin the exact JSON property in OpenAPI and API contract tests before
+implementation.
+
+Emit an actionable target only when desired count, observed Machine count,
+available count, and distinct member-node inventory agree, and every member
+has a fresh eligible node recommendation for the requested term/engine. If
+the Machine API is absent, mark MachineSet recommendations not applicable;
+if reads fail or counts/coverage disagree, mark the MachineSet data
+unavailable/incomplete and withhold its target. Node-level recommendations
+continue. Never infer membership from `instance_type` or treat missing rows
+as a successful zero-reduction result.
+
+The current documented support scope remains IPI until other topologies are
+compatibility-tested. UPI is an installation method, not proof that the
+Machine API is present or absent. Bare Metal Operator (`BareMetalHost`)
+inventory can describe physical-host readiness and hardware, but it is not a
+fallback source for MachineSet membership or desired count.
 
 ### 1. Replica count engine
 
@@ -94,6 +149,7 @@ and does **not** require `cloud_instance_catalog`.
 |--------|-------------|
 | `node_recommendations` | `node`, `machineset_name`, `cluster_uuid`, `term`, `engine`, `node_count_reduction`, `cpu_util_p95`, `mem_util_p95`, `confidence_level`, `data_days`, `estimated_savings_cents`, `classification`, `notification_codes`, `instance_type` |
 | `daily_node_digests` | `node_capacity_cpu_cores`, `node_capacity_memory_bytes` (latest row per node in term window) |
+| MachineSet API snapshot | namespace/name/UID, `.spec.replicas`, `.status.replicas`, `.status.availableReplicas`, collection timestamp |
 
 Scope: all nodes where `machineset_name IS NOT NULL AND BTRIM(machineset_name) <> ''`
 for a given `(org_id, cluster_uuid, term, engine='cost')`.
@@ -102,31 +158,47 @@ for a given `(org_id, cluster_uuid, term, engine='cost')`.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `current_replicas` | `int` | Count of distinct member nodes |
-| `recommended_replicas` | `int` | Target replica count after consolidation |
-| `excess_nodes` | `int` | `current_replicas - recommended_replicas` (≥ 0) |
+| `current_node_count` | `int` | Distinct current Nodes linked to the MachineSet; must agree with the stable API snapshot |
+| `desired_node_count` | `int` | MachineSet `.spec.replicas`, the currently configured desired Machine/node count |
+| `observed_machine_count` | `int` | MachineSet `.status.replicas`; counts observed Machine objects |
+| `available_machine_count` | `int` | MachineSet `.status.availableReplicas`; counts available Machine objects |
+| `recommended_node_count` | `int` | Recommended target for MachineSet `.spec.replicas` |
+| `excess_nodes` | `int` | `current_node_count - recommended_node_count` (≥ 0) |
 
 #### Algorithm
 
 ```
-current_replicas = COUNT(DISTINCT node) for machineset_name
+desired_node_count = MachineSet.spec.replicas
+observed_machine_count = MachineSet.status.replicas
+available_machine_count = MachineSet.status.availableReplicas
+current_node_count = COUNT(DISTINCT member Node linked from Machines)
+
+if desired_node_count != observed_machine_count
+   or observed_machine_count != available_machine_count
+   or available_machine_count != current_node_count
+   or any member lacks fresh eligible node recommendation:
+    withhold target; mark MachineSet data unavailable/incomplete
+
 excess           = SUM(node_count_reduction) across member nodes
-                   -- only nodes with node_count_reduction > 0 contribute
-recommended_raw  = current_replicas - excess
-recommended_replicas = MAX(recommended_raw, ROS_MIN_MACHINESET_REPLICAS)
+                    -- only nodes with node_count_reduction > 0 contribute
+recommended_raw  = current_node_count - excess
+recommended_node_count = MAX(recommended_raw, ROS_MIN_MACHINESET_REPLICAS)
 ```
 
 **Floor:** `ROS_MIN_MACHINESET_REPLICAS` defaults to **1** for Tier 2a
-(never recommend 0 replicas). Operators may raise this via config for HA
-(e.g. `2` for multi-AZ pools). The engine MUST NOT emit `recommended_replicas = 0`.
+(never recommend zero nodes). This floor does **not** guarantee HA; availability
+depends on topology and workloads. The engine MUST NOT emit
+`recommended_node_count = 0`.
 
-**No-change case:** When `excess = 0` (all member nodes have
+**No-reduction case:** When `excess = 0` (all member nodes have
 `node_count_reduction = 0` — healthy/utilized, or consolidation blocked by
-pod headroom gate), then `recommended_replicas = current_replicas`. Emit
-notification **79** (`MACHINESET_OPTIMAL`).
+pod headroom gate), then `recommended_node_count = current_node_count`. Emit
+planned notification **90** (`MACHINESET_NO_REDUCTION_RECOMMENDED`) only when
+the data gate passes. This means no reduction is recommended under the current
+model; it does not claim the MachineSet is globally “optimal.”
 
-**Scale-down case:** When `recommended_replicas < current_replicas`, emit
-notification **78** (`MACHINESET_SCALE_DOWN_RECOMMENDED`).
+**Scale-down case:** When `recommended_node_count < current_node_count`, emit
+planned notification **89** (`MACHINESET_SCALE_DOWN_RECOMMENDED`).
 
 #### Relationship to Tier 1 list API (today)
 
@@ -139,29 +211,45 @@ COALESCE(SUM(nr.node_count_reduction), 0) AS excess_nodes,
 -- recommended_node_count = current_node_count - excess_nodes (client-side)
 ```
 
-Tier 2a **persists** the same formula so list/detail/history do not recompute
-from `node_recommendations` on every request.
+The shipped Tier 1 `current_node_count` is only the number of nodes with
+recommendation rows, not authoritative MachineSet membership. Tier 2a
+deliberately changes that pre-release field's meaning to verified linked Node
+inventory and adds distinct desired/observed/available counts. Update IQE and
+other consumers before public launch. Tier 2a persists the same consolidation
+math only after validating the API snapshot and complete member coverage;
+list/detail/history do not recompute it from incomplete rows.
 
 #### Pseudocode (Go)
 
 ```go
-func computeReplicaRecommendation(members []NodeRec) ReplicaResult {
-    current := len(members)
+func computeNodeCountRecommendation(snapshot MachineSetSnapshot, members []NodeRec) NodeCountResult {
+    currentNodes := len(members)
+    // Withhold the target unless API counts and the linked member-node inventory
+    // agree and every member has a fresh eligible node recommendation.
+    if snapshot.DesiredNodeCount != snapshot.ObservedMachineCount ||
+        snapshot.ObservedMachineCount != snapshot.AvailableMachineCount ||
+       snapshot.AvailableMachineCount != currentNodes || !allMembersCovered(members) {
+        return NodeCountResult{DataStatus: "incomplete"}
+    }
     excess := 0
     for _, n := range members {
         if n.NodeCountReduction > 0 {
             excess += n.NodeCountReduction
         }
     }
-    recommended := current - excess
-    minReplicas := cfg.MinMachineSetReplicas // default 1
-    if recommended < minReplicas {
-        recommended = minReplicas
+    recommendedNodes := currentNodes - excess
+    minNodes := cfg.MinMachineSetReplicas // default 1; this is not an HA guarantee
+    if recommendedNodes < minNodes {
+        recommendedNodes = minNodes
     }
-    return ReplicaResult{
-        CurrentReplicas:     current,
-        RecommendedReplicas: recommended,
-        ExcessNodes:         current - recommended,
+    return NodeCountResult{
+        DataStatus:           "complete",
+        CurrentNodeCount:     currentNodes,
+        DesiredNodeCount:     snapshot.DesiredNodeCount,
+        ObservedMachineCount: snapshot.ObservedMachineCount,
+        AvailableMachineCount: snapshot.AvailableMachineCount,
+        RecommendedNodeCount: recommendedNodes,
+        ExcessNodes:          currentNodes - recommendedNodes,
     }
 }
 ```
@@ -187,18 +275,26 @@ Tier 1; the sum matches the list API today.
 
 ### 2. Database schema — `machineset_recommendations`
 
-Migration: `000XXX_machineset_recommendations.up.sql`
+Migration: assign the next migration number when implementation begins; no
+MachineSet recommendation migration exists yet.
 
 ```sql
 CREATE TABLE IF NOT EXISTS machineset_recommendations (
     id                          BIGSERIAL PRIMARY KEY,
     org_id                      TEXT NOT NULL,
     cluster_uuid                UUID NOT NULL,
+    machineset_namespace        TEXT NOT NULL,
     machineset_name             TEXT NOT NULL,
+    machineset_uid              TEXT NOT NULL,
+    machineset_snapshot_at      TIMESTAMPTZ NOT NULL,
+    recommendation_fingerprint TEXT NOT NULL,
     term                        TEXT NOT NULL DEFAULT 'medium_term',
     engine                      TEXT NOT NULL DEFAULT 'cost',
-    current_replicas            INT NOT NULL,
-    recommended_replicas        INT NOT NULL,
+    current_node_count           INT NOT NULL,
+    desired_node_count           INT NOT NULL,
+    observed_machine_count       INT NOT NULL,
+    available_machine_count      INT NOT NULL,
+    recommended_node_count      INT NOT NULL,
     instance_type               TEXT,          -- from node labels; NULL for bare-metal
     estimated_savings_cents     BIGINT NOT NULL DEFAULT 0,
     currency                    TEXT NOT NULL DEFAULT 'USD',
@@ -214,7 +310,11 @@ CREATE TABLE IF NOT EXISTS machineset_recommendations (
     updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT machineset_recommendations_unique
-        UNIQUE (org_id, cluster_uuid, machineset_name, term, engine)
+        UNIQUE (org_id, cluster_uuid, machineset_namespace, machineset_name, term, engine),
+    CONSTRAINT machineset_recommendation_counts_nonnegative
+        CHECK (current_node_count >= 0 AND desired_node_count >= 0 AND
+               observed_machine_count >= 0 AND available_machine_count >= 0 AND
+               recommended_node_count >= 1)
 );
 
 CREATE INDEX IF NOT EXISTS idx_machineset_recs_org_cluster
@@ -224,7 +324,7 @@ CREATE INDEX IF NOT EXISTS idx_machineset_recs_savings
     ON machineset_recommendations (org_id, estimated_savings_cents DESC);
 
 CREATE INDEX IF NOT EXISTS idx_machineset_recs_name
-    ON machineset_recommendations (org_id, machineset_name);
+    ON machineset_recommendations (org_id, machineset_namespace, machineset_name);
 ```
 
 | Column | Population rule |
@@ -234,6 +334,13 @@ CREATE INDEX IF NOT EXISTS idx_machineset_recs_name
 | `member_nodes` | Sorted `array_agg(DISTINCT node)` |
 | `last_reported` | `MAX(updated_at)` from member `node_recommendations` |
 | `term` / `engine` | Same dimensions as `node_recommendations`; one row per term+engine |
+| `machineset_snapshot_at` | Source timestamp of the MachineSet API snapshot used by the recommendation |
+| `machineset_uid` | Kubernetes UID; detects deletion/recreation under the same name |
+| `recommendation_fingerprint` | SHA-256 hex of canonical result fields that trigger history changes; excludes recording timestamps |
+
+No foreign key points from these recommendation snapshots to live Machine or
+MachineSet objects: upstream objects can be deleted while recommendation
+history remains. Tenant/cluster scoping is enforced in the service query.
 
 **Tier 2b columns (add in separate migration when catalog ships):**
 
@@ -255,15 +362,23 @@ Phase 3 Optimize group.
 
 ```sql
 INSERT INTO machineset_recommendations (...)
-ON CONFLICT (org_id, cluster_uuid, machineset_name, term, engine)
+ON CONFLICT (org_id, cluster_uuid, machineset_namespace, machineset_name, term, engine)
 DO UPDATE SET
-    current_replicas = EXCLUDED.current_replicas,
-    recommended_replicas = EXCLUDED.recommended_replicas,
+    machineset_uid = EXCLUDED.machineset_uid,
+    machineset_snapshot_at = EXCLUDED.machineset_snapshot_at,
+    recommendation_fingerprint = EXCLUDED.recommendation_fingerprint,
+    current_node_count = EXCLUDED.current_node_count,
+    desired_node_count = EXCLUDED.desired_node_count,
+    observed_machine_count = EXCLUDED.observed_machine_count,
+    available_machine_count = EXCLUDED.available_machine_count,
+    recommended_node_count = EXCLUDED.recommended_node_count,
     ...
     updated_at = NOW();
 ```
 
-Delete stale rows: MachineSets with zero member nodes after recalc.
+Delete stale rows only after a complete successful snapshot for that cluster
+confirms a MachineSet has zero members. Never sweep rows after an unsupported,
+failed, stale, or incomplete collection.
 
 ---
 
@@ -294,12 +409,17 @@ Mirror node detail (`GET .../nodes/{node}`) patterns:
 ```json
 {
   "machineset_name": "worker-us-east-1a",
+  "machineset_namespace": "openshift-machine-api",
+  "machineset_uid": "5b1a8c22-0837-4b61-82b0-ef6d3b842c79",
   "cluster_uuid": "02059694-68ab-4d58-8809-de1e91f1d0e5",
   "cluster_alias": "production",
   "term": "medium_term",
   "engine": "cost",
-  "current_replicas": 5,
-  "recommended_replicas": 3,
+  "current_node_count": 5,
+  "desired_node_count": 5,
+  "observed_machine_count": 5,
+  "available_machine_count": 5,
+  "recommended_node_count": 3,
   "excess_nodes": 2,
   "instance_type": "m5.4xlarge",
   "estimated_monthly_savings": { "value": "1234.56", "unit": "USD" },
@@ -310,8 +430,9 @@ Mirror node detail (`GET .../nodes/{node}`) patterns:
   "avg_memory_utilization_p95": 0.41,
   "data_days": 18,
   "last_reported": "2026-05-28T14:00:00Z",
+  "machineset_snapshot_at": "2026-05-28T14:00:00Z",
   "notifications": {
-    "78": { "severity": "INFO", "description": "..." }
+      "89": { "severity": "INFO", "description": "..." }
   },
   "member_nodes": [
     {
@@ -327,8 +448,14 @@ Mirror node detail (`GET .../nodes/{node}`) patterns:
   "history": [
     {
       "recorded_at": "2026-05-21T06:00:00Z",
-      "current_replicas": 5,
-      "recommended_replicas": 4,
+      "machineset_namespace": "openshift-machine-api",
+      "machineset_uid": "5b1a8c22-0837-4b61-82b0-ef6d3b842c79",
+      "machineset_snapshot_at": "2026-05-21T06:00:00Z",
+      "current_node_count": 5,
+      "desired_node_count": 5,
+      "observed_machine_count": 5,
+      "available_machine_count": 5,
+      "recommended_node_count": 4,
       "estimated_savings_cents": 95000
     }
   ]
@@ -352,34 +479,63 @@ Detail endpoint: **no pagination** (single resource).
 Follow [`vm_recommendation_history`](../../migrations/000099_vm_recommendation_history.up.sql)
 and `quota_recommendation_history` patterns.
 
+Create this table in the same numbered migration as
+`machineset_recommendations`; do not leave a placeholder migration number.
+
 ```sql
 CREATE TABLE IF NOT EXISTS machineset_recommendation_history (
     id                      BIGSERIAL PRIMARY KEY,
     org_id                  TEXT NOT NULL,
     cluster_uuid            UUID NOT NULL,
+    machineset_namespace    TEXT NOT NULL,
     machineset_name         TEXT NOT NULL,
+    machineset_uid          TEXT NOT NULL,
     term                    TEXT NOT NULL,
     engine                  TEXT NOT NULL,
-    current_replicas        INT NOT NULL,
-    recommended_replicas    INT NOT NULL,
+    current_node_count      INT NOT NULL,
+    desired_node_count      INT NOT NULL,
+    observed_machine_count  INT NOT NULL,
+    available_machine_count INT NOT NULL,
+    recommended_node_count  INT NOT NULL,
+    machineset_snapshot_at  TIMESTAMPTZ NOT NULL,
+    recommendation_fingerprint TEXT NOT NULL,
     estimated_savings_cents BIGINT NOT NULL DEFAULT 0,
     heterogeneous           BOOLEAN NOT NULL DEFAULT false,
     notification_codes      SMALLINT[] NOT NULL DEFAULT '{}',
-    recorded_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    recorded_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT machineset_history_counts_nonnegative
+        CHECK (current_node_count >= 0 AND desired_node_count >= 0 AND
+               observed_machine_count >= 0 AND available_machine_count >= 0 AND
+               recommended_node_count >= 1)
 );
 
 CREATE INDEX IF NOT EXISTS idx_machineset_rec_history_lookup
     ON machineset_recommendation_history (
-        org_id, cluster_uuid, machineset_name, term, engine, recorded_at DESC
+        org_id, cluster_uuid, machineset_namespace, machineset_name, term, engine, recorded_at DESC
+    );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_machineset_history_idempotency
+    ON machineset_recommendation_history (
+        org_id, cluster_uuid, machineset_namespace, machineset_name, term, engine,
+        machineset_uid, machineset_snapshot_at, recommendation_fingerprint
     );
 ```
 
 #### Write policy
 
+History insertion must be retry-safe. `recorded_at DEFAULT NOW()` alone is not
+an idempotency key. Use the source snapshot identity and a deterministic
+recommendation fingerprint so replaying the same input does not duplicate a
+history point, while a changed recommendation can be recorded. Pin this with
+an integration test before the migration is numbered.
+
 Insert a history row when **any** of these change vs. the previous snapshot:
 
-- `recommended_replicas`
-- `current_replicas`
+- `recommended_node_count`
+- `current_node_count`
+- `desired_node_count`
+- `observed_machine_count`
+- `available_machine_count`
 - `estimated_savings_cents` (by more than 5% relative, to avoid noise)
 - `heterogeneous` flag
 - `notification_codes` set (order-insensitive compare)
@@ -433,7 +589,7 @@ heterogeneous = (cpu_variance_pct > THRESHOLD) OR (mem_variance_pct > THRESHOLD)
 When `heterogeneous = true`:
 
 - Set column `heterogeneous = true`
-- Append notification **77** (`MACHINESET_HETEROGENEOUS_FLEET`)
+- Append planned notification candidate **88** (`MACHINESET_HETEROGENEOUS_CAPACITY`)
 - Do **not** block replica recommendation; warn only
 
 Edge cases:
@@ -446,28 +602,30 @@ Edge cases:
 
 ---
 
-### 7. Notification codes (Tier 2a)
+### 7. Notification codes (Tier 2a — planned candidates)
 
-Register in migration + [`internal/notifications/names.go`](../../internal/notifications/names.go)
-+ [`notification-codes.md`](../architecture/notification-codes.md).
+Codes 88–90 are candidate IDs, not registered definitions. Before implementation,
+verify uniqueness across backend, UI, IQE, operator, and API-cheatsheet consumers;
+then add definitions/migration and update those consumers together.
 
 | Code | Constant | Severity | When |
 |------|----------|----------|------|
 | **76** | `NODE_FLEET_CONSOLIDATION` | INFO | **Node** rows only (Tier 1, shipped). Not duplicated on MachineSet rows. |
-| **77** | `MACHINESET_HETEROGENEOUS_FLEET` | WARNING | Member nodes differ in CPU or memory capacity by > 10% |
-| **78** | `MACHINESET_SCALE_DOWN_RECOMMENDED` | INFO | `recommended_replicas < current_replicas` |
-| **79** | `MACHINESET_OPTIMAL` | INFO | `recommended_replicas = current_replicas` (no change) |
+| **88** | `MACHINESET_HETEROGENEOUS_CAPACITY` | WARNING | Member nodes differ in CPU or memory capacity by > 10% |
+| **89** | `MACHINESET_SCALE_DOWN_RECOMMENDED` | INFO | `recommended_node_count < current_node_count` |
+| **90** | `MACHINESET_NO_REDUCTION_RECOMMENDED` | INFO | `recommended_node_count = current_node_count` with complete eligible data |
 
-Codes **4** (PDB caveat), **23**, **24** (catalog) remain Tier 2b or
-notification-only additions.
+Code **4** (PDB caveat) remains a separate notification-only decision; PDB and
+placement simulation are not Tier 2a gates. Codes **23** and **24** remain
+catalog-related Tier 2b notifications.
 
 #### `recommendation_type` filter mapping
 
 | Filter value | SQL predicate |
 |--------------|---------------|
-| `scale_down` | `recommended_replicas < current_replicas` |
-| `optimal` | `recommended_replicas = current_replicas` |
-| `heterogeneous_warning` | `heterogeneous = true` OR `77 = ANY(notification_codes)` |
+| `scale_down` | `recommended_node_count < current_node_count` |
+| `no_reduction` | `recommended_node_count = current_node_count` |
+| `heterogeneous_warning` | `heterogeneous = true` OR `88 = ANY(notification_codes)` |
 
 ---
 
@@ -483,8 +641,12 @@ Already implemented in [`handlers_machineset_pagination.go`](../../internal/api/
 
 **Tier 2a migration:** switch data source from runtime `GROUP BY` to
 `machineset_recommendations` table. Keep identical response JSON shape for
-backward compatibility (field rename: `current_node_count` → `current_replicas`
-is a **breaking change** — keep JSON aliases during transition or version bump).
+the pre-release API. Customer-facing count fields use node terminology:
+`current_node_count`, `desired_node_count`, and `recommended_node_count`.
+Keep `observed_machine_count` and `available_machine_count` explicitly named
+as Machine status counts. The desired field represents the MachineSet
+`.spec.replicas` value, a desired Machine/node count rather than
+application-pod replicas.
 
 Detail endpoint: no pagination.
 
@@ -504,7 +666,7 @@ changes required for Tier 2a beyond reading from the persisted table.
 |--------|-------|-------|
 | Cluster | `filter[cluster]` or `cluster_uuid` | Exact UUID |
 | MachineSet name | `filter[machineset_name]` | Exact or `*` wildcard → `ILIKE` |
-| Recommendation type | `filter[recommendation_type]` | `scale_down`, `optimal`, `heterogeneous_warning` |
+| Recommendation type | `filter[recommendation_type]` | `scale_down`, `no_reduction`, `heterogeneous_warning` |
 | Term | `filter[term]` or `term` | `short_term`, `medium_term`, `long_term` |
 
 RBAC: same cluster/node scoping as today in `handlers_machinesets.go`.
@@ -519,8 +681,8 @@ Query param: `order_by` (comma-separated; prefix `-` for DESC).
 |-------|-------------------|------------|
 | `estimated_savings` | **DESC** (default) | `estimated_savings_cents` |
 | `machineset_name` | ASC | `machineset_name` |
-| `recommended_replicas` | ASC | `recommended_replicas` |
-| `current_replicas` | DESC | `current_replicas` |
+| `recommended_node_count` | ASC | `recommended_node_count` |
+| `current_node_count` | DESC | `current_node_count` |
 
 Keyset cursor must encode the active sort column when `order_by` is not the
 default (extend `MachineSetCursor`).
@@ -531,26 +693,28 @@ default (extend `MachineSetCursor`).
 
 | # | Criterion | Verification |
 |---|-----------|--------------|
-| AC-1 | Replica formula matches Tier 1 aggregation | IQE: same `recommended_replicas` as `current - excess` for fixture cluster |
-| AC-2 | Floor never below `ROS_MIN_MACHINESET_REPLICAS` | Unit test: excess > current still returns ≥ 1 |
-| AC-3 | `machineset_recommendations` upserted on recalc | Integration: row exists after `RecommendNodes` batch |
-| AC-4 | Detail returns member nodes + 30-day history | API test: `GET .../machinesets/{name}?cluster_uuid=...` |
-| AC-5 | Confidence = min(member) | Unit test with mixed confidence members |
-| AC-6 | Heterogeneous detection at >10% variance | Unit test: mixed `m5.2xlarge` + `m5.4xlarge` capacities |
-| AC-7 | Notifications 77/78/79 emitted correctly | Engine test matrix |
-| AC-8 | List filters `recommendation_type`, `order_by` | API integration tests |
-| AC-9 | CSV export unchanged | Existing CSV test passes against table-backed list |
-| AC-10 | Nodes without `machineset_name` excluded | No MachineSet row for bare-metal nodes |
+| AC-1 | Node-count formula matches Tier 1 consolidation math when counts are stable and coverage is complete | IQE: same `recommended_node_count` as `current_node_count - excess` for fixture cluster |
+| AC-2 | No target is emitted when desired, observed, available, member-node, or recommendation-coverage counts disagree | API/ingestion tests for mismatch, stale, and missing-member cases |
+| AC-3 | Floor never below `ROS_MIN_MACHINESET_REPLICAS` (default 1); this does not guarantee HA | Unit test: excess > current still returns ≥ 1 |
+| AC-4 | `machineset_recommendations` upserted on recalc | Integration: row exists after `RecommendNodes` batch |
+| AC-5 | History writes are retry-safe by source snapshot identity and recommendation fingerprint | Integration: replay same input without duplicate; changed output fingerprint records the new recommendation |
+| AC-6 | Detail returns member nodes + 30-day history | API test: `GET .../machinesets/{name}?cluster_uuid=...` |
+| AC-7 | Confidence = min(member) | Unit test with mixed confidence members |
+| AC-8 | Heterogeneous detection at >10% variance | Unit test: mixed capacities |
+| AC-9 | Candidate notifications 88/89/90 emitted after uniqueness is verified | Engine/catalog test matrix |
+| AC-10 | List filters `recommendation_type`, `order_by` | API integration tests |
+| AC-11 | CSV export unchanged | Existing CSV test passes against table-backed list |
+| AC-12 | Machine API absent vs. RBAC/read failure are distinguishable; neither yields a target | KMO/ingestion contract tests |
 
 ---
 
 ### Tier 2a — Implementation checklist
 
 1. Migration: `machineset_recommendations` + `machineset_recommendation_history`
-2. Migration: notification codes 77, 78, 79
+2. Migration: register planned notification codes 88, 89, 90 after cross-consumer uniqueness verification
 3. `internal/plugins/machineset/` — Phase 3 plugin
 4. Replica + confidence + heterogeneous logic
-5. History writer (on change detection)
+5. Retry-safe history writer keyed by source snapshot identity and recommendation fingerprint
 6. Wire into recalc batch after `RecommendNodes`
 7. `GET .../machinesets/{name}` handler + OpenAPI
 8. Switch list API to table-backed rows
@@ -565,7 +729,7 @@ default (extend `MachineSetCursor`).
 ## Tier 2b — Needs Catalog (Implementation Spec)
 
 Tier 2b adds instance type and family recommendations on top of Tier 2a
-replica guidance. **Blocked on** `cloud_instance_catalog` (REQ-8c.6) and
+node-count guidance. **Blocked on** `cloud_instance_catalog` (REQ-8c.6) and
 `instance-type` plugin.
 
 ### 1. Instance type recommendation
@@ -574,7 +738,7 @@ replica guidance. **Blocked on** `cloud_instance_catalog` (REQ-8c.6) and
 
 | Source | Fields |
 |--------|--------|
-| `machineset_recommendations` (Tier 2a) | `recommended_replicas`, member utilization |
+| `machineset_recommendations` (Tier 2a) | `recommended_node_count`, member utilization |
 | `daily_node_digests` | Per-node P95 CPU/memory **usage** (not allocatable) |
 | `cloud_instance_catalog` | `vcpus`, `memory_mib`, `family`, `category`, pricing |
 | Cluster source | `provider` (AWS/Azure/GCP), `region` |
@@ -641,8 +805,8 @@ Family switch only when catalog pricing shows savings ≥ hysteresis threshold.
 ### 3. Cost comparison
 
 ```
-current_cost_monthly  = current_replicas × instance_hourly_rate(current_type)  × 730
-recommended_cost_monthly = recommended_replicas × instance_hourly_rate(recommended_type) × 730
+current_cost_monthly  = current_node_count × instance_hourly_rate(current_type)  × 730
+recommended_cost_monthly = recommended_node_count × instance_hourly_rate(recommended_type) × 730
 savings_monthly = current_cost_monthly - recommended_cost_monthly
 estimated_savings_cents = ROUND(savings_monthly × 100)
 ```
@@ -752,8 +916,8 @@ node_recommendations ─►│ instance-type   │────►│ machineset 
 ## What Tier 2 does **not** include
 
 - **Tier 3 MachineAutoscaler** min/max tuning (REQ-8c.7)
-- **PDB/scheduling simulation** — changes replica math; separate engine work
-- **Bare metal / SNO / NULL `machineset_name`** — Tier 1 only
+- **PDB/affinity placement simulation** — separate research issues #709 and #710; not a Tier 2a prerequisite
+- **Clusters without a usable Machine API** — no MachineSet target; node-level recommendations remain available. BMO inventory is not a fallback.
 - **Automated apply** — advisory; see [hpa-vpa-deployment-modes.md](../architecture/hpa-vpa-deployment-modes.md)
 
 ---
