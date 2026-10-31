@@ -193,6 +193,23 @@ Mismatch escape hatch (arm64 node, or quay unreachable): build locally with
 `podman build -t ros-ocp-backend:$TAG -f Dockerfile .` after verifying
 `uname -m` against node arch, then push as above with a unique tag.
 
+## Metrics operator is the data source
+
+ROS on-prem rows come from the metrics operator (namespace
+`koku-metrics-operator`), not from this backend, so an empty recommendation table
+is usually an operator problem. Empty status on `costmanagementmetricscfg`, or
+`forbidden` in the operator log, means nothing was uploaded and the engine had
+nothing to compute.
+
+```bash
+cd ~/dev/koku/koku-metrics-operator
+./hack/verify-install.sh -n koku-metrics-operator -c costmanagementmetricscfg
+```
+
+OLM reinstall for a branch build (index image, same-version CSV teardown): the
+cluster's `ACCESS.md`, section "Metrics operator". The customer-facing version of
+this precondition is in `docs-site/testing/validating-native-engine.md`.
+
 ## Access Details
 
 Full cluster access information is in your local `ACCESS.md` file
