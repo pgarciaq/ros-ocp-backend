@@ -47,7 +47,7 @@ func TestRunExplain_OneDayFixture(t *testing.T) {
 	var buf bytes.Buffer
 	err := runExplain(&buf, explainFlags{
 		commonFlags: commonFlags{
-			input:        csvPath,
+			inputs:       []string{csvPath},
 			noUserConfig: true,
 			now:          "2026-08-01T02:00:00Z",
 		},
@@ -85,7 +85,7 @@ func TestRunExplain_NoMatch(t *testing.T) {
 	t.Chdir(cwd)
 
 	err := runExplain(&bytes.Buffer{}, explainFlags{
-		commonFlags: commonFlags{input: csvPath, noUserConfig: true, now: "2026-08-01T02:00:00Z"},
+		commonFlags: commonFlags{inputs: []string{csvPath}, noUserConfig: true, now: "2026-08-01T02:00:00Z"},
 		namespace:   "missing",
 		workload:    "api",
 		container:   "api",
@@ -118,7 +118,7 @@ func TestRunExplain_RejectsRecommendEnvelope(t *testing.T) {
 	dir := t.TempDir()
 	path := writeJSONFile(t, dir, "env.json", baseEnvelope())
 	err := runExplain(&bytes.Buffer{}, explainFlags{
-		commonFlags: commonFlags{input: path, noUserConfig: true},
+		commonFlags: commonFlags{inputs: []string{path}, noUserConfig: true},
 		namespace:   "app",
 		workload:    "api",
 		container:   "api",
@@ -153,7 +153,7 @@ func TestRunExplain_TwoPluginsError(t *testing.T) {
 
 	err := runExplain(&bytes.Buffer{}, explainFlags{
 		commonFlags: commonFlags{
-			input:        csvPath,
+			inputs:       []string{csvPath},
 			plugins:      "namespace,node",
 			noUserConfig: true,
 			now:          "2026-08-01T02:00:00Z",
@@ -177,7 +177,7 @@ func TestRunExplain_YAMLPluginsDoesNotSelectType(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := runExplain(&buf, explainFlags{
-		commonFlags: commonFlags{input: csvPath, noUserConfig: true, now: "2026-08-01T02:00:00Z"},
+		commonFlags: commonFlags{inputs: []string{csvPath}, noUserConfig: true, now: "2026-08-01T02:00:00Z"},
 		namespace:   "app",
 		workload:    "api",
 		container:   "api",
@@ -213,7 +213,7 @@ func TestRunExplain_BusinessHoursScheduleRequiresYAML(t *testing.T) {
 	t.Chdir(cwd)
 
 	err := runExplain(&bytes.Buffer{}, explainFlags{
-		commonFlags: commonFlags{input: csvPath, noUserConfig: true, now: "2026-08-01T02:00:00Z"},
+		commonFlags: commonFlags{inputs: []string{csvPath}, noUserConfig: true, now: "2026-08-01T02:00:00Z"},
 		namespace:   "app",
 		workload:    "api",
 		container:   "api",
@@ -235,7 +235,7 @@ func TestRunExplain_BusinessHoursWeekendNoMatch(t *testing.T) {
 	t.Chdir(cwd)
 
 	err := runExplain(&bytes.Buffer{}, explainFlags{
-		commonFlags: commonFlags{input: csvPath, noUserConfig: true, now: "2026-08-01T02:00:00Z"},
+		commonFlags: commonFlags{inputs: []string{csvPath}, noUserConfig: true, now: "2026-08-01T02:00:00Z"},
 		namespace:   "app",
 		workload:    "api",
 		container:   "api",
@@ -259,7 +259,7 @@ func TestRunExplain_BusinessHoursWeekday(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := runExplain(&buf, explainFlags{
-		commonFlags: commonFlags{input: csvPath, noUserConfig: true, now: "2026-08-04T00:00:00Z"},
+		commonFlags: commonFlags{inputs: []string{csvPath}, noUserConfig: true, now: "2026-08-04T00:00:00Z"},
 		namespace:   "app",
 		workload:    "api",
 		container:   "api",
@@ -283,7 +283,7 @@ func TestRunExplain_BusinessHoursOtherPluginError(t *testing.T) {
 	t.Chdir(cwd)
 
 	err := runExplain(&bytes.Buffer{}, explainFlags{
-		commonFlags: commonFlags{input: csvPath, plugins: "pvc", noUserConfig: true, now: "2026-05-03T02:00:00Z"},
+		commonFlags: commonFlags{inputs: []string{csvPath}, plugins: "pvc", noUserConfig: true, now: "2026-05-03T02:00:00Z"},
 		namespace:   "production",
 		pvc:         "data-pvc",
 		term:        "short",
@@ -305,7 +305,7 @@ func TestRunExplain_BusinessHoursNodeWeekday(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := runExplain(&buf, explainFlags{
-		commonFlags: commonFlags{input: csvPath, plugins: "node", noUserConfig: true, now: "2026-08-04T00:00:00Z"},
+		commonFlags: commonFlags{inputs: []string{csvPath}, plugins: "node", noUserConfig: true, now: "2026-08-04T00:00:00Z"},
 		node:        "worker-1",
 		term:        "short",
 		engine:      "cost",
@@ -328,7 +328,7 @@ func TestRunExplain_BusinessHoursNodeWeekendNoMatch(t *testing.T) {
 	t.Chdir(cwd)
 
 	err := runExplain(&bytes.Buffer{}, explainFlags{
-		commonFlags: commonFlags{input: csvPath, plugins: "node", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
+		commonFlags: commonFlags{inputs: []string{csvPath}, plugins: "node", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
 		node:        "worker-1",
 		term:        "short",
 		engine:      "cost",
@@ -348,7 +348,7 @@ func TestRunExplain_Namespace(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := runExplain(&buf, explainFlags{
-		commonFlags: commonFlags{input: csvPath, plugins: "namespace", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
+		commonFlags: commonFlags{inputs: []string{csvPath}, plugins: "namespace", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
 		namespace:   "kube-system",
 		term:        "short",
 		engine:      "cost",
@@ -374,7 +374,7 @@ func TestRunExplain_Node(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := runExplain(&buf, explainFlags{
-		commonFlags: commonFlags{input: csvPath, plugins: "node", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
+		commonFlags: commonFlags{inputs: []string{csvPath}, plugins: "node", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
 		node:        "worker-1",
 		term:        "short",
 		engine:      "cost",
@@ -397,7 +397,7 @@ func TestRunExplain_GPUMIG(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := runExplain(&buf, explainFlags{
-		commonFlags: commonFlags{input: csvPath, plugins: "gpu", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
+		commonFlags: commonFlags{inputs: []string{csvPath}, plugins: "gpu", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
 		namespace:   "app",
 		workload:    "api",
 		container:   "api",
@@ -420,7 +420,7 @@ func TestRunExplain_GPUTimeslicing(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input: csvPath, plugins: "gpu", noUserConfig: true, now: "2026-08-01T02:00:00Z",
+		inputs: []string{csvPath}, plugins: "gpu", noUserConfig: true, now: "2026-08-01T02:00:00Z",
 	})
 	require.NoError(t, err)
 	if len(result.GPUTimeslicing) == 0 {
@@ -430,7 +430,7 @@ func TestRunExplain_GPUTimeslicing(t *testing.T) {
 
 	var buf bytes.Buffer
 	err = runExplain(&buf, explainFlags{
-		commonFlags: commonFlags{input: csvPath, plugins: "gpu", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
+		commonFlags: commonFlags{inputs: []string{csvPath}, plugins: "gpu", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
 		node:        ts.NodeName,
 		gpuModel:    ts.GPUModel,
 		term:        ts.Term,
@@ -452,7 +452,7 @@ func TestRunExplain_PVC(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := runExplain(&buf, explainFlags{
-		commonFlags: commonFlags{input: csvPath, plugins: "pvc", noUserConfig: true, now: "2026-05-03T02:00:00Z"},
+		commonFlags: commonFlags{inputs: []string{csvPath}, plugins: "pvc", noUserConfig: true, now: "2026-05-03T02:00:00Z"},
 		namespace:   "production",
 		pvc:         "data-pvc",
 		term:        "short",
@@ -476,7 +476,7 @@ func TestRunExplain_VM(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := runExplain(&buf, explainFlags{
-		commonFlags: commonFlags{input: csvPath, plugins: "vm", noUserConfig: true, now: "2026-05-03T02:00:00Z"},
+		commonFlags: commonFlags{inputs: []string{csvPath}, plugins: "vm", noUserConfig: true, now: "2026-05-03T02:00:00Z"},
 		namespace:   "production",
 		vmName:      "web-vm",
 		term:        "short_term",
@@ -500,7 +500,7 @@ func TestRunExplain_Quota(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := runExplain(&buf, explainFlags{
-		commonFlags: commonFlags{input: csvPath, plugins: "quota", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
+		commonFlags: commonFlags{inputs: []string{csvPath}, plugins: "quota", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
 		namespace:   "app",
 		quotaName:   "compute",
 	})
@@ -522,7 +522,7 @@ func TestRunExplain_ClusterQuota(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := runExplain(&buf, explainFlags{
-		commonFlags:      commonFlags{input: csvPath, plugins: "cluster-quota", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
+		commonFlags:      commonFlags{inputs: []string{csvPath}, plugins: "cluster-quota", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
 		clusterQuotaName: "team-a",
 	})
 	require.NoError(t, err)
@@ -542,7 +542,7 @@ func TestRunExplain_Snapshot(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := runExplain(&buf, explainFlags{
-		commonFlags:  commonFlags{input: csvPath, plugins: "snapshot", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
+		commonFlags:  commonFlags{inputs: []string{csvPath}, plugins: "snapshot", noUserConfig: true, now: "2026-08-01T02:00:00Z"},
 		namespace:    "app",
 		snapshotName: "snap-a",
 	})

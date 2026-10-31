@@ -54,7 +54,7 @@ func TestRecommend_HCPGuardrailFromPayloadManifest(t *testing.T) {
 		t.Setenv("ROBNE_NO_USER_CONFIG", "1")
 		t.Chdir(cwd)
 		result, err := computeRecommendations(commonFlags{
-			input:        cwd,
+			inputs:       []string{cwd},
 			noUserConfig: true,
 			now:          "2026-08-01T02:00:00Z",
 			format:       "json",
@@ -107,7 +107,7 @@ func TestRecommend_ManifestClusterMismatchFails(t *testing.T) {
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
 	t.Chdir(cwd)
 	_, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 		format:       "json",

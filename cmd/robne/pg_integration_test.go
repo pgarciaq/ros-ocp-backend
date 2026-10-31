@@ -101,7 +101,7 @@ func TestExecuteRecommend_PathBUsesStoredHistory(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := executeRecommend(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		output:       poolDSN(t, pool, ""),
 		noUserConfig: true,
 		now:          "2026-08-07T02:00:00Z",
@@ -142,7 +142,7 @@ func TestExecuteRecommend_PathARecompute(t *testing.T) {
 
 	dsn := poolDSN(t, pool, "")
 	result, err := executeRecommend(commonFlags{
-		input:        dsn,
+		inputs:       []string{dsn},
 		noUserConfig: true,
 		now:          "2026-08-07T02:00:00Z",
 		format:       "json",
@@ -184,7 +184,7 @@ func TestExecuteRecommend_PathANamespaceRecompute(t *testing.T) {
 	t.Chdir(cwd)
 
 	_, err := executeRecommend(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		output:       poolDSN(t, pool, ""),
 		plugins:      "namespace",
 		noUserConfig: true,
@@ -194,7 +194,7 @@ func TestExecuteRecommend_PathANamespaceRecompute(t *testing.T) {
 	require.NoError(t, err)
 
 	result, err := executeRecommend(commonFlags{
-		input:        poolDSN(t, pool, ""),
+		inputs:       []string{poolDSN(t, pool, "")},
 		plugins:      "namespace",
 		noUserConfig: true,
 		now:          "2026-08-02T02:00:00Z",
@@ -209,7 +209,7 @@ func TestExecuteRecommend_PathANamespaceEmptySelectErrors(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	pathAEnv(t, "1234567", testutil.TestClusterUUID)
 	_, err := executeRecommend(commonFlags{
-		input:        poolDSN(t, pool, ""),
+		inputs:       []string{poolDSN(t, pool, "")},
 		plugins:      "namespace",
 		noUserConfig: true,
 		now:          "2026-08-07T02:00:00Z",
@@ -232,7 +232,7 @@ func TestExecuteRecommend_PathAMixedContainerNamespace(t *testing.T) {
 	t.Chdir(cwd)
 
 	_, err := executeRecommend(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		output:       poolDSN(t, pool, ""),
 		plugins:      "container,namespace",
 		noUserConfig: true,
@@ -242,7 +242,7 @@ func TestExecuteRecommend_PathAMixedContainerNamespace(t *testing.T) {
 	require.NoError(t, err)
 
 	result, err := executeRecommend(commonFlags{
-		input:        poolDSN(t, pool, ""),
+		inputs:       []string{poolDSN(t, pool, "")},
 		plugins:      "container,namespace",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -267,7 +267,7 @@ func TestExecuteRecommend_PathAQuotaNestedNoContainerPlugin(t *testing.T) {
 	t.Chdir(cwd)
 
 	_, err := executeRecommend(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		output:       poolDSN(t, pool, ""),
 		plugins:      "quota",
 		noUserConfig: true,
@@ -277,7 +277,7 @@ func TestExecuteRecommend_PathAQuotaNestedNoContainerPlugin(t *testing.T) {
 	require.NoError(t, err)
 
 	result, err := executeRecommend(commonFlags{
-		input:        poolDSN(t, pool, ""),
+		inputs:       []string{poolDSN(t, pool, "")},
 		output:       poolDSN(t, pool, ""),
 		plugins:      "quota",
 		noUserConfig: true,
@@ -312,7 +312,7 @@ func TestExecuteRecommend_PathAClusterQuotaWithoutQuotaDays(t *testing.T) {
 	pathAEnv(t, orgID, cluster)
 
 	result, err := executeRecommend(commonFlags{
-		input:        poolDSN(t, pool, ""),
+		inputs:       []string{poolDSN(t, pool, "")},
 		plugins:      "cluster-quota",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -375,25 +375,25 @@ func TestExecuteRecommend_PathANodeGPUPVCVM(t *testing.T) {
 	pathAEnv(t, orgID, cluster)
 
 	nodeOut, err := executeRecommend(commonFlags{
-		input: poolDSN(t, pool, ""), plugins: "node", noUserConfig: true, now: "2026-08-01T02:00:00Z", format: "json",
+		inputs: []string{poolDSN(t, pool, "")}, plugins: "node", noUserConfig: true, now: "2026-08-01T02:00:00Z", format: "json",
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, nodeOut.NodeRecs)
 
 	gpuOut, err := executeRecommend(commonFlags{
-		input: poolDSN(t, pool, ""), plugins: "gpu", noUserConfig: true, now: "2026-08-01T02:00:00Z", format: "json",
+		inputs: []string{poolDSN(t, pool, "")}, plugins: "gpu", noUserConfig: true, now: "2026-08-01T02:00:00Z", format: "json",
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, gpuOut.GPURecs)
 
 	pvcOut, err := executeRecommend(commonFlags{
-		input: poolDSN(t, pool, ""), plugins: "pvc", noUserConfig: true, now: "2026-08-01T02:00:00Z", format: "json",
+		inputs: []string{poolDSN(t, pool, "")}, plugins: "pvc", noUserConfig: true, now: "2026-08-01T02:00:00Z", format: "json",
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, pvcOut.PVCRecs)
 
 	vmOut, err := executeRecommend(commonFlags{
-		input: poolDSN(t, pool, ""), plugins: "vm", noUserConfig: true, now: "2026-08-01T02:00:00Z", format: "json",
+		inputs: []string{poolDSN(t, pool, "")}, plugins: "vm", noUserConfig: true, now: "2026-08-01T02:00:00Z", format: "json",
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, vmOut.VMRecs)
@@ -409,7 +409,7 @@ func TestExecuteRecommend_EmptySelectErrors(t *testing.T) {
 	t.Chdir(cwd)
 
 	_, err := executeRecommend(commonFlags{
-		input:        poolDSN(t, pool, ""),
+		inputs:       []string{poolDSN(t, pool, "")},
 		noUserConfig: true,
 		now:          "2026-08-07T02:00:00Z",
 	})
@@ -497,7 +497,7 @@ func TestExecuteRecommend_PathBPersistsNamespaceRecs(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := executeRecommend(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		output:       poolDSN(t, pool, ""),
 		plugins:      "namespace",
 		noUserConfig: true,
@@ -672,7 +672,7 @@ func TestExecuteRecommend_PathBQuotaPersistsAllQuotaDays(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := executeRecommend(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		output:       poolDSN(t, pool, ""),
 		plugins:      "quota",
 		noUserConfig: true,
@@ -711,7 +711,7 @@ func TestExecuteRecommend_PathBQuotaWithContainerCSVPersistsContainerDays(t *tes
 	t.Chdir(cwd)
 
 	result, err := executeRecommend(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		output:       poolDSN(t, pool, ""),
 		plugins:      "quota",
 		noUserConfig: true,
@@ -748,7 +748,7 @@ func TestExecuteRecommend_PathBGPUPersistsGPUDigests(t *testing.T) {
 	t.Chdir(cwd)
 
 	_, err := executeRecommend(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		output:       poolDSN(t, pool, ""),
 		plugins:      "gpu",
 		noUserConfig: true,

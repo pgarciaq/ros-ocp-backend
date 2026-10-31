@@ -1,6 +1,6 @@
 # robne CLI — Standalone Offline/Batch Recommendations
 
-> **Last verified:** 2026-10-27
+> **Last verified:** 2026-10-31
 
 !!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, 2b stdout, 2c other-entity rec upsert, other-entity digest INSERT, other-entity Path A SELECT, snapshot stdout, business hours, Phase 3 `diff` / container `explain`, other-entity `explain`, `robne version`, and HCP fleet-capacity ([#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)) shipped"
     Parent issue: [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99).
@@ -260,6 +260,62 @@ rows from term windows.
 
 If no timestamp can be parsed, the CLI exits with an error. It does not silently use
 `time.Now()`. Spec §3.
+
+## Multi-payload input and HCP advisories (#721)
+
+`--input` is **repeatable**: the first payload is the **primary** (the
+recommendation cluster — for advisories, the guest whose cluster ID is the
+hosted cluster's identity); additional payloads are **advisory context**
+(typically the HCP management cluster's payload carrying the topology
+emission with the tier label and the NodePool rows).
+
+```bash
+# Compute recommendations for the guest + the sleep advisory from the
+# management cluster's topology:
+robne recommend --input guest-payload/ --input mgmt-payload/ --config robne.yaml
+```
+
+The W8 non-prod sleep-candidate advisory appears in the JSON envelope as
+the `hcp_advisories` sibling (matching the server's serving contract,
+#717/ADR-0349): one advisory per hosted cluster, with typed per-verdict
+`details` (`declared_tier`, `bh_active_peak_cpu_mc`,
+`outside_bh_peak_cpu_mc`, `worker_node_count`,
+`reclaim_node_hours_per_week`) plus the raw correlator `evidence` and the
+ADR-0333 carry-over copy (worker capacity only — the control plane keeps
+running; waking takes ~20 minutes of full reprovision).
+
+**Semantics (ADR-0348):** the declaration (`insights.cost-management/hc-tier=non-prod`
+on the HostedCluster, carried by the operator's topology emission)
+classifies; the business-hours usage signature gates. A labeled cluster
+with overnight workloads is **never** advised — sleeping it would break
+them. The tier is read latest-wins (label changes and removal take effect
+on the next collection cycle). The schedule resolves against the org-wide
+or cluster-level business-hours schedule only (namespace-scoped schedules
+never define a hosted cluster's hours); an org with no org/cluster
+schedule gets no sleep advisories.
+
+**Configuration** (`sleep_advisory` in the YAML):
+
+```yaml
+business_hours:
+  enabled: true
+  timezone: UTC
+  days: [monday, tuesday, wednesday, thursday, friday]
+  start_time: "09:00"
+  end_time: "17:00"
+sleep_advisory:
+  window_days: 14              # trailing signature window
+  bh_activity_floor_mc: 10     # daily per-workload BH CPU counting as active
+  outside_bh_idle_floor_mc: 10 # daily per-workload CPU outside BH that breaks the signature
+  platform_namespaces:         # synced cost-groups exclusions (optional;
+    - "kube-%"                 #   compiled defaults always apply alongside)
+    - "openshift-%"
+    - "my-team-namespace"
+```
+
+**Design record:** [ADR-0350](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0350-robne-multi-payload-input.md)
+(the multi-payload input contract); deferred input-model generalizations in
+[#725](https://github.com/pgarciaq/ros-ocp-backend/issues/725).
 
 ## Manpages and offline docs (#703)
 

@@ -73,7 +73,7 @@ Contract: docs/plans/robne-cli-spec.md`,
 }
 
 type commonFlags struct {
-	input        string
+	inputs       []string
 	configPath   string
 	rateCardPath string
 	plugins      string
@@ -86,7 +86,7 @@ type commonFlags struct {
 }
 
 func bindCommonFlags(cmd *cobra.Command, f *commonFlags, withRateCard, withFormat bool) {
-	cmd.Flags().StringVar(&f.input, "input", "", "directory, .csv, .tar.gz, or postgres:// URL (recompute from stored digests)")
+	cmd.Flags().StringArrayVar(&f.inputs, "input", nil, "directory, .csv, .tar.gz, or postgres:// URL (recompute from stored digests); repeatable — the first payload is the primary (recommendation cluster), later payloads are advisory context (e.g. the HCP management cluster's topology)")
 	_ = cmd.MarkFlagRequired("input")
 	cmd.Flags().StringVar(&f.configPath, "config", "", "YAML overlay (skips ./robne.yaml; still overlays the user file)")
 	cmd.Flags().StringVar(&f.plugins, "plugins", "", "comma-separated allowlist (default: all shipped plugins; omit to skip missing inputs)")
@@ -98,4 +98,21 @@ func bindCommonFlags(cmd *cobra.Command, f *commonFlags, withRateCard, withForma
 	if withFormat {
 		cmd.Flags().StringVar(&f.format, "format", "json", "stdout format: json, csv, or table")
 	}
+}
+
+// splitInputs divides the repeatable --input values into the primary (the
+// recommendation cluster — first input, option (d), #721) and the advisory
+// context payloads (later inputs, e.g. the HCP management cluster's
+// topology). A postgres:// URL is valid only as the primary.
+func splitInputs(inputs []string) (primary string, extra []string) {
+	if len(inputs) == 0 {
+		return "", nil
+	}
+	return inputs[0], inputs[1:]
+}
+
+// splitPrimary returns just the primary input (the first --input).
+func splitPrimary(inputs []string) string {
+	primary, _ := splitInputs(inputs)
+	return primary
 }

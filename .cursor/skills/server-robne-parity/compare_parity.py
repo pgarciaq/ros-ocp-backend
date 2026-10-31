@@ -233,6 +233,10 @@ ENTITY = {
         robne_key="hcp_recommendations",
         kind="hcp",
     ),
+    "hcp-advisory": dict(
+        robne_key="hcp_advisories",
+        kind="hcp_advisory",
+    ),
 }
 
 CRQ_MAP = [
@@ -243,6 +247,32 @@ CRQ_MAP = [
     ("storage_request_bytes", "storage_request_hard_bytes", "storage_request_recommended_bytes"),
     ("pods", "pods_hard", "pods_recommended"),
 ]
+
+
+def cmp_hcp_advisory(rep, robne, server):
+    """Compare HCP advisories (one per hosted cluster per window). The
+    robne hcp_advisories sibling and the server GET .../hcp/advisories
+    response share the #717 contract: verdict, confidence, window, typed
+    details, evidence. Compared per hosted_cluster_id."""
+    srows = {r["hosted_cluster_id"]: r for r in server}
+    for c in robne:
+        k = c.get("hosted_cluster_id", "?")
+        s = srows.pop(k, None)
+        if s is None:
+            rep.diff(k, "server", "MISSING", "present in robne only")
+            continue
+        if c.get("verdict") != s.get("verdict"):
+            rep.diff(k, "verdict", c.get("verdict"), s.get("verdict"))
+        if c.get("confidence") != s.get("confidence"):
+            rep.diff(k, "confidence", c.get("confidence"), s.get("confidence"))
+        cd = c.get("details") or {}
+        sd = s.get("details") or {}
+        for f in ("declared_tier", "bh_active_peak_cpu_mc", "outside_bh_peak_cpu_mc",
+                   "worker_node_count", "reclaim_node_hours_per_week"):
+            if f in cd or f in sd:
+                rep.diff(k, f"details.{f}", cd.get(f), sd.get(f))
+    for k in srows:
+        rep.diff(k, "robne", "MISSING", "present in server only")
 
 
 def compare(entity, robne_doc, server_doc):
@@ -330,6 +360,8 @@ def compare(entity, robne_doc, server_doc):
                 rep.good()
             else:
                 rep.diff(k, "namespaces", sorted(ns_s), sorted(ns_c))
+    elif kind == "hcp_advisory":
+        cmp_hcp_advisory(rep, robne, server)
     elif kind == "hcp":
         # Server-only observations are benign by construction: the live cluster
         # keeps accumulating history; only the payload's observations compare.

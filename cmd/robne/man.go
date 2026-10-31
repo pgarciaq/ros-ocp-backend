@@ -15,7 +15,7 @@ import (
 // regeneration differ in the .TH line and defeat the make man-check
 // drift guard. Bump it when the CLI surface changes meaningfully
 // (it only feeds the manpage header, not content).
-var manGeneratedAt = time.Date(2026, 10, 27, 0, 0, 0, 0, time.UTC)
+var manGeneratedAt = time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC)
 
 // generateDocs writes roff manpages for the public command tree into
 // manOut and a markdown tree into mdOut (skipped when mdOut is empty).

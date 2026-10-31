@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI: multi-payload input and the W8 sleep advisory ([#721](https://github.com/pgarciaq/ros-ocp-backend/issues/721), [ADR-0350](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0350-robne-multi-payload-input.md)):**
+  `--input` is now repeatable — the first payload is the primary
+  (recommendation cluster), additional payloads are advisory context
+  (typically the HCP management cluster's topology emission). The W8
+  non-prod sleep-candidate advisory appears in the JSON envelope as the
+  `hcp_advisories` sibling (envelope version 13 when present), matching
+  the server's serving contract (#717). The `sleep_advisory` YAML section
+  configures the policy fields and the optional synced platform-namespace
+  exclusions. Per-payload manifest/CSV consistency is enforced
+  independently (a mismatched context payload fails fast). The advisory is
+  independent of the HCP capacity plugin — gated on the business-hours
+  schedule, the context facts, and the dual digests.
 - **W8 non-prod HC sleep advisory ([#716](https://github.com/pgarciaq/ros-ocp-backend/issues/716), [ADR-0348](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0348-w8-nonprod-sleep-advisory.md)):**
   the correlator now emits `schedule_nonprod_sleep` advisories for hosted
   clusters that are **declared** non-prod (label

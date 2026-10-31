@@ -27,7 +27,7 @@ func TestRecommend_ShortTermExists(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 		format:       "json",
@@ -69,7 +69,7 @@ func TestRecommend_GoldenShortTerm(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "container",
 		noUserConfig: true,
 		now:          pinnedNow,
@@ -112,7 +112,7 @@ func TestRecommend_ClusterUUIDMismatch(t *testing.T) {
 	t.Chdir(cwd)
 
 	_, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 	})
@@ -196,7 +196,7 @@ func TestRecommend_NamespacePluginStdout(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "namespace",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -234,7 +234,7 @@ func TestRecommend_DefaultPluginsRunsNamespaceFiles(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 	})
@@ -254,7 +254,7 @@ func TestRecommend_NodePluginStdout(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "node",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -286,7 +286,7 @@ func TestRecommend_GPUPluginStdout(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "gpu",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -317,7 +317,7 @@ func TestRecommend_DefaultPluginsRunsNodeSkipsGPUWithoutModel(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 	})
@@ -341,7 +341,7 @@ func TestRecommend_NodeWithoutContainerCSVError(t *testing.T) {
 	t.Chdir(cwd)
 
 	_, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		plugins:      "node",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -360,7 +360,7 @@ func TestRecommend_DefaultPluginsRunsNamespaceOnly(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 	})
@@ -371,7 +371,7 @@ func TestRecommend_DefaultPluginsRunsNamespaceOnly(t *testing.T) {
 
 func TestRecommend_PathAApplySchemaRejected(t *testing.T) {
 	_, err := executeRecommend(commonFlags{
-		input:        "postgres://localhost/robne",
+		inputs:       []string{"postgres://localhost/robne"},
 		plugins:      "namespace",
 		applySchema:  true,
 		noUserConfig: true,
@@ -413,7 +413,7 @@ func TestRecommend_PVCPluginStdout(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "pvc",
 		noUserConfig: true,
 		now:          "2026-05-03T02:00:00Z",
@@ -443,7 +443,7 @@ func TestRecommend_PVCWithoutStorageCSVError(t *testing.T) {
 	t.Chdir(cwd)
 
 	_, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		plugins:      "pvc",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -461,7 +461,7 @@ func TestValidate_PVCStorageOnly(t *testing.T) {
 	t.Chdir(cwd)
 
 	require.NoError(t, runValidate(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		plugins:      "pvc",
 		noUserConfig: true,
 	}))
@@ -477,7 +477,7 @@ func TestRecommend_DefaultPluginsRunsPVCFiles(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 	})
@@ -527,7 +527,7 @@ func TestRecommend_VMPluginStdout(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "vm",
 		noUserConfig: true,
 		now:          "2026-05-03T02:00:00Z",
@@ -557,7 +557,7 @@ func TestRecommend_VMWithoutUsageCSVError(t *testing.T) {
 	t.Chdir(cwd)
 
 	_, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		plugins:      "vm",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -575,7 +575,7 @@ func TestValidate_VMUsageOnly(t *testing.T) {
 	t.Chdir(cwd)
 
 	require.NoError(t, runValidate(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		plugins:      "vm",
 		noUserConfig: true,
 	}))
@@ -638,7 +638,7 @@ func TestRecommend_QuotaPluginStdout(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "quota",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -670,7 +670,7 @@ func TestRecommend_QuotaNoQuotaNameEmptyRecs(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "quota",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -696,7 +696,7 @@ func TestRecommend_QuotaWithoutNamespaceCSVError(t *testing.T) {
 	t.Chdir(cwd)
 
 	_, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		plugins:      "quota",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -714,7 +714,7 @@ func TestValidate_QuotaNamespaceOnly(t *testing.T) {
 	t.Chdir(cwd)
 
 	require.NoError(t, runValidate(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		plugins:      "quota",
 		noUserConfig: true,
 	}))
@@ -730,7 +730,7 @@ func TestRecommend_DefaultPluginsRunsQuotaFiles(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 	})
@@ -749,7 +749,7 @@ func TestRecommend_QuotaUsesContainerAggregates(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		plugins:      "quota",
 		noUserConfig: true,
 		now:          "2026-08-04T02:00:00Z",
@@ -771,7 +771,7 @@ func TestRecommend_DefaultPluginsRunsVMFiles(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 	})
@@ -868,7 +868,7 @@ func TestRecommend_ClusterQuotaPluginStdout(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "cluster-quota",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -912,7 +912,7 @@ func TestRecommend_ClusterQuotaNoHardLimitsEmptyRecs(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "cluster-quota",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -938,7 +938,7 @@ func TestRecommend_ClusterQuotaWithoutCSVError(t *testing.T) {
 	t.Chdir(cwd)
 
 	_, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		plugins:      "cluster-quota",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -956,7 +956,7 @@ func TestValidate_ClusterQuotaOnly(t *testing.T) {
 	t.Chdir(cwd)
 
 	require.NoError(t, runValidate(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		plugins:      "cluster-quota",
 		noUserConfig: true,
 	}))
@@ -972,7 +972,7 @@ func TestRecommend_DefaultPluginsRunsClusterQuotaFiles(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 	})
@@ -990,7 +990,7 @@ func TestRecommend_ClusterQuotaWithoutNamespaceStillEmits(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		plugins:      "cluster-quota",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -1013,7 +1013,7 @@ func TestRecommend_ClusterQuotaEmptyNamespacesSumsAll(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		plugins:      "quota,cluster-quota",
 		noUserConfig: true,
 		now:          "2026-08-04T02:00:00Z",
@@ -1038,7 +1038,7 @@ func TestRecommend_ClusterQuotaNamespacesFilterMembership(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		plugins:      "quota,cluster-quota",
 		noUserConfig: true,
 		now:          "2026-08-04T02:00:00Z",
@@ -1063,7 +1063,7 @@ func TestRecommend_ClusterQuotaTwoQuotasInOneNamespaceBothCount(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		plugins:      "quota,cluster-quota",
 		noUserConfig: true,
 		now:          "2026-08-04T02:00:00Z",
@@ -1101,7 +1101,7 @@ func TestRecommend_SnapshotPluginStdout(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "snapshot",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -1135,7 +1135,7 @@ func TestRecommend_SnapshotWithoutCSVError(t *testing.T) {
 	t.Chdir(cwd)
 
 	_, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		plugins:      "snapshot",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -1153,7 +1153,7 @@ func TestRecommend_DefaultPluginsSkipsMissingSnapshot(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 	})
@@ -1177,7 +1177,7 @@ func TestRecommend_DefaultPluginsRunsSnapshotFiles(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 	})
@@ -1196,7 +1196,7 @@ func TestRecommend_SnapshotHourlyCollapseOneRec(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "snapshot",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -1217,7 +1217,7 @@ func TestRecommend_SnapshotEmptyInventoryEmptySibling(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "snapshot",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -1243,7 +1243,7 @@ func TestValidate_SnapshotOnly(t *testing.T) {
 	t.Chdir(cwd)
 
 	require.NoError(t, runValidate(commonFlags{
-		input:        cwd,
+		inputs:       []string{cwd},
 		plugins:      "snapshot",
 		noUserConfig: true,
 	}))
@@ -1259,7 +1259,7 @@ func TestRecommend_DefaultPluginsCSVNeedsSingleEntity(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 	})
@@ -1372,7 +1372,7 @@ func TestRecommend_BusinessHoursWeekendEmptySiblings(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "container",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -1407,7 +1407,7 @@ func TestRecommend_BusinessHoursWeekdayFiltersSamples(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "container",
 		noUserConfig: true,
 		now:          "2026-08-04T00:00:00Z",
@@ -1433,7 +1433,7 @@ func TestRecommend_BusinessHoursCSVError(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "container",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -1517,7 +1517,7 @@ func TestRecommend_BusinessHoursYAMLPluginsNodeSucceeds(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "node",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
@@ -1555,7 +1555,7 @@ func TestRecommend_BusinessHoursDefaultAllJSONVersion11(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 		format:       "json",
@@ -1584,7 +1584,7 @@ func TestRecommend_BusinessHoursNodeWeekdaySiblings(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "node",
 		noUserConfig: true,
 		now:          "2026-08-04T00:00:00Z",
@@ -1622,7 +1622,7 @@ func TestRecommend_BusinessHoursGPUWeekdaySiblings(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "gpu",
 		noUserConfig: true,
 		now:          "2026-08-04T00:00:00Z",
@@ -1667,7 +1667,7 @@ func TestRecommend_BusinessHoursVMWeekdaySiblings(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "vm",
 		noUserConfig: true,
 		now:          "2026-08-05T00:00:00Z",
@@ -1703,7 +1703,7 @@ func TestRecommend_BusinessHoursNodeCSVError(t *testing.T) {
 	t.Chdir(cwd)
 
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "node",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",

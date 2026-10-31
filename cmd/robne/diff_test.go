@@ -201,7 +201,7 @@ func oneDayShortCostEnvelope(t *testing.T) recommendJSON {
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
 	t.Chdir(cwd)
 	result, err := computeRecommendations(commonFlags{
-		input:        csvPath,
+		inputs:       []string{csvPath},
 		plugins:      "container",
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",

@@ -39,6 +39,8 @@ E2E temp dirs live in `/tmp` and get cleaned — when none survive, generate.
 Parity requires the **same bytes** to reach robne and the server: generate
 once, upload that exact directory, and point robne at it.
 
+The `hcp-advisory` entity (#721) needs a **two-payload fixture**: the guest payload (container CSVs with both BH and all-hours rows) plus the management payload (a `manifest.json` with the `hcpSnapshot` topology carrying `hcTier`, and a NodePool CSV). Pass both to robne with repeatable `--input` (guest first). Compare against the server's `GET .../hcp/advisories` response.
+
 1. **Template per entity** (nise repo `examples/`, or the chart's
    `tests/fixtures/nise_templates/` for cluster-quota):
 
@@ -142,6 +144,8 @@ once, upload that exact directory, and point robne at it.
 | robne hcp stdout not pure JSON | The hcp path leaks log lines before the envelope — strip them (robne bug, tracked) |
 | sshuttle dies but the hypervisor answers | SSH `-L` port-forwards through the hypervisor + a kubeconfig pointing at localhost is a viable reconnection; if the hypervisor is unreachable too, stop and ask |
 | Payload files vanish from `/tmp` | Keep scratch under `.superpowers/tmp/` |
+| hcp-advisory parity: robne silent | The advisory needs a BH schedule (`business_hours.enabled`), a context payload (`--input` twice: guest first, mgmt second), and dual digests — silence is the designed missing-input posture, not a bug |
+| hcp-advisory: context tier not picked up | The mgmt manifest's `hcpSnapshot` entries must name the primary's cluster ID in `hostedClusterID` and be `complete: true`; partial or mismatched entries are invisible by design |
 
 ## Interrupted Runs
 

@@ -10,6 +10,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/redhatinsights/ros-ocp-backend/librobne/advisory"
 	libcsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/namespace"
@@ -33,6 +34,10 @@ const recommendJSONVersionWithSnapshot = 9
 const recommendJSONVersionWithBusinessHours = 10
 const recommendJSONVersionWithBusinessHoursPlugins = 11
 const recommendJSONVersionWithHCPCapacity = 12
+
+// recommendJSONVersionWithHCPAdvisories adds the hcp_advisories sibling
+// (#721): the W8 sleep-candidate advisory from the multi-payload input.
+const recommendJSONVersionWithHCPAdvisories = 13
 
 var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster-quota", "snapshot", "hcp"}
 
@@ -110,6 +115,7 @@ type recommendResult struct {
 	ClusterQuotaRecs    []quota.ClusterQuotaRec
 	SnapshotRecs        []snapshot.SnapshotRec
 	HCPCapacity         []HCPCapacityOut
+	HCPAdvisories       []advisory.Advisory
 	Digests             []types.KeyedDigest
 	BHDigests           []types.KeyedDigest
 	NamespaceDigests    map[namespace.NamespaceKey][]types.DigestRow
@@ -157,6 +163,7 @@ type recommendJSON struct {
 	ClusterQuotaRecommendations                *[]clusterQuotaOut   `json:"cluster_quota_recommendations,omitempty"`
 	SnapshotRecommendations                    *[]snapshotOut       `json:"snapshot_recommendations,omitempty"`
 	HCPRecommendations                         *[]HCPCapacityOut    `json:"hcp_recommendations,omitempty"`
+	HCPAdvisories                              []advisory.Advisory  `json:"hcp_advisories,omitempty"`
 }
 
 // containerOut is the snake_case row DTO. Fields match containerOutCSVHeader.
@@ -645,6 +652,11 @@ func writeJSON(w io.Writer, result recommendResult) error {
 	}
 	if len(result.HCPCapacity) > 0 {
 		env.HCPRecommendations = &result.HCPCapacity
+	}
+	if len(result.HCPAdvisories) > 0 {
+		sortAdvisoryOut(result.HCPAdvisories)
+		env.HCPAdvisories = result.HCPAdvisories
+		env.Version = recommendJSONVersionWithHCPAdvisories
 	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")

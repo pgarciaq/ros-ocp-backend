@@ -58,7 +58,10 @@ func runRecommend(f commonFlags) error {
 
 func executeRecommend(f commonFlags) (recommendResult, error) {
 	var out recommendResult
-	if isPostgresURL(f.input) {
+	primaryInput, extraInputs := splitInputs(f.inputs)
+	_ = primaryInput
+	_ = extraInputs
+	if isPostgresURL(splitPrimary(f.inputs)) {
 		if f.applySchema {
 			return out, fmt.Errorf("recompute does not migrate; use files with --output postgres:// and --apply-schema to bootstrap a dedicated database")
 		}
@@ -95,7 +98,7 @@ func pathADSN(f commonFlags) (string, error) {
 	if f.pgURLFile != "" {
 		return resolvePostgresDSN("postgres://", f.pgURLFile)
 	}
-	return resolvePostgresDSN(f.input, "")
+	return resolvePostgresDSN(splitPrimary(f.inputs), "")
 }
 
 func persistRecommendations(ctx context.Context, f commonFlags, result recommendResult) error {
@@ -558,6 +561,12 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 		}
 		out.HCPCapacity = caps
 	}
+	// W8 non-prod sleep advisory (#721): independent of the HCP capacity
+	// plugin — gated on the multi-payload context + the BH schedule +
+	// the dual digests. Silent when any input is absent.
+	if advs := computeSleepAdvisory(fl); len(advs) > 0 {
+		out.HCPAdvisories = advs
+	}
 	if err := attachFileOnlyRecs(&out, fl); err != nil {
 		return out, err
 	}
@@ -602,7 +611,7 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	out.plugins = resolvedPlugins(out.cfg, f.plugins)
 	explicit := pluginsExplicit(out.cfg, f.plugins)
 	out.pluginsExplicit = explicit
-	csvLoaded, err := csv.Load(f.input)
+	csvLoaded, err := csv.Load(splitPrimary(f.inputs))
 	if err != nil {
 		return out, err
 	}
@@ -723,6 +732,7 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	}
 	if wantSnap {
 		out.snapshotRows = csvLoaded.SnapshotRows
+
 		for _, r := range csvLoaded.SnapshotRows {
 			end := r.IntervalEnd
 			if end.IsZero() {
@@ -754,21 +764,40 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	out.now = now
 	out.skipped = csvLoaded.RowsSkipped
 	out.manifest = csvLoaded.Manifest
+	// Advisory context payloads (#721, option d): each extra --input loads
+	// independently; only the cross-cluster facts are consumed. The
+	// per-payload manifest/CSV consistency guard applies to each context
+	// load exactly as it does to the primary (a mismatched context payload
+	// fails fast rather than mislabeling facts).
+	if _, extra := splitInputs(f.inputs); len(extra) > 0 {
+		if err := loadAdvisoryContext(&out, f, extra, clusterID); err != nil {
+			return out, err
+		}
+	}
+
 	return out, nil
 }
 
 type fileLoad struct {
-	cfg                   fileConfig
-	plugins               []string
-	pluginsExplicit       bool
-	clusterID             string
-	orgID                 string
-	now                   time.Time
-	skipped               int
-	manifest              *csv.Manifest
-	capacityRows          []csv.HCPCapacityRow
-	bhEnabled             bool
-	bhSchedule            bhschedule.Schedule
+	cfg             fileConfig
+	plugins         []string
+	pluginsExplicit bool
+	clusterID       string
+	orgID           string
+	now             time.Time
+	skipped         int
+	manifest        *csv.Manifest
+	capacityRows    []csv.HCPCapacityRow
+	bhEnabled       bool
+	bhSchedule      bhschedule.Schedule
+	// Advisory context (#721 option d): facts from the extra --input
+	// payloads, joined on the primary's cluster identity. The tier is
+	// latest-wins over the context topologies' entries whose
+	// hostedClusterID matches the primary cluster; worker nodes sum the
+	// latest spec_replicas per pool for that HC.
+	hcContextLoaded       bool
+	hcTier                string
+	hcWorkerNodes         int
 	containerDigests      []types.KeyedDigest
 	containerBHDigests    []types.KeyedDigest
 	containerMeta         map[types.ContainerKey]csv.RowMeta
@@ -913,6 +942,12 @@ func computeRecommendations(f commonFlags) (recommendResult, error) {
 			return out, err
 		}
 		out.HCPCapacity = caps
+	}
+	// W8 non-prod sleep advisory (#721): independent of the HCP capacity
+	// plugin — gated on the multi-payload context + the BH schedule +
+	// the dual digests. Silent when any input is absent.
+	if advs := computeSleepAdvisory(fl); len(advs) > 0 {
+		out.HCPAdvisories = advs
 	}
 	if err := attachFileOnlyRecs(&out, fl); err != nil {
 		return out, err
@@ -1498,7 +1533,7 @@ func newValidateCmd() *cobra.Command {
 }
 
 func runValidate(f commonFlags) error {
-	if isPostgresURL(f.input) {
+	if isPostgresURL(splitPrimary(f.inputs)) {
 		return fmt.Errorf("validate reads files only (directory, .csv, or .tar.gz), not a PostgreSQL URL")
 	}
 	env, err := overlayEnvFromOS(f.noUserConfig)
@@ -1514,7 +1549,7 @@ func runValidate(f commonFlags) error {
 	}
 	plugins := resolvedPlugins(cfg, f.plugins)
 	explicit := pluginsExplicit(cfg, f.plugins)
-	loaded, err := csv.Load(f.input)
+	loaded, err := csv.Load(splitPrimary(f.inputs))
 	if err != nil {
 		return err
 	}

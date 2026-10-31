@@ -77,7 +77,7 @@ func runCapacityRecommend(t *testing.T, dir, now string, extra func(*commonFlags
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
 	f := commonFlags{
-		input:        dir,
+		inputs:       []string{dir},
 		noUserConfig: true,
 		now:          now,
 		format:       "json",
@@ -246,7 +246,7 @@ func TestRecommend_BHAndCapacityEnvelope(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
 	result, err := computeRecommendations(commonFlags{
-		input:        dir,
+		inputs:       []string{dir},
 		noUserConfig: true,
 		now:          "2026-10-26T22:30:00Z",
 		format:       "json",
@@ -335,7 +335,7 @@ func TestRecommend_CapacityOnlyPoisonedExplicit(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 	_, err := computeRecommendations(commonFlags{
-		input:        dir,
+		inputs:       []string{dir},
 		noUserConfig: true,
 		now:          "2026-10-26T22:30:00Z",
 		format:       "json",
@@ -361,7 +361,7 @@ func TestValidate_HCPCapacity(t *testing.T) {
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
-	err := runValidate(commonFlags{input: "testdata/hcp-capacity", noUserConfig: true, plugins: "hcp"})
+	err := runValidate(commonFlags{inputs: []string{"testdata/hcp-capacity"}, noUserConfig: true, plugins: "hcp"})
 	_ = w.Close()
 	os.Stdout = oldStdout
 	_, _ = out.ReadFrom(r)
@@ -385,7 +385,7 @@ func TestValidate_HCPCapacitySkippedReasons(t *testing.T) {
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
-	err := runValidate(commonFlags{input: dir, noUserConfig: true, plugins: "hcp"})
+	err := runValidate(commonFlags{inputs: []string{dir}, noUserConfig: true, plugins: "hcp"})
 	_ = w.Close()
 	os.Stdout = oldStdout
 	_, _ = out.ReadFrom(r)
@@ -400,7 +400,7 @@ func TestValidate_HCPCapacityOnlyNoClock(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
-	err := runValidate(commonFlags{input: "testdata/hcp-capacity", noUserConfig: true, plugins: "hcp"})
+	err := runValidate(commonFlags{inputs: []string{"testdata/hcp-capacity"}, noUserConfig: true, plugins: "hcp"})
 	require.NoError(t, err)
 }
 
@@ -446,7 +446,7 @@ func TestExplain_HCPCapacity(t *testing.T) {
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
 	var out bytes.Buffer
 	err := runExplain(&out, explainFlags{
-		commonFlags: commonFlags{input: "testdata/hcp-capacity", noUserConfig: true, now: "2026-10-26T22:30:00Z", plugins: "hcp", format: "json"},
+		commonFlags: commonFlags{inputs: []string{"testdata/hcp-capacity"}, noUserConfig: true, now: "2026-10-26T22:30:00Z", plugins: "hcp", format: "json"},
 		scenario:    "medium_qps",
 	})
 	require.NoError(t, err)
@@ -465,7 +465,7 @@ func TestExplain_HCPCapacitySelectors(t *testing.T) {
 	// --observed-at selects the row.
 	var out bytes.Buffer
 	err := runExplain(&out, explainFlags{
-		commonFlags: commonFlags{input: "testdata/hcp-capacity", noUserConfig: true, now: "2026-10-26T22:30:00Z", plugins: "hcp", format: "json"},
+		commonFlags: commonFlags{inputs: []string{"testdata/hcp-capacity"}, noUserConfig: true, now: "2026-10-26T22:30:00Z", plugins: "hcp", format: "json"},
 		scenario:    "request",
 		observedAt:  "2026-10-26T20:59:59Z",
 	})
@@ -474,7 +474,7 @@ func TestExplain_HCPCapacitySelectors(t *testing.T) {
 
 	// Bad scenario name → error.
 	err = runExplain(&bytes.Buffer{}, explainFlags{
-		commonFlags: commonFlags{input: "testdata/hcp-capacity", noUserConfig: true, now: "2026-10-26T22:30:00Z", plugins: "hcp", format: "json"},
+		commonFlags: commonFlags{inputs: []string{"testdata/hcp-capacity"}, noUserConfig: true, now: "2026-10-26T22:30:00Z", plugins: "hcp", format: "json"},
 		scenario:    "turbo_qps",
 	})
 	require.Error(t, err)
@@ -482,7 +482,7 @@ func TestExplain_HCPCapacitySelectors(t *testing.T) {
 
 	// BH schedule rejected for hcp.
 	err = runExplain(&bytes.Buffer{}, explainFlags{
-		commonFlags: commonFlags{input: "testdata/hcp-capacity", noUserConfig: true, now: "2026-10-26T22:30:00Z", plugins: "hcp", format: "json"},
+		commonFlags: commonFlags{inputs: []string{"testdata/hcp-capacity"}, noUserConfig: true, now: "2026-10-26T22:30:00Z", plugins: "hcp", format: "json"},
 		scenario:    "request",
 		schedule:    "business_hours",
 	})

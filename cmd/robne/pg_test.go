@@ -15,7 +15,7 @@ import (
 func TestRecommend_PathASnapshotExplicitError(t *testing.T) {
 	t.Parallel()
 	_, err := executeRecommend(commonFlags{
-		input:        "postgres://localhost/robne",
+		inputs:       []string{"postgres://localhost/robne"},
 		plugins:      "snapshot",
 		noUserConfig: true,
 	})
@@ -27,7 +27,7 @@ func TestRecommend_PathASnapshotExplicitError(t *testing.T) {
 func TestRecommend_ApplySchemaRejectedOnPostgresInput(t *testing.T) {
 	t.Parallel()
 	_, err := executeRecommend(commonFlags{
-		input:        "postgres://localhost/robne",
+		inputs:       []string{"postgres://localhost/robne"},
 		applySchema:  true,
 		noUserConfig: true,
 	})
@@ -39,7 +39,7 @@ func TestRecommend_ApplySchemaRejectedOnPostgresInput(t *testing.T) {
 func TestRecommend_MismatchedPostgresDSN(t *testing.T) {
 	t.Parallel()
 	_, err := executeRecommend(commonFlags{
-		input:        "postgres://localhost:5432/a",
+		inputs:       []string{"postgres://localhost:5432/a"},
 		output:       "postgres://localhost:5432/b",
 		noUserConfig: true,
 	})
@@ -49,7 +49,7 @@ func TestRecommend_MismatchedPostgresDSN(t *testing.T) {
 
 func TestValidate_RejectsPostgresInput(t *testing.T) {
 	t.Parallel()
-	err := runValidate(commonFlags{input: "postgres://localhost/robne", noUserConfig: true})
+	err := runValidate(commonFlags{inputs: []string{"postgres://localhost/robne"}, noUserConfig: true})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "files")
 }

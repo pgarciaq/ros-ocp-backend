@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/redhatinsights/ros-ocp-backend/librobne/advisory"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/engine"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
@@ -18,7 +19,7 @@ import (
 var allowedYAMLKeys = map[string]struct{}{
 	"org_id": {}, "cluster_uuid": {}, "now": {}, "plugins": {},
 	"terms": {}, "plugin_terms": {}, "sizing": {}, "idle": {}, "staleness_hours": {},
-	"business_hours": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster-quota": {}, "snapshot": {},
+	"business_hours": {}, "sleep_advisory": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster-quota": {}, "snapshot": {},
 }
 
 var reservedYAMLKeys = []string{"node", "gpu", "pvc", "vm", "quota", "cluster-quota", "snapshot"}
@@ -46,6 +47,7 @@ type fileConfig struct {
 	Idle           idleYAML              `yaml:"idle,omitempty"`
 	StalenessHours *float64              `yaml:"staleness_hours,omitempty"`
 	BusinessHours  *businessHoursYAML    `yaml:"business_hours,omitempty"`
+	SleepAdvisory  *sleepAdvisoryYAML    `yaml:"sleep_advisory,omitempty"`
 	Node           map[string]any        `yaml:"node,omitempty"`
 	GPU            map[string]any        `yaml:"gpu,omitempty"`
 	PVC            map[string]any        `yaml:"pvc,omitempty"`
@@ -90,6 +92,55 @@ type idleYAML struct {
 	MinObservationDays   int      `yaml:"min_observation_days"`
 	ExcludeNamespaces    []string `yaml:"exclude_namespaces"`
 	ExcludeWorkloadTypes []string `yaml:"exclude_workload_types"`
+}
+
+// sleepAdvisoryYAML configures the W8 non-prod sleep-candidate advisory
+// (#721, ADR-0348 parity). Requires business_hours.enabled — the signature
+// is defined against the org/cluster-level schedule only.
+type sleepAdvisoryYAML struct {
+	WindowDays           int   `yaml:"window_days,omitempty"`
+	BHActivityFloorMC    int64 `yaml:"bh_activity_floor_mc,omitempty"`
+	OutsideBHIdleFloorMC int64 `yaml:"outside_bh_idle_floor_mc,omitempty"`
+	// PlatformNamespaces are the synced cost-groups exclusions (the
+	// offline stand-in for the koku push): exact namespaces, or
+	// %-suffix prefixes. Compiled defaults always apply alongside.
+	PlatformNamespaces []string `yaml:"platform_namespaces,omitempty"`
+}
+
+// sleepPolicyFromYAML resolves the advisory policy with compiled defaults.
+func sleepPolicyFromYAML(sa *sleepAdvisoryYAML) advisory.SleepPolicy {
+	pol := advisory.DefaultSleepPolicy()
+	if sa == nil {
+		return pol
+	}
+	if sa.WindowDays > 0 {
+		pol.WindowDays = sa.WindowDays
+	}
+	if sa.BHActivityFloorMC > 0 {
+		pol.BHActivityFloorMC = sa.BHActivityFloorMC
+	}
+	if sa.OutsideBHIdleFloorMC > 0 {
+		pol.OutsideBHIdleFloorMC = sa.OutsideBHIdleFloorMC
+	}
+	return pol
+}
+
+// platformExclusionsFromYAML splits the synced entries into exact and
+// prefix sets (%-suffix wins is_prefix, mirroring the koku contract).
+func platformExclusionsFromYAML(sa *sleepAdvisoryYAML) (map[string]bool, []string) {
+	if sa == nil {
+		return nil, nil
+	}
+	exact := map[string]bool{}
+	var prefixes []string
+	for _, e := range sa.PlatformNamespaces {
+		if strings.HasSuffix(e, "%") {
+			prefixes = append(prefixes, strings.TrimSuffix(e, "%"))
+		} else {
+			exact[e] = true
+		}
+	}
+	return exact, prefixes
 }
 
 // businessHoursYAML is the cluster-wide CLI schedule (not Settings JSON nesting).

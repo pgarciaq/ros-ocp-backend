@@ -106,7 +106,8 @@ GPU: --container selects MIG; --node without --container selects timeslicing.
 }
 
 func runExplain(stdout io.Writer, f explainFlags) error {
-	if err := rejectRecommendEnvelopeInput(f.input); err != nil {
+	primaryInput, _ := splitInputs(f.inputs)
+	if err := rejectRecommendEnvelopeInput(primaryInput); err != nil {
 		return err
 	}
 	env, err := overlayEnvFromOS(f.noUserConfig)
