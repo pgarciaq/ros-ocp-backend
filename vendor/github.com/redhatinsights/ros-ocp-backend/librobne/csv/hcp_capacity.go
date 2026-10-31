@@ -3,11 +3,11 @@ package csv
 import (
 	"encoding/csv"
 	"errors"
-	"strings"
 	"fmt"
 	"io"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	hcpcapacity "github.com/redhatinsights/ros-ocp-backend/librobne/hcp"

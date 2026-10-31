@@ -19,7 +19,7 @@ import (
 var allowedYAMLKeys = map[string]struct{}{
 	"org_id": {}, "cluster_uuid": {}, "now": {}, "plugins": {},
 	"terms": {}, "plugin_terms": {}, "sizing": {}, "idle": {}, "staleness_hours": {},
-	"business_hours": {}, "sleep_advisory": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster-quota": {}, "snapshot": {},
+	"business_hours": {}, "sleep_advisory": {}, "zombie_advisory": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster-quota": {}, "snapshot": {},
 }
 
 var reservedYAMLKeys = []string{"node", "gpu", "pvc", "vm", "quota", "cluster-quota", "snapshot"}
@@ -48,6 +48,7 @@ type fileConfig struct {
 	StalenessHours *float64              `yaml:"staleness_hours,omitempty"`
 	BusinessHours  *businessHoursYAML    `yaml:"business_hours,omitempty"`
 	SleepAdvisory  *sleepAdvisoryYAML    `yaml:"sleep_advisory,omitempty"`
+	ZombieAdvisory *zombieAdvisoryYAML   `yaml:"zombie_advisory,omitempty"`
 	Node           map[string]any        `yaml:"node,omitempty"`
 	GPU            map[string]any        `yaml:"gpu,omitempty"`
 	PVC            map[string]any        `yaml:"pvc,omitempty"`
@@ -107,6 +108,40 @@ type sleepAdvisoryYAML struct {
 	PlatformNamespaces []string `yaml:"platform_namespaces,omitempty"`
 }
 
+// zombieAdvisoryYAML configures the W3 unused-hosted-cluster advisory
+// (#722, ADR-0333 parity): the standard idle window plus the pool-zero
+// short lane (#674). Same platform_namespaces contract as sleep.
+type zombieAdvisoryYAML struct {
+	WindowDays      int   `yaml:"window_days,omitempty"`
+	IdleFloorMC     int64 `yaml:"idle_floor_mc,omitempty"`
+	ShortWindowDays int   `yaml:"short_window_days,omitempty"`
+	// ShortRequiredDays floors covered pool-evidence days; 0 disables
+	// the short lane entirely (server semantics: policy <= 0 skips).
+	ShortRequiredDays  int      `yaml:"short_required_days,omitempty"`
+	PlatformNamespaces []string `yaml:"platform_namespaces,omitempty"`
+}
+
+// zombiePolicyFromYAML resolves the advisory policy with compiled defaults.
+func zombiePolicyFromYAML(za *zombieAdvisoryYAML) advisory.ZombiePolicy {
+	pol := advisory.DefaultZombiePolicy()
+	if za == nil {
+		return pol
+	}
+	if za.WindowDays > 0 {
+		pol.IdleWindowDays = za.WindowDays
+	}
+	if za.IdleFloorMC > 0 {
+		pol.IdleCPUFloorMC = za.IdleFloorMC
+	}
+	if za.ShortWindowDays > 0 {
+		pol.ShortWindowDays = za.ShortWindowDays
+	}
+	if za.ShortRequiredDays > 0 {
+		pol.ShortRequiredDays = za.ShortRequiredDays
+	}
+	return pol
+}
+
 // sleepPolicyFromYAML resolves the advisory policy with compiled defaults.
 func sleepPolicyFromYAML(sa *sleepAdvisoryYAML) advisory.SleepPolicy {
 	pol := advisory.DefaultSleepPolicy()
@@ -131,9 +166,15 @@ func platformExclusionsFromYAML(sa *sleepAdvisoryYAML) (map[string]bool, []strin
 	if sa == nil {
 		return nil, nil
 	}
+	return splitPlatformNamespaces(sa.PlatformNamespaces)
+}
+
+// splitPlatformNamespaces is the shared synced-exclusion contract for the
+// advisory family (sleep #721, zombie #722).
+func splitPlatformNamespaces(entries []string) (map[string]bool, []string) {
 	exact := map[string]bool{}
 	var prefixes []string
-	for _, e := range sa.PlatformNamespaces {
+	for _, e := range entries {
 		if strings.HasSuffix(e, "%") {
 			prefixes = append(prefixes, strings.TrimSuffix(e, "%"))
 		} else {

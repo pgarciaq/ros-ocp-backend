@@ -567,6 +567,12 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 	if advs := computeSleepAdvisory(fl); len(advs) > 0 {
 		out.HCPAdvisories = advs
 	}
+	// W3 unused-hosted-cluster advisory (#722): both lanes (standard +
+	// pool-zero short) over the primary digests and the context facts.
+	if advs := computeZombieAdvisory(fl); len(advs) > 0 {
+		out.HCPAdvisories = append(out.HCPAdvisories, advs...)
+		sortAdvisoryOut(out.HCPAdvisories)
+	}
 	if err := attachFileOnlyRecs(&out, fl); err != nil {
 		return out, err
 	}
@@ -764,6 +770,11 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	out.now = now
 	out.skipped = csvLoaded.RowsSkipped
 	out.manifest = csvLoaded.Manifest
+	// Advisory inputs (#722-#724): SLO + api-tax rows ride any payload;
+	// identity joins happen inside the advisories, so rows naming other
+	// clusters are invisible by design.
+	out.sloRows = csvLoaded.SLORows
+	out.apiTaxRows = csvLoaded.APITaxRows
 	// Advisory context payloads (#721, option d): each extra --input loads
 	// independently; only the cross-cluster facts are consumed. The
 	// per-payload manifest/CSV consistency guard applies to each context
@@ -795,9 +806,20 @@ type fileLoad struct {
 	// latest-wins over the context topologies' entries whose
 	// hostedClusterID matches the primary cluster; worker nodes sum the
 	// latest spec_replicas per pool for that HC.
-	hcContextLoaded       bool
-	hcTier                string
-	hcWorkerNodes         int
+	hcContextLoaded bool
+	hcTier          string
+	hcWorkerNodes   int
+	// #722 zombie context: management digests, association namespaces,
+	// raw NodePool rows (short lane), and the 72h snapshot freshness.
+	hcContextDigests  []types.KeyedDigest
+	hcAssocNamespaces []string
+	hcNodepoolRows    []csv.NodepoolRow
+	hcSnapshotFresh   bool
+	// SLO + api-tax rows (#722 API context, #723 H leg, #724): primary
+	// payload rows plus context rows, identity-joined inside the
+	// advisories. Advisory inputs are plugin-independent (#721 lesson).
+	sloRows               []csv.SLORow
+	apiTaxRows            []csv.APITaxRow
 	containerDigests      []types.KeyedDigest
 	containerBHDigests    []types.KeyedDigest
 	containerMeta         map[types.ContainerKey]csv.RowMeta
@@ -948,6 +970,12 @@ func computeRecommendations(f commonFlags) (recommendResult, error) {
 	// the dual digests. Silent when any input is absent.
 	if advs := computeSleepAdvisory(fl); len(advs) > 0 {
 		out.HCPAdvisories = advs
+	}
+	// W3 unused-hosted-cluster advisory (#722): both lanes (standard +
+	// pool-zero short) over the primary digests and the context facts.
+	if advs := computeZombieAdvisory(fl); len(advs) > 0 {
+		out.HCPAdvisories = append(out.HCPAdvisories, advs...)
+		sortAdvisoryOut(out.HCPAdvisories)
 	}
 	if err := attachFileOnlyRecs(&out, fl); err != nil {
 		return out, err

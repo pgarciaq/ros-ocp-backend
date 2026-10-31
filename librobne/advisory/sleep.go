@@ -102,13 +102,16 @@ func isUserNamespace(ns string, exact map[string]bool, prefixes []string) bool {
 }
 
 // CompiledPlatformPrefixes and CompiledPlatformExact mirror the server's
-// zombiePlatformPrefixes/Exact (internal/engine/correlate/zombie.go).
+// zombiePlatformPrefixes/Exact (internal/engine/correlate/zombie.go) — the
+// set BOTH the sleep and zombie rules share server-side. #722 restored the
+// evidence-grounded lab addon entry the #721 copy dropped.
 var (
 	CompiledPlatformPrefixes = []string{"kube-", "openshift-"}
 	CompiledPlatformExact    = map[string]bool{
 		"koku-metrics-operator":               true,
 		"local-path-storage":                  true,
 		"open-cluster-management-agent-addon": true,
+		"open-cluster-management-hc01":        true,
 	}
 )
 

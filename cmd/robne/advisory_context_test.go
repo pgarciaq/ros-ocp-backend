@@ -151,3 +151,140 @@ func TestComputeSleepAdvisory_JSONEnvelopeSibling(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &env.HCPAdvisories))
 	require.Len(t, env.HCPAdvisories, 1)
 }
+
+// #722: the zombie assembly over the multi-payload input — the primary
+// (guest) payload carries the hosted digests (idle leg); the context
+// (management) payload carries the association topology, the still-on
+// digests, and the NodePool rows (short lane). Fixture shapes mirror the
+// server's zombie_test.go topology.
+
+// zombieContainerRow renders one container-CSV row (the header contract
+// the loader parses; usage/request averages in cores).
+func zombieContainerRow(day int, ns, wl string, usageAvg, reqAvg string) string {
+	return "2026-10-01 00:00:00 +0000 UTC,2026-11-01 00:00:00 +0000 UTC,2026-10-" + pad2(day) + " 09:00:00 +0000 UTC,2026-10-" + pad2(day) + " 17:00:00 +0000 UTC,c0," + wl + "-pod,web,ReplicaSet,web,deployment," + ns + ",quay.io/example/app:latest,worker-0,i-0,8,33554432000,250,7.5,32212254720,0,m5.xlarge,workers,worker," + reqAvg + "," + reqAvg + ",0.2,0.2," + usageAvg + ",0.08,0.15,0.1,0,0,0,0,1073741824,1073741824,1127428915,1127428915,268435456,241591910,322122547,268435456,255013683,228170137,295279001,255013683,0,0,1,1,1,,,,,,,,,,,,,,,\n"
+}
+
+// writeZombieFixture writes a guest payload (container CSVs: idle user
+// workload + busy platform rows) and a mgmt context payload (topology
+// association + still-on digests + optional nodepool CSV). Days cover the
+// trailing window before 2026-10-30 (the pinned now).
+func writeZombieFixture(t *testing.T, days []int, userUsageAvg, mgmtReqAvg string, nodepool string) (guestDir, mgmtDir string) {
+	t.Helper()
+	root := t.TempDir()
+	guestDir = filepath.Join(root, "guest")
+	mgmtDir = filepath.Join(root, "mgmt")
+	require.NoError(t, os.MkdirAll(guestDir, 0o750))
+	require.NoError(t, os.MkdirAll(mgmtDir, 0o750))
+
+	hdr := "report_period_start,report_period_end,interval_start,interval_end,container_name,pod,owner_name,owner_kind,workload,workload_type,namespace,image_name,node,resource_id,node_capacity_cpu_cores,node_capacity_memory_bytes,node_capacity_pods,node_allocatable_cpu_cores,node_allocatable_memory_bytes,node_allocatable_gpu_count,instance_type,machineset_name,node_role,cpu_request_container_avg,cpu_request_container_sum,cpu_limit_container_avg,cpu_limit_container_sum,cpu_usage_container_avg,cpu_usage_container_min,cpu_usage_container_max,cpu_usage_container_sum,cpu_throttle_container_avg,cpu_throttle_container_max,cpu_throttle_container_min,cpu_throttle_container_sum,memory_request_container_avg,memory_request_container_sum,memory_limit_container_avg,memory_limit_container_sum,memory_usage_container_avg,memory_usage_container_min,memory_usage_container_max,memory_usage_container_sum,memory_rss_usage_container_avg,memory_rss_usage_container_min,memory_rss_usage_container_max,memory_rss_usage_container_sum,oom_count,restart_count,workload_pod_count,desired_replicas,available_replicas,accelerator_model_name,accelerator_profile_name,gpu_uuid,accelerator_frame_buffer_usage_min,accelerator_frame_buffer_usage_max,accelerator_frame_buffer_usage_avg,tensor_pipe_active_min,tensor_pipe_active_max,tensor_pipe_active_avg,dram_active_min,dram_active_max,dram_active_avg,sm_active_min,sm_active_max,sm_active_avg\n"
+	var rows string
+	for _, d := range days {
+		rows += zombieContainerRow(d, "demo-app", "web", userUsageAvg, "0.1")
+		rows += zombieContainerRow(d, "kube-system", "coredns", "2.0", "2.0")
+		rows += zombieContainerRow(d, "koku-metrics-operator", "collector", "5.0", "5.0")
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(guestDir, "ros-openshift-container-202610.csv"), []byte(hdr+rows), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(guestDir, "manifest.json"), []byte(`{"cluster_id": "bbbbbbbb-1111-1111-1111-111111111111"}`), 0o600))
+
+	// Mgmt: association topology (fresh complete snapshot naming the guest
+	// HC) + still-on digests in the association namespace.
+	mgmtManifest := `{"cluster_id": "cccccccc-1111-1111-1111-111111111111", "cr_status": {"topology": {"hostedControlPlaneNamespaces": ["clusters-hc9"], "hcpSnapshot": [{"hcpNamespace": "clusters-hc9", "hostedClusterID": "bbbbbbbb-1111-1111-1111-111111111111", "hcUID": "uid-hc-1", "hcpUID": "uid-hcp-1", "namespaceUID": "uid-ns-1", "observedAt": "2026-10-29T12:00:00Z", "complete": true}]}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(mgmtDir, "manifest.json"), []byte(mgmtManifest), 0o600))
+	var mgmtRows string
+	for _, d := range days {
+		mgmtRows += zombieContainerRow(d, "clusters-hc9", "kube-apiserver", "0.05", mgmtReqAvg)
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(mgmtDir, "ros-openshift-container-202610.csv"), []byte(hdr+mgmtRows), 0o600))
+	if nodepool != "" {
+		require.NoError(t, os.WriteFile(filepath.Join(mgmtDir, "ros-openshift-nodepool-202610.csv"), []byte(nodepool), 0o600))
+	}
+	return guestDir, mgmtDir
+}
+
+func zombieDays14() []int {
+	return []int{16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29}
+}
+
+func TestComputeZombieAdvisory_AssemblyFires(t *testing.T) {
+	guestDir, mgmtDir := writeZombieFixture(t, zombieDays14(), "0.001", "0.5", "")
+	f := commonFlags{
+		inputs:       []string{guestDir, mgmtDir},
+		noUserConfig: true,
+		now:          "2026-10-30T00:00:00Z",
+	}
+	result, err := executeRecommend(f)
+	require.NoError(t, err)
+	require.NotEmpty(t, result.HCPAdvisories, "idle user + provisioned CP must fire despite busy platform rows")
+	adv := result.HCPAdvisories[0]
+	assert.Equal(t, "review_unused_hosted_cluster", adv.Verdict)
+	assert.Equal(t, "high", adv.Confidence)
+	assert.Equal(t, "bbbbbbbb-1111-1111-1111-111111111111", adv.HostedClusterID)
+	assert.Equal(t, int64(1), adv.Details["peak_user_cpu_mc"], "1mC user peak under the 10mC floor")
+	assert.Equal(t, int64(10), adv.Details["idle_floor_cpu_mc"])
+	assert.Equal(t, int64(500), adv.Details["control_plane_cpu_request_mc"])
+	assert.NotContains(t, adv.Details, "api_max_daily_requests", "no SLO rows: api context unknown, field absent")
+	require.NotEmpty(t, adv.Evidence)
+	assert.Equal(t, "hc:bbbbbbbb-1111-1111-1111-111111111111", adv.Evidence[0])
+}
+
+func TestComputeZombieAdvisory_AliveGuestIsSilent(t *testing.T) {
+	guestDir, mgmtDir := writeZombieFixture(t, zombieDays14(), "0.5", "0.5", "")
+	f := commonFlags{
+		inputs:       []string{guestDir, mgmtDir},
+		noUserConfig: true,
+		now:          "2026-10-30T00:00:00Z",
+	}
+	result, err := executeRecommend(f)
+	require.NoError(t, err)
+	assert.Empty(t, result.HCPAdvisories, "busy user workload vetoes the idle leg")
+}
+
+func TestComputeZombieAdvisory_ZeroCPIsSilent(t *testing.T) {
+	guestDir, mgmtDir := writeZombieFixture(t, zombieDays14(), "0.001", "0.05", "")
+	f := commonFlags{
+		inputs:       []string{guestDir, mgmtDir},
+		noUserConfig: true,
+		now:          "2026-10-30T00:00:00Z",
+	}
+	result, err := executeRecommend(f)
+	require.NoError(t, err)
+	assert.Empty(t, result.HCPAdvisories, "CP requests present-but-below-floor is known-not-on: silence, not medium")
+}
+
+func TestComputeZombieAdvisory_NoContextPayloadIsSilent(t *testing.T) {
+	guestDir, _ := writeZombieFixture(t, zombieDays14(), "0.001", "0.5", "")
+	f := commonFlags{
+		inputs:       []string{guestDir},
+		noUserConfig: true,
+		now:          "2026-10-30T00:00:00Z",
+	}
+	result, err := executeRecommend(f)
+	require.NoError(t, err)
+	assert.Empty(t, result.HCPAdvisories, "no context payload means no fresh snapshot: silence, never an error")
+}
+
+func TestComputeZombieAdvisory_ShortLaneFires(t *testing.T) {
+	// 3 days of guest data only: the standard 14d lane is silent (missing
+	// days read unknown); the pool-zero short lane fires over its window.
+	np := "hc_cluster_id,pool_name,window_start,window_end,spec_replicas,status_replicas,autoscaling,collected_at,source\n"
+	for _, d := range []int{27, 28, 29} {
+		for h := 0; h < 4; h++ {
+			np += "bbbbbbbb-1111-1111-1111-111111111111,workers,2026-10-" + pad2(d) + " " + pad2(h) + ":00:00 +0000 UTC,2026-10-" + pad2(d) + " " + pad2(h+1) + ":00:00 +0000 UTC,0,0,,2026-10-" + pad2(d) + " " + pad2(h+1) + ":00:00 +0000 UTC,hypershift\n"
+		}
+	}
+	guestDir, mgmtDir := writeZombieFixture(t, []int{27, 28, 29}, "0.001", "0.5", np)
+	f := commonFlags{
+		inputs:       []string{guestDir, mgmtDir},
+		noUserConfig: true,
+		now:          "2026-10-30T00:00:00Z",
+	}
+	result, err := executeRecommend(f)
+	require.NoError(t, err)
+	require.NotEmpty(t, result.HCPAdvisories, "parked pools + idle short window must fire the short lane")
+	adv := result.HCPAdvisories[0]
+	assert.Equal(t, "review_unused_hosted_cluster", adv.Verdict)
+	assert.Equal(t, "high", adv.Confidence)
+	assert.Equal(t, 72.0, adv.WindowEnd.Sub(adv.WindowStart).Hours(), "short window spans 3 days")
+	assert.Contains(t, adv.Evidence, "lane:short-3d")
+	assert.Contains(t, adv.Evidence, "pool_zero_days:3")
+}

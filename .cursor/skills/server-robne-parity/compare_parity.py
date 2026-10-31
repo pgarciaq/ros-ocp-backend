@@ -267,10 +267,13 @@ def cmp_hcp_advisory(rep, robne, server):
             rep.diff(k, "confidence", c.get("confidence"), s.get("confidence"))
         cd = c.get("details") or {}
         sd = s.get("details") or {}
-        for f in ("declared_tier", "bh_active_peak_cpu_mc", "outside_bh_peak_cpu_mc",
-                   "worker_node_count", "reclaim_node_hours_per_week"):
-            if f in cd or f in sd:
-                rep.diff(k, f"details.{f}", cd.get(f), sd.get(f))
+        # Key-union comparison: per-verdict detail fields differ across the
+        # advisory family (sleep #721, zombie #722, headroom #723, api-tax
+        # #724) — compare every key either side carries, so a missing or
+        # extra field on either side is a diff, not a silent pass.
+        fields = sorted(set(cd) | set(sd))
+        for f in fields:
+            rep.diff(k, f"details.{f}", cd.get(f), sd.get(f))
     for k in srows:
         rep.diff(k, "robne", "MISSING", "present in server only")
 

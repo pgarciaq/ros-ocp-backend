@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI: W3 unused-hosted-cluster (zombie) advisory ([#722](https://github.com/pgarciaq/ros-ocp-backend/issues/722), [ADR-0333](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0333-unused-hostedcluster-lifecycle-w3.md)):**
+  the `review_unused_hosted_cluster` advisory joins the `hcp_advisories`
+  sibling with full parity to the server's correlator rule — the standard
+  14-day idle window (full-coverage guest digests, platform exclusions
+  shared with sleep, one busy user day vetoes) plus the pool-zero short
+  lane (#674) over the NodePool rows. The still-on leg reads the
+  management payload's digests over the association namespaces (the first
+  context-digest consumer of the multi-payload input); missing CP proof
+  fires medium, present-but-zero CP is silence, days without digests read
+  unknown. `zombie_advisory` YAML configures the policy fields and the
+  synced platform-namespace exclusions. Restored the evidence-grounded
+  `open-cluster-management-hc01` entry to the shared compiled platform
+  set (the #721 copy had dropped it — a sleep/zombie parity fix).
 - **robne CLI: multi-payload input and the W8 sleep advisory ([#721](https://github.com/pgarciaq/ros-ocp-backend/issues/721), [ADR-0350](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0350-robne-multi-payload-input.md)):**
   `--input` is now repeatable — the first payload is the primary
   (recommendation cluster), additional payloads are advisory context

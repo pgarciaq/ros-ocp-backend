@@ -41,6 +41,8 @@ once, upload that exact directory, and point robne at it.
 
 The `hcp-advisory` entity (#721) needs a **two-payload fixture**: the guest payload (container CSVs with both BH and all-hours rows) plus the management payload (a `manifest.json` with the `hcpSnapshot` topology carrying `hcTier`, and a NodePool CSV). Pass both to robne with repeatable `--input` (guest first). Compare against the server's `GET .../hcp/advisories` response.
 
+The zombie verdict (#722) additionally needs **mgmt container CSVs** in the association namespace (`hcpSnapshot.hcpNamespace`) with CP requests >= 100mC — the still-on leg reads the context payload's digests, not just its topology. The short lane needs NodePool rows at spec=0 AND status=0 on every covered day.
+
 1. **Template per entity** (nise repo `examples/`, or the chart's
    `tests/fixtures/nise_templates/` for cluster-quota):
 
@@ -146,6 +148,8 @@ The `hcp-advisory` entity (#721) needs a **two-payload fixture**: the guest payl
 | Payload files vanish from `/tmp` | Keep scratch under `.superpowers/tmp/` |
 | hcp-advisory parity: robne silent | The advisory needs a BH schedule (`business_hours.enabled`), a context payload (`--input` twice: guest first, mgmt second), and dual digests — silence is the designed missing-input posture, not a bug |
 | hcp-advisory: context tier not picked up | The mgmt manifest's `hcpSnapshot` entries must name the primary's cluster ID in `hostedClusterID` and be `complete: true`; partial or mismatched entries are invisible by design |
+| zombie parity: robne silent | The zombie needs a fresh (72h) complete snapshot AND full-window guest digests AND mgmt digests in the association namespace — a missing day reads unknown, never idle-by-absence |
+| zombie parity: fires medium not high | Medium = the mgmt payload lacks trailing-day rows in the assoc namespace (CP proof unknown); high needs CP requests >= 100mC there |
 
 ## Interrupted Runs
 

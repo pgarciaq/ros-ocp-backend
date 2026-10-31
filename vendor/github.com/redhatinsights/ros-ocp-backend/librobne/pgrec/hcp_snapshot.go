@@ -25,6 +25,9 @@ type SnapshotRow struct {
 	ObservedAt       time.Time
 	Complete         bool
 	Diagnostics      string
+	// HcTier is the HostedCluster's tier label value at observation time
+	// (W8 declared classification, ADR-0348). Read latest-wins.
+	HcTier string
 }
 
 // parseSnapshotTime parses an RFC3339 timestamp, yielding zero time on empty
@@ -118,8 +121,9 @@ func UpsertHCPSnapshots(ctx context.Context, pool *pgxpool.Pool, orgID, clusterU
 			INSERT INTO manifest_hcp_snapshots (
 				manifest_id, org_id, cluster_uuid, hcp_namespace,
 				hosted_cluster_id, hc_uid, hcp_uid, namespace_uid,
-				namespace_created_at, observed_at, complete, diagnostics
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+				namespace_created_at, observed_at, complete, diagnostics,
+				hc_tier
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 			ON CONFLICT (manifest_id, hcp_namespace)
 			DO UPDATE SET
 				hosted_cluster_id = EXCLUDED.hosted_cluster_id,
@@ -129,11 +133,12 @@ func UpsertHCPSnapshots(ctx context.Context, pool *pgxpool.Pool, orgID, clusterU
 				namespace_created_at = EXCLUDED.namespace_created_at,
 				observed_at = EXCLUDED.observed_at,
 				complete = EXCLUDED.complete,
-				diagnostics = EXCLUDED.diagnostics`,
+				diagnostics = EXCLUDED.diagnostics,
+				hc_tier = EXCLUDED.hc_tier`,
 			manifestID, orgID, clusterUUID, e.HCPNamespace,
 			e.HostedClusterID, e.HcUID, e.HcpUID, e.NamespaceUID,
 			nullTime(parseSnapshotTime(e.NamespaceCreatedAt)), observed,
-			e.Complete, e.Diagnostics,
+			e.Complete, e.Diagnostics, e.HcTier,
 		)
 	}
 	if batch.Len() == 0 {

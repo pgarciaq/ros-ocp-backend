@@ -87,6 +87,11 @@ type HCPSnapshotEntry struct {
 	Complete bool `json:"complete,omitempty"`
 	// Diagnostics names the failed reads for incomplete entries.
 	Diagnostics string `json:"diagnostics,omitempty"`
+	// HcTier is the HostedCluster's insights.cost-management/hc-tier label
+	// value, verbatim (empty when the label is absent). W8 declared
+	// classification (#715/#716, ADR-0348); the operator interprets
+	// nothing — ROS reads it latest-wins.
+	HcTier string `json:"hcTier,omitempty"`
 }
 
 // Classify maps facts to a topology following ADR-0328: a management plane

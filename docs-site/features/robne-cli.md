@@ -317,6 +317,48 @@ sleep_advisory:
 (the multi-payload input contract); deferred input-model generalizations in
 [#725](https://github.com/pgarciaq/ros-ocp-backend/issues/725).
 
+### Zombie advisory (#722)
+
+The W3 unused-hosted-cluster advisory (verdict `review_unused_hosted_cluster`,
+ADR-0333) appears in the same `hcp_advisories` sibling. Two lanes evaluate
+independently:
+
+- **Standard lane**: a trailing idle window (default 14 days) where every
+  covered day shows zero active non-system workloads on the **guest**
+  payload, plus a provisioned control plane on the **management** payload
+  (CP CPU requests above the 100mC floor in the association namespace).
+- **Short lane** (#674): when the NodePool rows read all-pools-zero
+  (spec=0 AND status=0) on every covered day of a short window (default
+  3 days), the same dual legs evaluate over that window — the advisory
+  carries `lane:short-3d` evidence.
+
+```bash
+robne recommend --input guest-payload/ --input mgmt-payload/ --format json
+```
+
+The management payload must carry container CSVs in the association
+namespace (the topology's `hcpNamespace`) — the still-on leg reads the
+context payload's digests. Days without digests read unknown, never
+idle-by-absence; a fresh (72h) complete association snapshot is required.
+Missing CP proof fires `medium`; present-but-zero CP is silence.
+
+**Copy constraint (ADR-0333, applies to any human-readable rendering):**
+scaling to zero saves **worker cost only — the control plane keeps
+running**. `pausedUntil` is **never** a savings mechanism; delete is the
+real save. The JSON advisory carries evidence facts only, matching the
+server's rows byte-for-byte.
+
+```yaml
+zombie_advisory:
+  window_days: 14            # trailing idle window (1-90)
+  idle_floor_mc: 10          # daily per-workload CPU counting as active
+  short_window_days: 3       # pool-zero fast-lane window
+  short_required_days: 3     # covered pool days required
+  platform_namespaces:       # synced cost-groups exclusions (optional;
+    - "kube-%"               #   compiled defaults always apply alongside)
+    - "openshift-%"
+```
+
 ## Manpages and offline docs (#703)
 
 `make man` regenerates roff manpages (`docs/man/man1/robne.1` plus one page

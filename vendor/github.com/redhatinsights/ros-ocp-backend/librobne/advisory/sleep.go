@@ -102,13 +102,16 @@ func isUserNamespace(ns string, exact map[string]bool, prefixes []string) bool {
 }
 
 // CompiledPlatformPrefixes and CompiledPlatformExact mirror the server's
-// zombiePlatformPrefixes/Exact (internal/engine/correlate/zombie.go).
+// zombiePlatformPrefixes/Exact (internal/engine/correlate/zombie.go) — the
+// set BOTH the sleep and zombie rules share server-side. #722 restored the
+// evidence-grounded lab addon entry the #721 copy dropped.
 var (
 	CompiledPlatformPrefixes = []string{"kube-", "openshift-"}
 	CompiledPlatformExact    = map[string]bool{
 		"koku-metrics-operator":               true,
 		"local-path-storage":                  true,
 		"open-cluster-management-agent-addon": true,
+		"open-cluster-management-hc01":        true,
 	}
 )
 
@@ -204,7 +207,9 @@ func SleepCandidate(hcID, tier string, sums map[string]map[DayKey]DaySum, sched 
 func weeklyOutsideHours(s bhschedule.Schedule) float64 {
 	parse := func(hhmm string) int {
 		var h, m int
-		fmt.Sscanf(hhmm, "%d:%d", &h, &m)
+		if _, err := fmt.Sscanf(hhmm, "%d:%d", &h, &m); err != nil {
+			return 0 // unparseable window — treated as 0 minutes
+		}
 		return h*60 + m
 	}
 	window := parse(s.EndTime) - parse(s.StartTime)
