@@ -29,8 +29,16 @@ func TestValidateHCPCorrelationSettingsUpdate_RejectsUnknownField(t *testing.T) 
 }
 
 func TestValidateHCPCorrelationSettingsUpdate_RejectsMissingField(t *testing.T) {
-	err := validateHCPCorrelationSettingsUpdate(json.RawMessage(`{"h_p99_threshold_s": 0.5}`))
+	// The Bruno-example drift shape (#733): 13 of 16 fields — every zombie
+	// field present, every sleep field absent (the exact body the cheat
+	// sheet shipped between #716 and the #733 correction). The rejection
+	// must NAME the missing fields so a confused client can fix the body.
+	body := json.RawMessage(`{"h_p99_threshold_s":0.35,"h_baseline_multiple":4,"c_cpu_pct":85,"c_etcd_p99_s":0.02,"window_h":2,"skew_m":10,"freshness_h":4,"expiry_h":48,"z_idle_req_per_day":100,"z_idle_cpu_floor_mc":10,"z_short_window_days":3,"z_short_required_days":3,"z_idle_window_days":14}`)
+	err := validateHCPCorrelationSettingsUpdate(body)
 	require.Error(t, err, "PUT replaces the whole domain: partial bodies are rejected like quota")
+	for _, missing := range []string{"sleep_window_days", "sleep_bh_activity_floor_mc", "sleep_outside_bh_idle_floor_mc"} {
+		require.Contains(t, err.Error(), missing, "the error names every missing field")
+	}
 }
 
 func TestValidateHCPCorrelationSettingsUpdate_RejectsOutOfRange(t *testing.T) {
