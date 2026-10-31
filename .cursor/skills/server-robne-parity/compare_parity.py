@@ -54,6 +54,16 @@ def load_server(paths):
     return merged
 
 
+def float_close(a, b, rel=1e-3):
+    """Equal, or both numeric within relative tolerance (float4 storage
+    artifacts + percentile-method deltas on derived aggregates)."""
+    if a == b:
+        return True
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return abs(a - b) <= rel * max(abs(a), abs(b), 1e-12)
+    return False
+
+
 def server_rows(doc):
     return doc["data"] if isinstance(doc, dict) and "data" in doc else doc
 
@@ -250,19 +260,29 @@ CRQ_MAP = [
 
 
 def cmp_hcp_advisory(rep, robne, server):
-    """Compare HCP advisories (one per hosted cluster per window). The
-    robne hcp_advisories sibling and the server GET .../hcp/advisories
-    response share the #717 contract: verdict, confidence, window, typed
-    details, evidence. Compared per hosted_cluster_id."""
-    srows = {r["hosted_cluster_id"]: r for r in server}
+    """Compare HCP advisories. The robne hcp_advisories sibling and the
+    server GET .../hcp/advisories response share the #717 contract:
+    verdict, confidence, window, typed details, evidence.
+
+    Keyed per (hosted_cluster_id, verdict): robne's envelope can carry
+    several verdicts for one HC, while the server's table keeps ONE row
+    per (org, HC, window) — when two correlator cycles fire for the same
+    HC+window the last writer wins (ADR-0349 §3). A robne verdict with no
+    server counterpart is reported as a model note (superseded or not
+    fired server-side), not a field-by-field diff against an unrelated
+    verdict. Cluster-scoped rows (null hosted_cluster_id, e.g. api-tax)
+    key on the empty string, matching the server's storage."""
+    def skey(r):
+        return (r.get("hosted_cluster_id") or "", r.get("verdict"))
+
+    srows = {skey(r): r for r in server}
     for c in robne:
-        k = c.get("hosted_cluster_id", "?")
-        s = srows.pop(k, None)
+        k = c.get("hosted_cluster_id") or "?"
+        s = srows.pop(skey(c), None)
         if s is None:
-            rep.diff(k, "server", "MISSING", "present in robne only")
+            rep.diff(k, "server verdict " + str(c.get("verdict")),
+                     "present in robne only", "no server row (not fired, or superseded by last-writer-wins)")
             continue
-        if c.get("verdict") != s.get("verdict"):
-            rep.diff(k, "verdict", c.get("verdict"), s.get("verdict"))
         if c.get("confidence") != s.get("confidence"):
             rep.diff(k, "confidence", c.get("confidence"), s.get("confidence"))
         cd = c.get("details") or {}
@@ -270,12 +290,25 @@ def cmp_hcp_advisory(rep, robne, server):
         # Key-union comparison: per-verdict detail fields differ across the
         # advisory family (sleep #721, zombie #722, headroom #723, api-tax
         # #724) — compare every key either side carries, so a missing or
-        # extra field on either side is a diff, not a silent pass.
+        # extra field on either side is a diff, not a silent pass. Floats
+        # compare with 1e-3 relative tolerance: the server's advisory
+        # columns are float4 (pgx scans introduce representation artifacts,
+        # e.g. 2.989 -> 2.989000082015991) and derived aggregates (the CP
+        # ratio) differ by the percentile method between the ingestion and
+        # robne's digest path (~0.1%).
         fields = sorted(set(cd) | set(sd))
         for f in fields:
-            rep.diff(k, f"details.{f}", cd.get(f), sd.get(f))
+            if float_close(cd.get(f), sd.get(f)):
+                rep.good()
+            else:
+                rep.diff(k, f"details.{f}", cd.get(f), sd.get(f))
+        if c.get("confidence") == s.get("confidence"):
+            rep.good()
+        if (c.get("window_start") or "")[:10] == (s.get("window_start") or "")[:10]:
+            rep.good()
     for k in srows:
-        rep.diff(k, "robne", "MISSING", "present in server only")
+        rep.diff(str(k[0]), "server verdict " + str(k[1]),
+                 "present in server only", "no robne row")
 
 
 def compare(entity, robne_doc, server_doc):
