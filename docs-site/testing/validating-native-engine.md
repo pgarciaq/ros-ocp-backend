@@ -1,6 +1,6 @@
 # Validating the Native Engine
 
-> **Last verified:** 2026-09-17
+> **Last verified:** 2026-10-31
 
 This guide is for senior QE engineers (and developers) validating the **entire ROS-OCP native recommendation engine** (Go) on **x86-64** hardware. The native engine is a **complete rewrite** of recommendation logic previously handled by **Kruize** (Java / Autotune). Validation must cover **all plugins**, **cross-cutting platform features**, **legacy-compatible API shapes** (99% — plot endpoints return percentile bands instead of boxplots per [ADR-0292](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0292-digest-based-plot-percentile-bands.md); all other shapes unchanged, so **koku-ui** needs no other changes), **performance**, and **regression vs legacy**—not only OpenShift Virtualization (VM) recommendations.
 
@@ -16,6 +16,8 @@ If you are validating the native engine for the first time:
 4. **Automated gate:** latest cost-onprem-chart full suite on phase12 images (point-in-time): **501 passed, 2 failed, 35 skipped** (`NAMESPACE=cost-onprem ./scripts/run-pytest.sh --all`). CI default without `--extended` is ~**88** tests.
 5. **Deeper coverage:** [IQE integration tests](#4-iqe-integration-tests-iqe-cost-management-plugin) and Bruno collections in `costmgmt-api-cheatsheet`.
 6. **Compare vs Kruize locally:** [Kruize vs Native comparison CLI](#kruize-vs-native-comparison-cli) — run the same nise CSV through both engines and get a side-by-side `comparison.csv`.
+
+**No recommendations while everything looks green?** Confirm the operator reconciled before debugging the engine: `oc get costmanagementmetricsconfig -n <operator-ns> costmanagementmetricscfg -o json | jq .status`. An empty `.status` is an operator problem, not an engine one — see [Operator looks green but nothing uploads](#operator-looks-green-but-nothing-uploads).
 
 **Branches:** See [Repositories and branches](#repositories-and-branches) below for the complete list of repos and clone commands.
 
@@ -550,6 +552,15 @@ Configure via **`CostManagementMetricsConfig`** CR (`costmanagement-metrics-cfg.
 | `spec.source` | Sources API integration for cluster registration |
 
 Upload content-type: `application/vnd.redhat.hccm.tar+tgz`. Manifest must list typed files and `resource_optimization_files` for ROS CSVs.
+
+**`.status` is the health signal; the CSV phase is not.** A `Succeeded` CSV and a `Running` pod only tell you OLM installed the bundle — they say nothing about whether the operator can read the cluster. The first successful reconcile is what fills `.status`:
+
+```bash
+oc get costmanagementmetricsconfig -n <operator-ns> costmanagementmetricscfg \
+  -o json | jq .status
+```
+
+Expect `prometheus.prometheus_connected: true`, `source.source_defined: true`, and a non-empty `topology.controlPlaneTopology`. An empty `.status` while every pod is green means no reconcile has ever completed: nothing is uploaded, so the engine has nothing to debug. See [Operator looks green but nothing uploads](#operator-looks-green-but-nothing-uploads).
 
 ---
 
@@ -2566,6 +2577,8 @@ Grep processor for: `native engine`, `native VM engine`, `unable to fetch CSV`, 
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
+| No recommendations **and** every pod green (CSV `Succeeded`, operator `Running`, 0 restarts) | Operator never reconciled — `.status` is empty because a cluster-scoped read is denied (installed bundle lags the operator code) | Check `.status`, not the CSV phase: [Operator looks green but nothing uploads](#operator-looks-green-but-nothing-uploads) |
+| Operator log repeats `is forbidden: … cannot list resource` | `collector.*` logger → best-effort (one CSV column stays empty, e.g. `machineset_name`); any other logger → reconcile stall, nothing uploads | Classify by the logger field: [Operator looks green but nothing uploads](#operator-looks-green-but-nothing-uploads) |
 | No recommendations in API | ROS Kafka disabled, processor not running, or empty `resource_optimization_files` | `DISABLE_ROS_MSG=False`; run processor; fix manifest |
 | Plugin returns **404** | Plugin disabled or Kruize mode | Check `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`; ensure not `kruize`-only |
 | Stale recommendations | Old digests, no re-ingest | Re-upload tarball; check `updated_at` in DB; settings cache up to **60s** |
@@ -2584,6 +2597,70 @@ Grep processor for: `native engine`, `native VM engine`, `unable to fetch CSV`, 
 | Wrong tenant / empty RBAC | Bad identity | Use `org_id: "1234567"`, admin user; or `RBAC_ENABLE=false` locally |
 | Stale API responses | Koku/Valkey cache | `docker exec koku_valkey redis-cli FLUSHALL`; restart `koku-server` |
 | orgorg schema bug | JWT `org_id: "org1234567"` | Use bare `"1234567"` |
+
+#### Operator looks green but nothing uploads
+
+The highest-value check when "no recommendations" is reported on an OLM-installed
+cluster, and the one that costs the most time to discover late. The install looks
+healthy by every signal people normally check — CSV `Succeeded`, operator pod
+`Running`, zero restarts, nothing crash-looping — while the operator has never
+completed a reconcile, so nothing was ever uploaded and the engine has nothing to
+work with.
+
+**Assert on `.status`:**
+
+```bash
+oc get costmanagementmetricsconfig -n <operator-ns> costmanagementmetricscfg \
+  -o json | jq .status
+```
+
+| `.status` field | Healthy value | Empty / false means |
+|---|---|---|
+| `prometheus.prometheus_configured` | `true` | the CR's Prometheus config was never processed |
+| `prometheus.prometheus_connected` | `true` | Prometheus/Thanos unreachable from the operator |
+| `authentication.credentials_found` | `true` | the token or secret named by the CR is missing |
+| `source.source_defined` | `true` | no source registered; uploads have nowhere to go |
+| `topology.controlPlaneTopology` | non-empty (`SingleReplica`, `HighlyAvailable`, …) | the cluster topology read is denied |
+| `packaging.number_reports_stored` | grows after the first cycle | `0` is **normal before the first packaging cycle** |
+| `upload.last_successful_upload_time` | set after the first upload | empty is **normal before the first upload** |
+
+Empty `.status` is not a partial state: the controller writes status at the end of a
+successful reconcile, so "entirely empty" means "never got that far".
+
+**Read the denial, then classify it.** Each denial is one log line:
+
+```
+<timestamp>  <LEVEL>  <logger>  <message>  {"error": "… is forbidden: User \"system:serviceaccount:<operator-ns>:…\" cannot <verb> resource \"<resource>\" …"}
+```
+
+The `<logger>` field decides what a denial means — only that field:
+
+- **`collector.*` — best-effort.** A collector enriches the CSVs; when denied it
+  degrades to an empty result and the cycle still completes. The columns it fills
+  stay empty (the current example is `machineset_name`, which leaves
+  `GET .../recommendations/openshift/machinesets` at `count: 0`). Worth fixing on
+  its own merits, but it does not block uploads.
+- **Anything else — reconcile stall.** The status/summary path was denied. This is
+  the failure that leaves `.status` empty and uploads nothing.
+
+Do not classify by the word `forbidden` alone, and do not trust the CSV phase. The
+OLM bundle is regenerated from the release branch, so an image built from a branch
+can be installed under a bundle whose grants lag the code — and OLM reports that
+install as `succeeded`.
+
+**Reproduce the assertion instead of eyeballing it.** In a `koku-metrics-operator`
+checkout, the fork branch carries `hack/verify-install.sh`, which asserts exactly
+the contract above (CSV phase, ready replica, reconcile-path denials, `.status`
+fields) and reports `collector.*` denials as a note:
+
+```bash
+KUBECONFIG=~/.kube/<cluster> ./hack/verify-install.sh -n <operator-ns> -c costmanagementmetricscfg
+# add --require-upload to also gate on the data path
+```
+
+If the image/bundle drift is real, reinstall from the regenerated bundle rather
+than patching the running CSV's `deployment` — a hand-patched image under the same
+install hides the drift from the next person.
 
 ### Disable Kruize explicitly
 
