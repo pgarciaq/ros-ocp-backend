@@ -10,6 +10,35 @@
     }
   },
   "paths": {
+    "/recommendations/openshift/hcp/advisories": {
+      "get": {
+        "tags": [
+          "Optimizations"
+        ],
+        "summary": "Get HCP advisories (all verdicts)",
+        "x-plugin-required": "hcp",
+        "description": "Live HCP advisories for the authenticated organization — the first serving surface for the correlator verdicts: do_not_add_workers_first (W2 headroom), tune_noisy_webhook (W5 api-tax, management-cluster-scoped: hosted_cluster_id is null), review_unused_hosted_cluster (W3 zombie; schedule_nonprod_sleep joins with W8). One advisory per hosted cluster per window (ADR-0349: predicate partition). Unpaginated; capped at 500 rows per response. Contract evolves additively only.",
+        "operationId": "getHCPAdvisories",
+        "responses": {
+          "200": {
+            "description": "The org's live advisories (may be empty)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HCPAdvisoriesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid identity"
+          },
+          "503": {
+            "description": "Database unavailable or query failed"
+          }
+        }
+      }
+    },
     "/recommendations/openshift": {
       "get": {
         "tags": [
@@ -7142,6 +7171,80 @@
   },
   "components": {
     "schemas": {
+      "HCPAdvisory": {
+        "type": "object",
+        "description": "One HCP advisory (ADR-0349). At most one advisory exists per (org, hosted cluster, window) — correlator rules are predicate-partitioned. details carries typed per-verdict fields; unmapped (future) verdicts surface their evidence only. Field evolution is additive-only.",
+        "properties": {
+          "hosted_cluster_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "The advised hosted cluster. Null on management-cluster-scoped verdicts (api-tax: shared-plane evidence names no single HC)."
+          },
+          "management_cluster_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "do_not_add_workers_first",
+              "tune_noisy_webhook",
+              "review_unused_hosted_cluster",
+              "schedule_nonprod_sleep"
+            ],
+            "description": "The advice. schedule_nonprod_sleep arrives with the W8 feature."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium"
+            ]
+          },
+          "window_start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "window_end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "details": {
+            "type": "object",
+            "description": "Typed fields per verdict. review_unused_hosted_cluster: peak_user_cpu_mc, idle_floor_cpu_mc, control_plane_cpu_request_mc, api_max_daily_requests (omitted when unknown). do_not_add_workers_first: hosted_api_p99_seconds, hosted_api_threshold_seconds, control_plane_capacity_ratio. tune_noisy_webhook: webhook, webhook_p99_seconds, webhook_p99_threshold_seconds, webhook_rejected_rate. schedule_nonprod_sleep (future): declared_tier, bh_active_peak_cpu_mc, outside_bh_peak_cpu_mc, worker_node_count, reclaim_node_hours_per_week. CPU values are millicores (_mc, digest-derived convention)."
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Raw correlator signals (key:value strings) for provenance and unmapped verdicts."
+          }
+        }
+      },
+      "HCPAdvisoriesResponse": {
+        "type": "object",
+        "properties": {
+          "meta": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer"
+              }
+            }
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HCPAdvisory"
+            }
+          }
+        }
+      },
       "IdleDetectionSettings": {
         "type": "object",
         "properties": {

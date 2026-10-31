@@ -100,6 +100,9 @@ func (p *HCPPlugin) RegisterRoutes(g *echo.Group) {
 	// explicit.
 	g.GET("/recommendations/openshift/hcp/fleet-capacity", rosapi.GetHCPCapacityLatest)
 	g.GET("/recommendations/openshift/hcp/fleet-capacity/history", rosapi.GetHCPCapacityHistory)
+	// HCP advisories serving API (#717, ADR-0349) — all correlator verdicts
+	// (headroom, api-tax, zombie; W8 sleep joins at implementation).
+	g.GET("/recommendations/openshift/hcp/advisories", rosapi.GetHCPAdvisories)
 	g.GET("/recommendations/openshift/hcp/:recommendation-id", rosapi.GetHCPRecommendationSet)
 }
 

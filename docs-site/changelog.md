@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **HCP advisories serving API ([#717](https://github.com/pgarciaq/ros-ocp-backend/issues/717), [ADR-0349](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0349-hcp-advisories-serving-api-contract.md)):**
+  `GET /api/cost-management/v1/recommendations/openshift/hcp/advisories`
+  returns the org's live correlator advisories — the first serving surface
+  for any HCP advisory. All verdicts are served with typed per-verdict
+  `details` (plus the raw correlator `evidence` for provenance):
+  `do_not_add_workers_first` (W2 headroom), `tune_noisy_webhook` (W5
+  api-tax; `hosted_cluster_id` is null on these management-cluster-scoped
+  rows), and `review_unused_hosted_cluster` (W3 zombie; the W8
+  `schedule_nonprod_sleep` verdict joins when that feature ships). One
+  advisory exists per hosted cluster per window (predicate partition);
+  the response is unpaginated with a 500-row cap, and the field vocabulary
+  evolves additively only. Requires the `hcp` plugin.
+
 ### Changed
 
 - **HCP capacity header contract is name-based ([#704](https://github.com/pgarciaq/ros-ocp-backend/issues/704)):**
