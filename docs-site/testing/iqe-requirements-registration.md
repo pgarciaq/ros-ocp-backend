@@ -1,99 +1,85 @@
 # IQE requirement registration for ROS recommendation tests
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-11-01
 
-**Last updated:** 2026-06-02
+**Last updated:** 2026-11-01
 
-IQE tests in `iqe-cost-management-plugin` tag each testcase with a `requirements:` marker in the docstring. The plugin declares those requirement IDs (with summary and priority) in `iqe_cost_management/conf/requirements.yaml`. CI jobs that pass `--requirements=<id>` only collect tests whose markers intersect the processed requirement set (see `iqe-core` `iqe/fixtures/requirements.py`).
+IQE tests tag each testcase with a `requirements:` marker in its docstring
+metadata. The plugin declares those requirement IDs (with summary and
+priority) in `iqe_ros_ocp/conf/requirements.yaml`; `iqe-core`'s
+`load_requirements()` reads that file, so `--requirements=<id>` and
+`--requirements-priority=<p>` only select tests whose markers resolve
+against it. **An ID used in a test but absent from the declarations is
+silently unselectable** — the job runs and selects nothing, which reads
+like a pass. A CI guard against that defect class is tracked in
+[#737](https://github.com/pgarciaq/ros-ocp-backend/issues/737).
 
-This document lists ROS-related requirements, what is registered in the plugin, and what still needs an **app-interface** merge request for requirement-filtered CI runs on stage/prod.
+## The marker convention (#736, owner decision 2026-11-01)
+
+`cost_ros_ocp` is the **default** — container recommendations, list
+mechanics (filters/sorting/search/pagination), engine selection,
+settings, and cross-cutting API behavior. A specific ID is minted **only
+when a group is a distinct capability QE would target by name** (a
+recommendation surface, or a reportable feature like the OOM timeline).
+The legacy umbrella IDs (`ROS-OCP`, `ROS-OCP-API`) and the phase-era
+`ROS-OCP-Phase4` marker were retired from the REST tests in the same
+change; the UI tests keep `ROS-OCP-UI`/`ROS-OCP-E2E` (declared, and a
+different surface).
 
 ## ROS requirement inventory
 
-| Requirement ID | Test file(s) | Registered in `requirements.yaml` | Typical recommendation scope |
-|----------------|--------------|-------------------------------------|------------------------------|
-| `cost_ros_ocp` | `test_ros.py`, `test_ros_container_detail.py`, `test_ros_namespace_recommendations.py`, `test_ros_threshold_settings.py`, `test_ros_*` (containers, namespaces, settings, tags, idle, history, quality, savings, fleet, business hours, term) | Yes | Base ROS-OCP ingest + container/namespace recommendations, settings, cross-cutting APIs |
-| `cost_ros_ocp_vm` | `test_ros_vm_recommendations.py` | Yes | OpenShift Virtualization VM recommendations |
-| `cost_ros_ocp_nodes` | `test_ros_node_recommendations.py`, `test_ros_node_utilization.py` | Yes (added 2026-06-02) | Node right-sizing + utilization |
-| `cost_ros_ocp_gpu` | `test_ros_gpu_recommendations.py` | Yes (added 2026-06-02) | GPU recommendations |
-| `cost_ros_ocp_pvc` | `test_pvc_recommendations.py` | Yes (added 2026-06-02) | PVC / storage recommendations |
-| `cost_ros_ocp_snapshot` | `iqe_ros_ocp/tests/rest/test_snapshot_recommendations.py` | Yes (added 2026-06-02) | Snapshot inventory / staleness |
-| `cost_ros_ocp_cluster_quota` | `test_ros_cluster_quota_recommendations.py` | Yes (added 2026-06-02) | ClusterResourceQuota recommendations |
-| `cost_ros_ocp_quota` | `test_ros_quota_recommendations.py` | Yes (added 2026-06-02) | Namespace ResourceQuota recommendations |
+Derived from the plugin tree (the derivation: for every
+`cost_ros_ocp*` token in `iqe_ros_ocp/tests/**`, the files carrying it,
+cross-checked against the declarations — every used ID is declared):
 
-### Containers vs namespaces vs other types
+| Requirement ID | Priority | Files | Scope |
+|---|---|---|---|
+| `cost_ros_ocp` | medium | `rest/test_apispec`, `rest/test_boxplots`, `rest/test_business_hours`, `rest/test_container_recommendations`, `rest/test_endpoints`, `rest/test_filters`, `rest/test_fleet_summary`, `rest/test_idle_detection`, `rest/test_native_engine`, `rest/test_negative`, `rest/test_new_container_endpoint`, `rest/test_notifications`, `rest/test_offset_limit`, `rest/test_oom`, `rest/test_quality`, `rest/test_recommendation_history`, `rest/test_ros_tag_groupby`, `rest/test_savings_summary`, `rest/test_savings_summary_engine`, `rest/test_searching`, `rest/test_settings_dual_percentiles`, `rest/test_sorting`, `rest/test_term_settings`, `rest/test_threshold_settings` | ROS-OCP general API tests |
+| `cost_ros_ocp_capabilities` | medium | `rest/test_capabilities` | ROS-OCP capabilities endpoint |
+| `cost_ros_ocp_cluster_quota` | high | `rest/test_cluster_quota_recommendations` | ROS-OCP ClusterResourceQuota recommendations API |
+| `cost_ros_ocp_fleet_heatmap` | medium | `rest/test_fleet_heatmap` | ROS-OCP fleet heatmap |
+| `cost_ros_ocp_gpu` | medium | `rest/test_gpu_recommendations` | ROS-OCP GPU recommendations API |
+| `cost_ros_ocp_gpu_summary` | medium | `rest/test_gpu_summary` | ROS-OCP GPU summary |
+| `cost_ros_ocp_hcp` | medium | `rest/test_hcp_advisories`, `rest/test_hcp_correlation_settings`, `rest/test_hcp_fleet_capacity`, `rest/test_hcp_recommendations` | ROS-OCP hosted control-plane (HCP) API |
+| `cost_ros_ocp_machinesets` | medium | `rest/test_machinesets` | ROS-OCP MachineSet recommendations API |
+| `cost_ros_ocp_namespace` | medium | `rest/test_namespace_boxplots`, `rest/test_namespace_engine_filter`, `rest/test_namespace_filter`, `rest/test_namespace_notifications`, `rest/test_namespace_ordering`, `rest/test_namespace_recommendation_detail`, `rest/test_namespace_recommendation_history`, `rest/test_namespace_recommendation_list`, `rest/test_namespace_recommendation_rbac`, `rest/test_namespace_recommendations`, `rest/test_namespace_units` | ROS-OCP namespace recommendations API |
+| `cost_ros_ocp_node_hourly` | medium | `rest/test_node_hourly_utilization` | ROS-OCP node hourly recommendations |
+| `cost_ros_ocp_nodes` | medium | `rest/test_node_engine_filter`, `rest/test_node_list_smoke`, `rest/test_node_recommendations`, `rest/test_node_utilization` | ROS-OCP node recommendations API |
+| `cost_ros_ocp_oom_timeline` | medium | `rest/test_oom_timeline` | ROS-OCP OOM timeline |
+| `cost_ros_ocp_pvc` | medium | `rest/test_pvc_recommendations`, `rest/test_pvc_storage_groupby` | ROS-OCP PVC recommendations API |
+| `cost_ros_ocp_quota` | high | `rest/test_quota_recommendations` | ROS-OCP namespace ResourceQuota recommendations API |
+| `cost_ros_ocp_savings_recalculate` | medium | `rest/test_savings_recalculate` | ROS-OCP savings recalculation |
+| `cost_ros_ocp_snapshot` | medium | `rest/test_snapshot_recommendations` | ROS-OCP snapshot recommendations API |
+| `cost_ros_ocp_snapshot_age_distribution` | medium | `rest/test_snapshot_age_distribution` | ROS-OCP snapshot age distribution |
+| `cost_ros_ocp_snapshot_cost_by_type` | medium | `rest/test_snapshot_cost_by_type` | ROS-OCP snapshot cost by type |
+| `cost_ros_ocp_tags` | medium | `rest/test_tags_status_sync` | ROS-OCP tag filtering |
+| `cost_ros_ocp_vm` | medium | `rest/test_vm_engine_filter`, `rest/test_vm_recommendations` | ROS-OCP VM recommendations API |
+| `cost_ros_ocp_vm_hourly` | medium | `rest/test_vm_hourly_activity` | ROS-OCP VM hourly recommendations |
+| `cost_ros_ocp_vm_instance_types` | medium | `rest/test_vm_instance_types` | ROS-OCP VM instance-type recommendations |
+| `cost_ros_ocp_workload_types` | medium | `rest/test_workload_types` | ROS-OCP workload types |
 
-- **Containers and generic namespace recommendations** use the broad `cost_ros_ocp` requirement (shared with many ROS API tests).
-- **Specialized recommendation plugins** (nodes, PVCs, GPUs, VMs, snapshots, cluster-quota, namespace quota) each have a **dedicated** requirement ID so CI can run targeted subsets once app-interface enables them.
+## Plugin-side registration
 
-### Container recommendations — IQE ownership split
-
-Container list/detail coverage is intentionally split across two IQE plugins to avoid
-duplicate maintenance and matrix drift:
-
-| Plugin | Owns |
-|--------|------|
-| **iqe-cost-management-plugin** | Detail contract, dual-engine (cost + performance), tag filtering, history, quality, idle detection, business hours |
-| **iqe-ros-ocp-plugin** | List filters (cluster, project, workload, container, workload_type), sorting, keyset pagination, settings (thresholds, business hours), CSV export, notification codes catalog |
-
-When adding a new container API behavior, place the IQE test in the owning plugin above
-(and tag with `cost_ros_ocp` in IQE-CM where applicable). Do not mirror the same
-assertion in both plugins unless the behavior spans both surfaces (e.g. a list field
-that must also appear on detail).
-
-## Plugin-side registration (done in this repo)
-
-Add or update entries in:
-
-`iqe-cost-management-plugin/iqe_cost_management/conf/requirements.yaml`
-
-Example entry shape:
+Add or update entries in `iqe_ros_ocp/conf/requirements.yaml`:
 
 ```yaml
-cost_ros_ocp_quota:
-  summary: ROS-OCP namespace ResourceQuota recommendations API
-  priority: high
+cost_ros_ocp_hcp:
+  summary: ROS-OCP hosted control-plane (HCP) API
+  priority: medium
+  description: HCP capacity recommendations (list/detail/scope), fleet-capacity, advisories, and correlator settings
 ```
 
-After merging plugin changes, release a new `iqe-cost-management-plugin` image/version consumed by CI.
+When adding a new test file: give every test function a docstring with a
+`metadata:` block carrying a `requirements:` marker (the default is
+`cost_ros_ocp`; mint a specific ID only for a targetable capability),
+declare the ID, and keep the inventory table above in step — the CI
+guard (#737) fails the merge if a used marker is undeclared.
 
 ## app-interface registration (still required for filtered CI)
 
-Requirement-filtered IQE jobs (e.g. `--requirements=cost_ros_ocp_quota`) also need the requirement IDs registered in **app-interface** so the CI template knows which requirements exist and can map them to job parameters / feature toggles.
-
-**Typical MR steps:**
-
-1. Open a merge request in [app-interface](https://gitlab.cee.redhat.com/service/app-interface) adding the new requirement IDs to the cost-management IQE job configuration (same pattern as existing `cost_ros_ocp` / `cost_ros_ocp_vm` entries).
-2. Get AppSRE review and merge to stage; validate a requirement-filtered job, for example:
-   ```bash
-   iqe tests plugin cost_management \
-     --requirements=cost_ros_ocp_quota \
-     --requirements-priority=high
-   ```
-3. Promote to prod after stage validation.
-
-Until app-interface lists a requirement ID, **tests still run** in unfiltered profiles (`smoke`, `extended`, etc.) because IQE matches markers directly when `--requirements` is passed manually. Missing app-interface entries mainly block **automated requirement-scoped** pipelines (nightly quota-only, PR gates on a single feature, etc.).
-
-## Does the same problem affect other recommendation types?
-
-**Yes.** Before 2026-06-02, only `cost_ros_ocp` and `cost_ros_ocp_vm` were in `requirements.yaml`, while tests already used six additional markers:
-
-- `cost_ros_ocp_nodes`
-- `cost_ros_ocp_gpu`
-- `cost_ros_ocp_pvc`
-- `cost_ros_ocp_snapshot`
-- `cost_ros_ocp_cluster_quota`
-- `cost_ros_ocp_quota`
-
-Those tests were not broken in full-profile runs (markers are optional filters), but:
-
-1. `--requirements=<id>` with priority filtering could not select them reliably from plugin metadata.
-2. app-interface could not schedule requirement-scoped jobs for those features.
-
-All eight ROS requirement IDs are now declared in the plugin. **app-interface MRs are still needed** for each new ID if you want isolated CI jobs (same as quota).
-
-## Related docs
-
-- On-prem IQE setup: `cost-onprem-chart/docs/development/iqe-testing-setup.md`
-- Cluster quota IQE case catalog: [iqe-cluster-quota-coverage.md](../testing/iqe-requirements-registration.md)
-- Skipped IQE groups (on-prem): `cost-onprem-chart/docs/development/skipped-iqe-tests.md`
+Requirement-filtered CI runs on stage/prod resolve IDs through
+app-interface's requirement definitions. The declarations in the plugin
+make the IDs selectable locally and in fork CI; the app-interface merge
+requests for the new IDs (`cost_ros_ocp_hcp`, `cost_ros_ocp_namespace`,
+and the feature IDs) remain open follow-ups — same as the 2026-06-02
+wave this page originally tracked.
