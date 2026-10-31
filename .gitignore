@@ -5,6 +5,7 @@ bin
 tmp
 /ros-ocp-backend
 /rosocp
+/robne
 __pycache__/
 coverage.txt
 output.csv
