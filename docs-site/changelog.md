@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI: zombie activity measure aligned with the server ([#746](https://github.com/pgarciaq/ros-ocp-backend/issues/746)):**
+  the zombie idle leg now sums BOTH digest streams when the
+  business-hours stream is present (robne's `business_hours` config
+  matching the org schedule) — a daytime-active workload reads active
+  and the zombie stays silent, matching the server's both-streams
+  contract discovered by the first recorded parity run. Without a BH
+  config, the all-hours p50 alone reads partial-day activity as idle —
+  the p50 measure's shared limitation, now tracked as #747 (the
+  all-hours p95 fix).
 - **robne CLI: W5 api-tax advisory ([#724](https://github.com/pgarciaq/ros-ocp-backend/issues/724)):**
   the `tune_noisy_webhook` advisory joins the `hcp_advisories` sibling
   with full parity to the server's thin W5 rule — the hottest webhook on

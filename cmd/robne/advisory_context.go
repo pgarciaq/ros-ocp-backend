@@ -179,6 +179,7 @@ func computeZombieAdvisory(fl fileLoad) []advisory.Advisory {
 		HcID:            fl.clusterID,
 		Now:             fl.now,
 		HostedDigests:   fl.containerDigests,
+		HostedBHDigests: fl.containerBHDigests,
 		MgmtDigests:     fl.hcContextDigests,
 		AssocNamespaces: fl.hcAssocNamespaces,
 		SnapshotFresh:   fl.hcSnapshotFresh,

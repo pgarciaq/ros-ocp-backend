@@ -186,14 +186,14 @@ func TestEvalZombieIdle_Boundary(t *testing.T) {
 	now := time.Now()
 	end := now.UTC().Truncate(24 * time.Hour)
 	start := end.AddDate(0, 0, -14)
-	sums := ZombieDaySums(zHostedIdle(now, 14, 9, nil))
+	sums := ZombieDaySums(zHostedIdle(now, 14, 9, nil), nil)
 	peak, idle, known := evalZombieIdle(sums, start, end, 10, nil, nil)
 	assert.True(t, known)
 	assert.True(t, idle, "9m every day with busy platform rows stays idle")
 	assert.Equal(t, int64(9), peak)
 	// Exactly-floor is active: boundary stays silent.
 	hot := zHostedIdle(now, 14, 10, nil)
-	_, idle, known = evalZombieIdle(ZombieDaySums(hot), start, end, 10, nil, nil)
+	_, idle, known = evalZombieIdle(ZombieDaySums(hot, nil), start, end, 10, nil, nil)
 	assert.True(t, known)
 	assert.False(t, idle)
 }
@@ -207,7 +207,7 @@ func TestZombie_SyncedExclusion(t *testing.T) {
 		hosted = append(hosted, zDay(d, "demo-app", "web", 9, 100))
 		hosted = append(hosted, zDay(d, "acme-team", "web", 5000, 100))
 	}
-	sums := ZombieDaySums(hosted)
+	sums := ZombieDaySums(hosted, nil)
 	peak, idle, known := evalZombieIdle(sums, start, end, 10, map[string]bool{"acme-team": true}, nil)
 	assert.True(t, known)
 	assert.True(t, idle, "synced admin CPU never counts as user activity")
@@ -332,4 +332,51 @@ func TestZombie_CustomIdleWindow(t *testing.T) {
 	got := EvaluateZombieStandard(in)
 	require.NotNil(t, got, "5 idle days must fire under a 5d custom window")
 	assert.Equal(t, 120.0, got.WindowEnd.Sub(got.WindowStart).Hours(), "advisory window spans the custom 5 days")
+}
+
+// TestZombie_SilentOnBHShapedWorkloadWithBHStream pins the #746 option-3
+// contract: with the BH digest stream present (robne's BH config matching
+// the org schedule), the activity measure is the SUM of the per-stream
+// p50s — a daytime-active workload reads 0 + 350 = 350 >= floor -> active
+// -> the zombie is silent, matching the server's both-streams read.
+func TestZombie_SilentOnBHShapedWorkloadWithBHStream(t *testing.T) {
+	now := time.Now()
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	// The all-hours p50 of a BH-shaped workload is 0 (the median sample
+	// is an off-hours one) — the W8 fixture's actual digest shape.
+	var all []types.KeyedDigest
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		all = append(all, zDay(d, "demo-app", "web", 0, 100))
+		all = append(all, zDay(d, "kube-system", "coredns", 2000, 2000))
+	}
+	// The BH stream's p50 captures the in-hours activity.
+	var bh []types.KeyedDigest
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		bh = append(bh, zDay(d, "demo-app", "web", 350, 100))
+	}
+	in := zInput(now, all, zMgmtOn(now, 14, 500))
+	in.HostedBHDigests = bh
+	assert.Nil(t, EvaluateZombieStandard(in),
+		"a daytime-active workload is not a zombie when the BH stream is present (the server's both-streams contract)")
+}
+
+// TestZombie_FiresOnBHShapedWithoutBHStream pins the non-BH contract: no
+// BH stream (robne run without a BH config, or an org with no schedule)
+// -> all-hours p50 only -> a BH-shaped workload reads 0 -> idle -> fires.
+// Both sides are wrong the same way here (the p50 measure's shared hole,
+// tracked as #747) — pinned explicitly so the behavior is a documented
+// contract, not an accident.
+func TestZombie_FiresOnBHShapedWithoutBHStream(t *testing.T) {
+	now := time.Now()
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	var all []types.KeyedDigest
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		all = append(all, zDay(d, "demo-app", "web", 0, 100))
+		all = append(all, zDay(d, "kube-system", "coredns", 2000, 2000))
+	}
+	in := zInput(now, all, zMgmtOn(now, 14, 500))
+	assert.NotNil(t, EvaluateZombieStandard(in),
+		"non-BH contract: the all-hours p50 reads partial-day activity as idle (#747 tracks the measure fix)")
 }

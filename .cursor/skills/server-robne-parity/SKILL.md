@@ -153,6 +153,7 @@ The zombie verdict (#722) additionally needs **mgmt container CSVs** in the asso
 | headroom parity: robne silent | All three legs must be KNOWN: SLO CSVs with a pre-window baseline snapshot (the delta needs two snapshots 30m+ apart), mgmt digests in the assoc namespace, and node recs — unknown legs are silence, never calm |
 | headroom parity: window proof fails | The mgmt snapshot's `observedAt` must be within the fire window minus 5m skew (default window 1h); a 72h-fresh snapshot is still too stale for headroom |
 | api-tax parity: robne silent | The webhook p99 needs two cumulative snapshots 30m+ apart with the earlier one BEFORE the fire window (the delta baseline); one job's snapshots must not be split across `source` values |
+| zombie parity: robne fires, server silent | The zombie's activity measure SUMS both digest streams when BH exists (#746): robne's `business_hours` config must match the org's schedule PRESENCE — a BH-enabled robne against a non-BH org diverges the other way. Non-BH orgs: both sides read all-hours p50 only (the shared #747 hole) |
 
 ## Interrupted Runs
 

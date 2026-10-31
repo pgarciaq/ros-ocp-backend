@@ -160,6 +160,17 @@ type zombieDayCPU struct {
 // liveness. SUM skips NULLs (unmeasurable samples contribute nothing);
 // measured flags rows with at least one real sample so all-NULL days
 // read as unmeasurable, never zero.
+//
+// ACTIVITY CONTRACT (#746 option 3, pinned 2026-10-31): the query
+// deliberately carries NO schedule_type filter — with business hours
+// enabled the table holds both streams and the per-workload daily sum
+// is all_hours p50 + business_hours p50. A daytime-active workload
+// reads 0 + <active level> >= floor -> active -> veto: a cluster used
+// during business hours is not an unused cluster. The double-count is
+// conservative by design (the rule's precision-first stance). Without
+// a BH stream (non-BH org) the all-hours p50 alone reads partial-day
+// activity as idle — the p50 measure's shared hole, tracked as #747.
+// robne's ZombieDaySums mirrors this sum (librobne/advisory/zombie.go).
 func loadZombieDayCPU(ctx context.Context, pool *pgxpool.Pool, orgID, hostedCluster string, startDate, endDate time.Time) ([]zombieDayCPU, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT bucket_date, namespace, workload,

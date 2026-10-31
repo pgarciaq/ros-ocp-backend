@@ -342,6 +342,13 @@ context payload's digests. Days without digests read unknown, never
 idle-by-absence; a fresh (72h) complete association snapshot is required.
 Missing CP proof fires `medium`; present-but-zero CP is silence.
 
+**Activity measure (#746)**: with the business-hours stream present
+(robne's `business_hours` config matching the org schedule), the idle
+leg sums BOTH digest streams — a daytime-active workload is not a
+zombie. Without a BH config, the all-hours p50 alone reads partial-day
+activity as idle (a known shared limitation of the p50 measure,
+tracked as #747).
+
 **Copy constraint (ADR-0333, applies to any human-readable rendering):**
 scaling to zero saves **worker cost only — the control plane keeps
 running**. `pausedUntil` is **never** a savings mechanism; delete is the

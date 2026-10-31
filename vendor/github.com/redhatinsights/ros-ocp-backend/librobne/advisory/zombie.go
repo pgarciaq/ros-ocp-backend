@@ -67,6 +67,10 @@ type ZombieInput struct {
 	Now  time.Time
 	// HostedDigests: the HC's own cluster digests (primary payload).
 	HostedDigests []types.KeyedDigest
+	// HostedBHDigests: the HC's business-hours digest stream — present
+	// only when robne's BH config matches the org schedule (#746: the
+	// activity measure sums both streams, the server's contract).
+	HostedBHDigests []types.KeyedDigest
 	// MgmtDigests: the management cluster's digests (context payload).
 	MgmtDigests []types.KeyedDigest
 	// AssocNamespaces: the association map's namespaces for this HC.
@@ -88,19 +92,34 @@ type ZombieInput struct {
 	SyncedPrefixes []string
 }
 
-// ZombieDaySums groups hosted digests into per-(day, ns, workload) CPU p50
-// sums (millicores) — the idle leg's input. A present row is measured;
-// the offline digests carry values, never NULLs.
-func ZombieDaySums(digests []types.KeyedDigest) map[string]map[DayKey]int64 {
+// ZombieDaySums groups the hosted digests into per-(day, ns, workload)
+// CPU p50 sums (millicores) — the idle leg's input. A present row is
+// measured; the offline digests carry values, never NULLs.
+//
+// The activity measure is the SUM over BOTH digest streams when the BH
+// stream exists (robne's BH config matching the org schedule): a
+// daytime-active workload reads all_hours p50 0 + business_hours p50
+// <active level> >= floor -> active -> veto — the server's contract
+// (#746 option 3: the server's loadZombieDayCPU reads the table without
+// a schedule_type filter, summing the streams; conservative by design —
+// the double-count vetoes more, the rule's precision-first stance).
+// Without a BH stream (non-BH org / robne without a BH config), the
+// all-hours p50 alone reads partial-day activity as idle — the shared
+// p50-measure hole, tracked as #747.
+func ZombieDaySums(all, bh []types.KeyedDigest) map[string]map[DayKey]int64 {
 	out := map[string]map[DayKey]int64{}
-	for _, kd := range digests {
-		day := kd.Row.BucketDate.UTC().Format("2006-01-02")
-		if out[day] == nil {
-			out[day] = map[DayKey]int64{}
+	add := func(digests []types.KeyedDigest) {
+		for _, kd := range digests {
+			day := kd.Row.BucketDate.UTC().Format("2006-01-02")
+			if out[day] == nil {
+				out[day] = map[DayKey]int64{}
+			}
+			k := DayKey{NS: kd.Key.Namespace, WL: kd.Key.Workload}
+			out[day][k] += kd.Row.CPUUsageP50MC
 		}
-		k := DayKey{NS: kd.Key.Namespace, WL: kd.Key.Workload}
-		out[day][k] += kd.Row.CPUUsageP50MC
 	}
+	add(all)
+	add(bh)
 	return out
 }
 
@@ -390,7 +409,7 @@ func EvaluateZombieShort(in ZombieInput) *Advisory {
 
 // evaluateZombieLanes runs the shared dual legs over one window.
 func evaluateZombieLanes(in ZombieInput, windowStart, windowEnd time.Time, lane ...string) *Advisory {
-	sums := ZombieDaySums(in.HostedDigests)
+	sums := ZombieDaySums(in.HostedDigests, in.HostedBHDigests)
 	peak, idle, known := evalZombieIdle(sums, windowStart, windowEnd, in.Policy.IdleCPUFloorMC, in.SyncedExact, in.SyncedPrefixes)
 	if !known || !idle {
 		return nil
