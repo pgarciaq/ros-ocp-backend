@@ -573,6 +573,12 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 		out.HCPAdvisories = append(out.HCPAdvisories, advs...)
 		sortAdvisoryOut(out.HCPAdvisories)
 	}
+	// W2 headroom advisory (#723): H && C && !N over the SLO rows, the
+	// context CP evidence, and the computed node recommendations.
+	if advs := computeHeadroomAdvisory(fl); len(advs) > 0 {
+		out.HCPAdvisories = append(out.HCPAdvisories, advs...)
+		sortAdvisoryOut(out.HCPAdvisories)
+	}
 	if err := attachFileOnlyRecs(&out, fl); err != nil {
 		return out, err
 	}
@@ -815,6 +821,12 @@ type fileLoad struct {
 	hcAssocNamespaces []string
 	hcNodepoolRows    []csv.NodepoolRow
 	hcSnapshotFresh   bool
+	// #723 window proof: the latest complete snapshot's observation time
+	// for the primary and the strict incarnation rule.
+	hcSnapshotObserved   time.Time
+	hcSnapshotUID        string
+	hcSnapshotSeen       bool
+	hcSnapshotConsistent bool
 	// SLO + api-tax rows (#722 API context, #723 H leg, #724): primary
 	// payload rows plus context rows, identity-joined inside the
 	// advisories. Advisory inputs are plugin-independent (#721 lesson).
@@ -974,6 +986,12 @@ func computeRecommendations(f commonFlags) (recommendResult, error) {
 	// W3 unused-hosted-cluster advisory (#722): both lanes (standard +
 	// pool-zero short) over the primary digests and the context facts.
 	if advs := computeZombieAdvisory(fl); len(advs) > 0 {
+		out.HCPAdvisories = append(out.HCPAdvisories, advs...)
+		sortAdvisoryOut(out.HCPAdvisories)
+	}
+	// W2 headroom advisory (#723): H && C && !N over the SLO rows, the
+	// context CP evidence, and the computed node recommendations.
+	if advs := computeHeadroomAdvisory(fl); len(advs) > 0 {
 		out.HCPAdvisories = append(out.HCPAdvisories, advs...)
 		sortAdvisoryOut(out.HCPAdvisories)
 	}

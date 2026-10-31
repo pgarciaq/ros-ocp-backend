@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI: W2 headroom advisory ([#723](https://github.com/pgarciaq/ros-ocp-backend/issues/723)):**
+  the `do_not_add_workers_first` advisory joins the `hcp_advisories`
+  sibling with full parity to the server's precision-first correlator —
+  H (hosted API p99 from the SLO bucket rollups, baseline-relative
+  threshold via the shared quantile math ported verbatim), C (CP
+  usage/requests ratio over the association namespaces), !N (no
+  overcommitted/scheduling-limited codes on the computed node
+  recommendations), and the window proof (a complete association
+  snapshot observed for the window with one incarnation). Unknown legs
+  and pressured workers produce nothing — the silence cases are pinned
+  by the ported verdict-matrix tests. `headroom_advisory` YAML
+  configures the policy fields.
 - **robne CLI: W3 unused-hosted-cluster (zombie) advisory ([#722](https://github.com/pgarciaq/ros-ocp-backend/issues/722), [ADR-0333](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0333-unused-hostedcluster-lifecycle-w3.md)):**
   the `review_unused_hosted_cluster` advisory joins the `hcp_advisories`
   sibling with full parity to the server's correlator rule — the standard

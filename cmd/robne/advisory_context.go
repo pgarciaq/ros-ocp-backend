@@ -5,6 +5,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/librobne/advisory"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/csv"
@@ -65,6 +66,25 @@ func loadAdvisoryContext(fl *fileLoad, _ commonFlags, extraInputs []string, prim
 				if e.HCPNamespace != "" {
 					fl.hcAssocNamespaces = appendUniqueString(fl.hcAssocNamespaces, e.HCPNamespace)
 					fl.hcContextLoaded = true
+				}
+				// Snapshot observation (the #723 window proof): track the
+				// latest complete observation and the strict incarnation
+				// rule — every complete entry for this HC must name one
+				// HostedCluster UID (a recreated HC fails, not downstream).
+				if observed, perr := time.Parse(time.RFC3339, e.ObservedAt); perr == nil {
+					if !fl.now.IsZero() && observed.After(fl.now.Add(-advisory.ZombieSnapshotFreshHours*time.Hour)) {
+						fl.hcSnapshotFresh = true
+					}
+					if !fl.hcSnapshotSeen {
+						fl.hcSnapshotSeen = true
+						fl.hcSnapshotConsistent = true
+						fl.hcSnapshotUID = e.HcUID
+					} else if e.HcUID != "" && e.HcUID != fl.hcSnapshotUID {
+						fl.hcSnapshotConsistent = false
+					}
+					if observed.After(fl.hcSnapshotObserved) {
+						fl.hcSnapshotObserved = observed
+					}
 				}
 			}
 		}
@@ -187,6 +207,41 @@ func zombiePlatformEntries(fl fileLoad) []string {
 	}
 	if fl.cfg.SleepAdvisory != nil {
 		return fl.cfg.SleepAdvisory.PlatformNamespaces
+	}
+	return nil
+}
+
+// computeHeadroomAdvisory runs the W2 headroom evaluation (#723): the H
+// leg over the SLO rows identity-joined to the primary, the C leg over
+// the context payload's management digests on the association
+// namespaces, the N leg over the node recommendations robne itself
+// computes, and the window proof over the context snapshot. Silence on
+// any missing input mirrors the server's never-fail-on-evidence posture.
+func computeHeadroomAdvisory(fl fileLoad) []advisory.Advisory {
+	if len(fl.sloRows) == 0 || !fl.hcSnapshotSeen || len(fl.hcAssocNamespaces) == 0 {
+		return nil
+	}
+	// The N leg reads the computed node recommendations (fresh by
+	// construction — this run computed them from the loaded payload).
+	nodeRecs := recommendNodes(fl)
+	var codes []int16
+	for _, r := range nodeRecs {
+		codes = append(codes, r.NotificationCodes...)
+	}
+	in := advisory.HeadroomInput{
+		HcID:               fl.clusterID,
+		Now:                fl.now,
+		SLORows:            fl.sloRows,
+		MgmtDigests:        fl.hcContextDigests,
+		AssocNamespaces:    fl.hcAssocNamespaces,
+		NodeNotifications:  codes,
+		NodeRecsExist:      len(nodeRecs) > 0,
+		SnapshotObserved:   fl.hcSnapshotObserved,
+		SnapshotConsistent: fl.hcSnapshotConsistent,
+		Policy:             headroomPolicyFromYAML(fl.cfg.HeadroomAdvisory),
+	}
+	if got := advisory.EvaluateHeadroom(in); got != nil {
+		return []advisory.Advisory{*got}
 	}
 	return nil
 }

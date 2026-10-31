@@ -150,6 +150,8 @@ The zombie verdict (#722) additionally needs **mgmt container CSVs** in the asso
 | hcp-advisory: context tier not picked up | The mgmt manifest's `hcpSnapshot` entries must name the primary's cluster ID in `hostedClusterID` and be `complete: true`; partial or mismatched entries are invisible by design |
 | zombie parity: robne silent | The zombie needs a fresh (72h) complete snapshot AND full-window guest digests AND mgmt digests in the association namespace — a missing day reads unknown, never idle-by-absence |
 | zombie parity: fires medium not high | Medium = the mgmt payload lacks trailing-day rows in the assoc namespace (CP proof unknown); high needs CP requests >= 100mC there |
+| headroom parity: robne silent | All three legs must be KNOWN: SLO CSVs with a pre-window baseline snapshot (the delta needs two snapshots 30m+ apart), mgmt digests in the assoc namespace, and node recs — unknown legs are silence, never calm |
+| headroom parity: window proof fails | The mgmt snapshot's `observedAt` must be within the fire window minus 5m skew (default window 1h); a 72h-fresh snapshot is still too stale for headroom |
 
 ## Interrupted Runs
 

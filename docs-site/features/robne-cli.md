@@ -359,6 +359,36 @@ zombie_advisory:
     - "openshift-%"
 ```
 
+### Headroom advisory (#723)
+
+The W2 headroom advisory (verdict `do_not_add_workers_first`) fires only
+on high-confidence triple evidence — **H && C && !N, all three legs
+known**; every other combination is silence:
+
+- **H** — hosted API latency: the max verb-group p99 over the trailing
+  window vs `max(p99_threshold_s, baseline_multiple × the 7-day median
+  of daily p99s)`, from the SLO CSVs identity-joined to the primary
+  cluster (`hc_cluster_id`).
+- **C** — control-plane stress: the trailing-day usage/requests ratio
+  over the association namespaces from the management payload's digests
+  vs `cp_cpu_pct`.
+- **!N** — worker calm: the node recommendations robne itself computes
+  carry no overcommitted (12) or scheduling-limited (74) codes.
+- **Window proof** — the association snapshot must be observed no
+  earlier than the window start (minus a 5-minute skew) with one
+  incarnation; a recreated hosted cluster fails the proof.
+
+```yaml
+headroom_advisory:
+  p99_threshold_s: 0.30    # absolute H threshold (seconds)
+  baseline_multiple: 3     # multiple of the 7-day baseline median
+  window_hours: 1          # trailing fire window
+  cp_cpu_pct: 80           # C-leg usage/requests threshold
+```
+
+The SLO CSVs (`ros-openshift-slo-YYYYMM.csv`) may ride either payload —
+rows naming other clusters are invisible by design (the identity join).
+
 ## Manpages and offline docs (#703)
 
 `make man` regenerates roff manpages (`docs/man/man1/robne.1` plus one page

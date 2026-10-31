@@ -6,10 +6,15 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// csvTimeFmt is the container-CSV timestamp layout the flexible parser
+// accepts first (shared by the SLO/api-tax fixtures).
+const csvTimeFmt = "2006-01-02 15:04:05 +0000 UTC"
 
 // #721: the advisory assembly over the multi-payload input — the primary
 // (guest) payload carries the dual digests; the context (management)
@@ -288,3 +293,128 @@ func TestComputeZombieAdvisory_ShortLaneFires(t *testing.T) {
 	assert.Contains(t, adv.Evidence, "lane:short-3d")
 	assert.Contains(t, adv.Evidence, "pool_zero_days:3")
 }
+
+// #723: the headroom assembly — the guest payload carries the SLO CSV
+// (H leg) and the container CSVs (N leg via node recs); the mgmt context
+// payload carries the association (window proof) and the CP digests
+// (C leg). Pinned now 2026-10-30T00:00:00Z → fire window
+// [2026-10-29T23:00, 2026-10-30T00:00).
+
+// sloRowCSV renders one SLO CSV line.
+func sloRowCSV(hcID string, collected time.Time, le string, count int64) string {
+	return hcID + "," + collected.Add(-time.Hour).Format(csvTimeFmt) + "," + collected.Format(csvTimeFmt) +
+		",mutating," + le + "," + fmt.Sprint(count) + "," + collected.Format(csvTimeFmt) + ",kubernetes\n"
+}
+
+func writeHeadroomFixture(t *testing.T, mgmtUsageAvg string, observedAt string) (guestDir, mgmtDir string) {
+	t.Helper()
+	root := t.TempDir()
+	guestDir = filepath.Join(root, "guest")
+	mgmtDir = filepath.Join(root, "mgmt")
+	require.NoError(t, os.MkdirAll(guestDir, 0o750))
+	require.NoError(t, os.MkdirAll(mgmtDir, 0o750))
+
+	// Guest: container rows (node recs compute calm — no 12/74 codes) +
+	// the SLO CSV with a hot p99 signature in the fire window.
+	hdr := "report_period_start,report_period_end,interval_start,interval_end,container_name,pod,owner_name,owner_kind,workload,workload_type,namespace,image_name,node,resource_id,node_capacity_cpu_cores,node_capacity_memory_bytes,node_capacity_pods,node_allocatable_cpu_cores,node_allocatable_memory_bytes,node_allocatable_gpu_count,instance_type,machineset_name,node_role,cpu_request_container_avg,cpu_request_container_sum,cpu_limit_container_avg,cpu_limit_container_sum,cpu_usage_container_avg,cpu_usage_container_min,cpu_usage_container_max,cpu_usage_container_sum,cpu_throttle_container_avg,cpu_throttle_container_max,cpu_throttle_container_min,cpu_throttle_container_sum,memory_request_container_avg,memory_request_container_sum,memory_limit_container_avg,memory_limit_container_sum,memory_usage_container_avg,memory_usage_container_min,memory_usage_container_max,memory_usage_container_sum,memory_rss_usage_container_avg,memory_rss_usage_container_min,memory_rss_usage_container_max,memory_rss_usage_container_sum,oom_count,restart_count,workload_pod_count,desired_replicas,available_replicas,accelerator_model_name,accelerator_profile_name,gpu_uuid,accelerator_frame_buffer_usage_min,accelerator_frame_buffer_usage_max,accelerator_frame_buffer_usage_avg,tensor_pipe_active_min,tensor_pipe_active_max,tensor_pipe_active_avg,dram_active_min,dram_active_max,dram_active_avg,sm_active_min,sm_active_max,sm_active_avg\n"
+	rows := ""
+	for _, d := range []int{28, 29} {
+		rows += zombieContainerRow(d, "demo-app", "web", "0.2", "0.3")
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(guestDir, "ros-openshift-container-202610.csv"), []byte(hdr+rows), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(guestDir, "manifest.json"), []byte(`{"cluster_id": "bbbbbbbb-1111-1111-1111-111111111111"}`), 0o600))
+
+	guestHC := "bbbbbbbb-1111-1111-1111-111111111111"
+	slo := "hc_cluster_id,window_start,window_end,verb_group,le,bucket_count,collected_at,source\n"
+	// Baseline snapshot 50m before the window start (the delta baseline).
+	base := time.Date(2026, 10, 29, 22, 10, 0, 0, time.UTC)
+	for _, le := range []string{"0.1", "0.5", "1.0", "2.0", "3.0", "+Inf"} {
+		count := map[string]int64{"0.1": 5, "0.5": 6, "1.0": 7, "2.0": 8, "3.0": 9, "+Inf": 10}[le]
+		slo += sloRowCSV(guestHC, base, le, count)
+	}
+	// Hot snapshot inside the window: mass concentrated at 3.0.
+	hot := time.Date(2026, 10, 29, 23, 50, 0, 0, time.UTC)
+	for _, le := range []string{"0.1", "0.5", "1.0", "2.0", "3.0", "+Inf"} {
+		count := map[string]int64{"0.1": 6, "0.5": 7, "1.0": 8, "2.0": 9, "3.0": 1010, "+Inf": 1011}[le]
+		slo += sloRowCSV(guestHC, hot, le, count)
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(guestDir, "ros-openshift-slo-202610.csv"), []byte(slo), 0o600))
+
+	// Mgmt: association proven FOR the window + saturated CP digests.
+	mgmtManifest := `{"cluster_id": "cccccccc-1111-1111-1111-111111111111", "cr_status": {"topology": {"hostedControlPlaneNamespaces": ["clusters-hc9"], "hcpSnapshot": [{"hcpNamespace": "clusters-hc9", "hostedClusterID": "bbbbbbbb-1111-1111-1111-111111111111", "hcUID": "uid-hc-1", "hcpUID": "uid-hcp-1", "namespaceUID": "uid-ns-1", "observedAt": "` + observedAt + `", "complete": true}]}}}`
+	require.NoError(t, os.WriteFile(filepath.Join(mgmtDir, "manifest.json"), []byte(mgmtManifest), 0o600))
+	var mgmtRows string
+	for _, d := range []int{28, 29} {
+		mgmtRows += zombieContainerRow(d, "clusters-hc9", "kube-apiserver", mgmtUsageAvg, "1.0")
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(mgmtDir, "ros-openshift-container-202610.csv"), []byte(hdr+mgmtRows), 0o600))
+	return guestDir, mgmtDir
+}
+
+func TestComputeHeadroomAdvisory_AssemblyFires(t *testing.T) {
+	guestDir, mgmtDir := writeHeadroomFixture(t, "0.9", "2026-10-29T23:30:00Z")
+	f := commonFlags{
+		inputs:       []string{guestDir, mgmtDir},
+		noUserConfig: true,
+		now:          "2026-10-30T00:00:00Z",
+	}
+	result, err := executeRecommend(f)
+	require.NoError(t, err)
+	require.NotEmpty(t, result.HCPAdvisories, "hot H + saturated C + calm N must fire")
+	adv := result.HCPAdvisories[0]
+	assert.Equal(t, "do_not_add_workers_first", adv.Verdict)
+	assert.Equal(t, "high", adv.Confidence)
+	assert.Equal(t, "bbbbbbbb-1111-1111-1111-111111111111", adv.HostedClusterID)
+	p99 := adv.Details["hosted_api_p99_seconds"].(float64)
+	assert.GreaterOrEqual(t, p99, 2.0)
+	assert.Equal(t, 0.30, adv.Details["hosted_api_threshold_seconds"])
+	ratio := adv.Details["control_plane_capacity_ratio"].(float64)
+	assert.Greater(t, ratio, 0.80)
+	// Hourly window.
+	assert.Equal(t, 1.0, adv.WindowEnd.Sub(adv.WindowStart).Hours())
+}
+
+func TestComputeHeadroomAdvisory_CalmCPIsSilent(t *testing.T) {
+	guestDir, mgmtDir := writeHeadroomFixture(t, "0.2", "2026-10-29T23:30:00Z")
+	f := commonFlags{
+		inputs:       []string{guestDir, mgmtDir},
+		noUserConfig: true,
+		now:          "2026-10-30T00:00:00Z",
+	}
+	result, err := executeRecommend(f)
+	require.NoError(t, err)
+	assert.Empty(t, result.HCPAdvisories, "calm C blames nothing")
+}
+
+func TestComputeHeadroomAdvisory_NoSLOIsSilent(t *testing.T) {
+	guestDir, mgmtDir := writeHeadroomFixture(t, "0.9", "2026-10-29T23:30:00Z")
+	require.NoError(t, os.Remove(filepath.Join(guestDir, "ros-openshift-slo-202610.csv")))
+	f := commonFlags{
+		inputs:       []string{guestDir, mgmtDir},
+		noUserConfig: true,
+		now:          "2026-10-30T00:00:00Z",
+	}
+	result, err := executeRecommend(f)
+	require.NoError(t, err)
+	assert.Empty(t, result.HCPAdvisories, "unknown H is silence")
+}
+
+func TestComputeHeadroomAdvisory_StaleSnapshotIsSilent(t *testing.T) {
+	// Observed 5h before the window: the association is not proven FOR
+	// this window (the skew tolerance is 5 minutes).
+	guestDir, mgmtDir := writeHeadroomFixture(t, "0.9", "2026-10-29T18:00:00Z")
+	f := commonFlags{
+		inputs:       []string{guestDir, mgmtDir},
+		noUserConfig: true,
+		now:          "2026-10-30T00:00:00Z",
+	}
+	result, err := executeRecommend(f)
+	require.NoError(t, err)
+	assert.Empty(t, result.HCPAdvisories, "window proof fails: silence, never blame")
+}
+
+// The unknown-N assembly case (no node recs → silence, never calm) cannot
+// be constructed end to end: any payload with a plugin CSV (required for
+// the load to succeed) also feeds node digests, so node recs always
+// compute. The semantics are pinned at the core level
+// (TestHeadroom_VerdictMatrix_Silence, "unknown N is silence not calm").

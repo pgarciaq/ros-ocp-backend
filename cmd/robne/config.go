@@ -19,7 +19,7 @@ import (
 var allowedYAMLKeys = map[string]struct{}{
 	"org_id": {}, "cluster_uuid": {}, "now": {}, "plugins": {},
 	"terms": {}, "plugin_terms": {}, "sizing": {}, "idle": {}, "staleness_hours": {},
-	"business_hours": {}, "sleep_advisory": {}, "zombie_advisory": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster-quota": {}, "snapshot": {},
+	"business_hours": {}, "sleep_advisory": {}, "zombie_advisory": {}, "headroom_advisory": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster-quota": {}, "snapshot": {},
 }
 
 var reservedYAMLKeys = []string{"node", "gpu", "pvc", "vm", "quota", "cluster-quota", "snapshot"}
@@ -42,20 +42,21 @@ type fileConfig struct {
 	// PluginTerms holds per-plugin term overrides (#705, ADR-0346). Keys are
 	// the six term-bearing plugins; unset plugins use their documented
 	// tables. Validated strictly: unknown keys and term-less plugins error.
-	PluginTerms    map[string][]termYAML `yaml:"plugin_terms,omitempty"`
-	Sizing         sizingYAML            `yaml:"sizing,omitempty"`
-	Idle           idleYAML              `yaml:"idle,omitempty"`
-	StalenessHours *float64              `yaml:"staleness_hours,omitempty"`
-	BusinessHours  *businessHoursYAML    `yaml:"business_hours,omitempty"`
-	SleepAdvisory  *sleepAdvisoryYAML    `yaml:"sleep_advisory,omitempty"`
-	ZombieAdvisory *zombieAdvisoryYAML   `yaml:"zombie_advisory,omitempty"`
-	Node           map[string]any        `yaml:"node,omitempty"`
-	GPU            map[string]any        `yaml:"gpu,omitempty"`
-	PVC            map[string]any        `yaml:"pvc,omitempty"`
-	VM             map[string]any        `yaml:"vm,omitempty"`
-	Quota          map[string]any        `yaml:"quota,omitempty"`
-	ClusterQuota   map[string]any        `yaml:"cluster-quota,omitempty"`
-	Snapshot       map[string]any        `yaml:"snapshot,omitempty"`
+	PluginTerms      map[string][]termYAML `yaml:"plugin_terms,omitempty"`
+	Sizing           sizingYAML            `yaml:"sizing,omitempty"`
+	Idle             idleYAML              `yaml:"idle,omitempty"`
+	StalenessHours   *float64              `yaml:"staleness_hours,omitempty"`
+	BusinessHours    *businessHoursYAML    `yaml:"business_hours,omitempty"`
+	SleepAdvisory    *sleepAdvisoryYAML    `yaml:"sleep_advisory,omitempty"`
+	ZombieAdvisory   *zombieAdvisoryYAML   `yaml:"zombie_advisory,omitempty"`
+	HeadroomAdvisory *headroomAdvisoryYAML `yaml:"headroom_advisory,omitempty"`
+	Node             map[string]any        `yaml:"node,omitempty"`
+	GPU              map[string]any        `yaml:"gpu,omitempty"`
+	PVC              map[string]any        `yaml:"pvc,omitempty"`
+	VM               map[string]any        `yaml:"vm,omitempty"`
+	Quota            map[string]any        `yaml:"quota,omitempty"`
+	ClusterQuota     map[string]any        `yaml:"cluster-quota,omitempty"`
+	Snapshot         map[string]any        `yaml:"snapshot,omitempty"`
 }
 
 type termYAML struct {
@@ -138,6 +139,39 @@ func zombiePolicyFromYAML(za *zombieAdvisoryYAML) advisory.ZombiePolicy {
 	}
 	if za.ShortRequiredDays > 0 {
 		pol.ShortRequiredDays = za.ShortRequiredDays
+	}
+	return pol
+}
+
+// headroomAdvisoryYAML configures the W2 headroom advisory (#723
+// parity): the H && C && !N correlator knobs. HMinDataMinutes is a
+// methodological floor, not a knob (no tenant field exists server-side,
+// #628).
+type headroomAdvisoryYAML struct {
+	P99ThresholdS    float64 `yaml:"p99_threshold_s,omitempty"`
+	BaselineMultiple float64 `yaml:"baseline_multiple,omitempty"`
+	WindowHours      int     `yaml:"window_hours,omitempty"`
+	CPCPUPct         float64 `yaml:"cp_cpu_pct,omitempty"`
+}
+
+// headroomPolicyFromYAML resolves the advisory policy with compiled
+// defaults.
+func headroomPolicyFromYAML(ha *headroomAdvisoryYAML) advisory.HeadroomPolicy {
+	pol := advisory.DefaultHeadroomPolicy()
+	if ha == nil {
+		return pol
+	}
+	if ha.P99ThresholdS > 0 {
+		pol.HAbsoluteThresholdS = ha.P99ThresholdS
+	}
+	if ha.BaselineMultiple > 0 {
+		pol.HBaselineMultiple = ha.BaselineMultiple
+	}
+	if ha.WindowHours > 0 {
+		pol.HWindowHours = ha.WindowHours
+	}
+	if ha.CPCPUPct > 0 {
+		pol.CPUThresholdPct = ha.CPCPUPct
 	}
 	return pol
 }
