@@ -42,6 +42,15 @@ type Policy struct {
 	// ZombieIdleWindowDays bounds the standard idle evaluation (#664
 	// 14d, tunable since the const-lock overturn).
 	ZombieIdleWindowDays int
+	// SleepWindowDays bounds the W8 non-prod sleep-candidate evaluation
+	// (#716, ADR-0348): trailing days of business-hours signature.
+	SleepWindowDays int
+	// SleepBHActivityFloorMC is the daily per-workload BH CPU at or above
+	// which a user workload counts as active in hours (W8 signature).
+	SleepBHActivityFloorMC int
+	// SleepOutsideBHIdleFloorMC is the daily per-workload CPU outside BH
+	// at or above which the signature breaks (idle-outside leg).
+	SleepOutsideBHIdleFloorMC int
 	// NodeFreshnessHours calibrates N to the daily node pipeline: 2h would
 	// permanently silence N (and thus the correlator) on daily uploads, so N
 	// freshness follows ingest cadence. Lab controls (#646) own recalibration.
@@ -51,20 +60,23 @@ type Policy struct {
 // DefaultPolicy returns the locked compiled defaults (#625 close draft).
 func DefaultPolicy() Policy {
 	return Policy{
-		HAbsoluteThresholdS:     0.30,
-		HBaselineMultiple:       3,
-		HWindowHours:            1,
-		HMinDataMinutes:         30,
-		CPUThresholdPct:         80,
-		SkewToleranceMinutes:    5,
-		FreshnessHours:          2,
-		AdvisoryExpiryHours:     24,
-		ZombieIdleReqPerDay:     100,
-		ZombieIdleCPUFloorMC:    10,
-		ZombieShortWindowDays:   3,
-		ZombieShortRequiredDays: 3,
-		ZombieIdleWindowDays:    14,
-		NodeFreshnessHours:      36,
+		HAbsoluteThresholdS:       0.30,
+		HBaselineMultiple:         3,
+		HWindowHours:              1,
+		HMinDataMinutes:           30,
+		CPUThresholdPct:           80,
+		SkewToleranceMinutes:      5,
+		FreshnessHours:            2,
+		AdvisoryExpiryHours:       24,
+		ZombieIdleReqPerDay:       100,
+		ZombieIdleCPUFloorMC:      10,
+		ZombieShortWindowDays:     3,
+		ZombieShortRequiredDays:   3,
+		ZombieIdleWindowDays:      14,
+		SleepWindowDays:           14,
+		SleepBHActivityFloorMC:    10,
+		SleepOutsideBHIdleFloorMC: 10,
+		NodeFreshnessHours:        36,
 	}
 }
 
@@ -78,17 +90,20 @@ func PolicyFromSettings(s engine.HCPCorrelationSettings) Policy {
 		HWindowHours:        s.WindowHours,
 		// HMinDataMinutes and NodeFreshnessHours are methodological floors,
 		// not tuning knobs: no tenant field exists for them by design (#628).
-		HMinDataMinutes:         DefaultPolicy().HMinDataMinutes,
-		CPUThresholdPct:         s.CCPUPct,
-		SkewToleranceMinutes:    s.SkewMinutes,
-		FreshnessHours:          s.FreshnessHours,
-		AdvisoryExpiryHours:     s.ExpiryHours,
-		ZombieIdleReqPerDay:     s.ZombieIdleReqPerDay,
-		ZombieIdleCPUFloorMC:    s.ZombieIdleCPUFloorMC,
-		ZombieShortWindowDays:   s.ZombieShortWindowDays,
-		ZombieShortRequiredDays: s.ZombieShortRequiredDays,
-		ZombieIdleWindowDays:    s.ZombieIdleWindowDays,
-		NodeFreshnessHours:      DefaultPolicy().NodeFreshnessHours,
+		HMinDataMinutes:           DefaultPolicy().HMinDataMinutes,
+		CPUThresholdPct:           s.CCPUPct,
+		SkewToleranceMinutes:      s.SkewMinutes,
+		FreshnessHours:            s.FreshnessHours,
+		AdvisoryExpiryHours:       s.ExpiryHours,
+		ZombieIdleReqPerDay:       s.ZombieIdleReqPerDay,
+		ZombieIdleCPUFloorMC:      s.ZombieIdleCPUFloorMC,
+		ZombieShortWindowDays:     s.ZombieShortWindowDays,
+		SleepWindowDays:           s.SleepWindowDays,
+		SleepBHActivityFloorMC:    s.SleepBHActivityFloorMC,
+		SleepOutsideBHIdleFloorMC: s.SleepOutsideBHIdleFloorMC,
+		ZombieShortRequiredDays:   s.ZombieShortRequiredDays,
+		ZombieIdleWindowDays:      s.ZombieIdleWindowDays,
+		NodeFreshnessHours:        DefaultPolicy().NodeFreshnessHours,
 	}
 }
 

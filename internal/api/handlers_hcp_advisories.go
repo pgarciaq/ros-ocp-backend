@@ -27,6 +27,7 @@ const (
 	advisoryVerdictHeadroom = "do_not_add_workers_first"
 	advisoryVerdictAPITax   = "tune_noisy_webhook"
 	advisoryVerdictZombie   = "review_unused_hosted_cluster"
+	advisoryVerdictSleep    = "schedule_nonprod_sleep"
 )
 
 // HCPAdvisory is one served advisory row. Details carries the per-verdict
@@ -121,6 +122,23 @@ func hcpAdvisoryDetails(verdict string, p99, threshold float64, cRatio *float64,
 		}
 		if v, ok := advisorySignalValue(signals, "webhook"); ok {
 			details["webhook"] = v
+		}
+	case advisoryVerdictSleep:
+		// Sleep columns: h_p99_s carries the BH-activity peak (mC),
+		// h_threshold_s the outside-BH peak (mC) (writeSleepAdvisory);
+		// the reclaim estimate parses from signals (ADR-0349 field table).
+		details["bh_active_peak_cpu_mc"] = int64(p99)
+		details["outside_bh_peak_cpu_mc"] = int64(threshold)
+		if v, ok := advisorySignalValue(signals, "declared_tier"); ok {
+			details["declared_tier"] = v
+		}
+		if v, ok := advisorySignalInt(signals, "worker_nodes"); ok {
+			details["worker_node_count"] = v
+		}
+		if raw, ok := advisorySignalValue(signals, "reclaim_node_hours_per_week"); ok {
+			if f, err := strconv.ParseFloat(raw, 64); err == nil {
+				details["reclaim_node_hours_per_week"] = f
+			}
 		}
 	default:
 		// Unmapped (future) verdict: evidence carries everything until a

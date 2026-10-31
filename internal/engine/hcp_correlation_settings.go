@@ -44,6 +44,9 @@ const (
 	hcpDefaultZombieShortWindowDays   = 3
 	hcpDefaultZombieShortRequiredDays = 3
 	hcpDefaultZombieIdleWindowDays    = 14
+	hcpDefaultSleepWindowDays         = 14
+	hcpDefaultSleepBHActivityFloorMC  = 10
+	hcpDefaultSleepOutsideBHIdleFloor = 10
 )
 
 // HCPCorrelationSettings are tenant-configurable correlator policy values.
@@ -70,59 +73,79 @@ type HCPCorrelationSettings struct {
 	ZombieShortWindowDays   int `json:"z_short_window_days"`
 	ZombieShortRequiredDays int `json:"z_short_required_days"`
 	ZombieIdleWindowDays    int `json:"z_idle_window_days"`
+	// SleepWindowDays bounds the W8 non-prod sleep-candidate evaluation
+	// (#716, ADR-0348): trailing days of business-hours signature.
+	SleepWindowDays int `json:"sleep_window_days"`
+	// SleepBHActivityFloorMC is the daily per-workload business-hours CPU
+	// (millicores) at or above which a user workload counts as active in
+	// hours (W8 signature, #716).
+	SleepBHActivityFloorMC int `json:"sleep_bh_activity_floor_mc"`
+	// SleepOutsideBHIdleFloorMC is the daily per-workload CPU outside
+	// business hours at or above which the signature breaks (idle-outside
+	// leg, #716).
+	SleepOutsideBHIdleFloorMC int `json:"sleep_outside_bh_idle_floor_mc"`
 }
 
 // HCPCorrelationSettingsResponse is the API GET/PUT/DELETE response.
 type HCPCorrelationSettingsResponse struct {
-	HP99ThresholdS          float64  `json:"h_p99_threshold_s"`
-	HBaselineMultiple       float64  `json:"h_baseline_multiple"`
-	CCPUPct                 float64  `json:"c_cpu_pct"`
-	CEtcdP99S               float64  `json:"c_etcd_p99_s"`
-	WindowHours             int      `json:"window_h"`
-	SkewMinutes             int      `json:"skew_m"`
-	FreshnessHours          int      `json:"freshness_h"`
-	ExpiryHours             int      `json:"expiry_h"`
-	ZombieIdleReqPerDay     float64  `json:"z_idle_req_per_day"`
-	ZombieIdleCPUFloorMC    int      `json:"z_idle_cpu_floor_mc"`
-	ZombieShortWindowDays   int      `json:"z_short_window_days"`
-	ZombieShortRequiredDays int      `json:"z_short_required_days"`
-	ZombieIdleWindowDays    int      `json:"z_idle_window_days"`
-	LockedFields            []string `json:"locked_fields"`
-	SettingsLocked          bool     `json:"settings_locked,omitempty"`
+	HP99ThresholdS            float64  `json:"h_p99_threshold_s"`
+	HBaselineMultiple         float64  `json:"h_baseline_multiple"`
+	CCPUPct                   float64  `json:"c_cpu_pct"`
+	CEtcdP99S                 float64  `json:"c_etcd_p99_s"`
+	WindowHours               int      `json:"window_h"`
+	SkewMinutes               int      `json:"skew_m"`
+	FreshnessHours            int      `json:"freshness_h"`
+	ExpiryHours               int      `json:"expiry_h"`
+	ZombieIdleReqPerDay       float64  `json:"z_idle_req_per_day"`
+	ZombieIdleCPUFloorMC      int      `json:"z_idle_cpu_floor_mc"`
+	ZombieShortWindowDays     int      `json:"z_short_window_days"`
+	ZombieShortRequiredDays   int      `json:"z_short_required_days"`
+	ZombieIdleWindowDays      int      `json:"z_idle_window_days"`
+	SleepWindowDays           int      `json:"sleep_window_days"`
+	SleepBHActivityFloorMC    int      `json:"sleep_bh_activity_floor_mc"`
+	SleepOutsideBHIdleFloorMC int      `json:"sleep_outside_bh_idle_floor_mc"`
+	LockedFields              []string `json:"locked_fields"`
+	SettingsLocked            bool     `json:"settings_locked,omitempty"`
 }
 
 // hcpCorrelationSettingsStored is the JSON document in recommendation_thresholds.
 type hcpCorrelationSettingsStored struct {
-	HP99ThresholdS          *float64 `json:"h_p99_threshold_s,omitempty"`
-	HBaselineMultiple       *float64 `json:"h_baseline_multiple,omitempty"`
-	CCPUPct                 *float64 `json:"c_cpu_pct,omitempty"`
-	CEtcdP99S               *float64 `json:"c_etcd_p99_s,omitempty"`
-	WindowHours             *int     `json:"window_h,omitempty"`
-	SkewMinutes             *int     `json:"skew_m,omitempty"`
-	FreshnessHours          *int     `json:"freshness_h,omitempty"`
-	ExpiryHours             *int     `json:"expiry_h,omitempty"`
-	ZombieIdleReqPerDay     *float64 `json:"z_idle_req_per_day,omitempty"`
-	ZombieIdleCPUFloorMC    *int     `json:"z_idle_cpu_floor_mc,omitempty"`
-	ZombieShortWindowDays   *int     `json:"z_short_window_days,omitempty"`
-	ZombieShortRequiredDays *int     `json:"z_short_required_days,omitempty"`
-	ZombieIdleWindowDays    *int     `json:"z_idle_window_days,omitempty"`
+	HP99ThresholdS            *float64 `json:"h_p99_threshold_s,omitempty"`
+	HBaselineMultiple         *float64 `json:"h_baseline_multiple,omitempty"`
+	CCPUPct                   *float64 `json:"c_cpu_pct,omitempty"`
+	CEtcdP99S                 *float64 `json:"c_etcd_p99_s,omitempty"`
+	WindowHours               *int     `json:"window_h,omitempty"`
+	SkewMinutes               *int     `json:"skew_m,omitempty"`
+	FreshnessHours            *int     `json:"freshness_h,omitempty"`
+	ExpiryHours               *int     `json:"expiry_h,omitempty"`
+	ZombieIdleReqPerDay       *float64 `json:"z_idle_req_per_day,omitempty"`
+	ZombieIdleCPUFloorMC      *int     `json:"z_idle_cpu_floor_mc,omitempty"`
+	ZombieShortWindowDays     *int     `json:"z_short_window_days,omitempty"`
+	ZombieShortRequiredDays   *int     `json:"z_short_required_days,omitempty"`
+	ZombieIdleWindowDays      *int     `json:"z_idle_window_days,omitempty"`
+	SleepWindowDays           *int     `json:"sleep_window_days,omitempty"`
+	SleepBHActivityFloorMC    *int     `json:"sleep_bh_activity_floor_mc,omitempty"`
+	SleepOutsideBHIdleFloorMC *int     `json:"sleep_outside_bh_idle_floor_mc,omitempty"`
 }
 
 func hcpCorrelationEnvLockMap() map[string]string {
 	return map[string]string{
-		"ROS_HCP_H_P99_THRESHOLD_S":          "h_p99_threshold_s",
-		"ROS_HCP_H_BASELINE_MULTIPLE":        "h_baseline_multiple",
-		"ROS_HCP_C_CPU_PCT":                  "c_cpu_pct",
-		"ROS_HCP_C_ETCD_P99_S":               "c_etcd_p99_s",
-		"ROS_HCP_WINDOW_HOURS":               "window_h",
-		"ROS_HCP_SKEW_MINUTES":               "skew_m",
-		"ROS_HCP_FRESHNESS_HOURS":            "freshness_h",
-		"ROS_HCP_EXPIRY_HOURS":               "expiry_h",
-		"ROS_HCP_ZOMBIE_IDLE_REQ_PER_DAY":    "z_idle_req_per_day",
-		"ROS_HCP_ZOMBIE_IDLE_CPU_FLOOR_MC":   "z_idle_cpu_floor_mc",
-		"ROS_HCP_ZOMBIE_SHORT_WINDOW_DAYS":   "z_short_window_days",
-		"ROS_HCP_ZOMBIE_SHORT_REQUIRED_DAYS": "z_short_required_days",
-		"ROS_HCP_ZOMBIE_IDLE_WINDOW_DAYS":    "z_idle_window_days",
+		"ROS_HCP_H_P99_THRESHOLD_S":              "h_p99_threshold_s",
+		"ROS_HCP_H_BASELINE_MULTIPLE":            "h_baseline_multiple",
+		"ROS_HCP_C_CPU_PCT":                      "c_cpu_pct",
+		"ROS_HCP_C_ETCD_P99_S":                   "c_etcd_p99_s",
+		"ROS_HCP_WINDOW_HOURS":                   "window_h",
+		"ROS_HCP_SKEW_MINUTES":                   "skew_m",
+		"ROS_HCP_FRESHNESS_HOURS":                "freshness_h",
+		"ROS_HCP_EXPIRY_HOURS":                   "expiry_h",
+		"ROS_HCP_ZOMBIE_IDLE_REQ_PER_DAY":        "z_idle_req_per_day",
+		"ROS_HCP_ZOMBIE_IDLE_CPU_FLOOR_MC":       "z_idle_cpu_floor_mc",
+		"ROS_HCP_ZOMBIE_SHORT_WINDOW_DAYS":       "z_short_window_days",
+		"ROS_HCP_ZOMBIE_SHORT_REQUIRED_DAYS":     "z_short_required_days",
+		"ROS_HCP_ZOMBIE_IDLE_WINDOW_DAYS":        "z_idle_window_days",
+		"ROS_HCP_SLEEP_WINDOW_DAYS":              "sleep_window_days",
+		"ROS_HCP_SLEEP_BH_ACTIVITY_FLOOR_MC":     "sleep_bh_activity_floor_mc",
+		"ROS_HCP_SLEEP_OUTSIDE_BH_IDLE_FLOOR_MC": "sleep_outside_bh_idle_floor_mc",
 	}
 }
 
@@ -132,19 +155,22 @@ func lockedHCPFieldsFromEnv() []string {
 
 func defaultHCPCorrelationSettings() HCPCorrelationSettings {
 	return HCPCorrelationSettings{
-		HP99ThresholdS:          hcpDefaultHP99ThresholdS,
-		HBaselineMultiple:       hcpDefaultHBaselineMult,
-		CCPUPct:                 hcpDefaultCCPUPct,
-		CEtcdP99S:               hcpDefaultCEtcdP99S,
-		WindowHours:             hcpDefaultWindowHours,
-		SkewMinutes:             hcpDefaultSkewMinutes,
-		FreshnessHours:          hcpDefaultFreshnessHours,
-		ExpiryHours:             hcpDefaultAdvisoryExpHrs,
-		ZombieIdleReqPerDay:     hcpDefaultZombieIdleReqPerDay,
-		ZombieIdleCPUFloorMC:    hcpDefaultZombieIdleCPUFloorMC,
-		ZombieShortWindowDays:   hcpDefaultZombieShortWindowDays,
-		ZombieShortRequiredDays: hcpDefaultZombieShortRequiredDays,
-		ZombieIdleWindowDays:    hcpDefaultZombieIdleWindowDays,
+		HP99ThresholdS:            hcpDefaultHP99ThresholdS,
+		HBaselineMultiple:         hcpDefaultHBaselineMult,
+		CCPUPct:                   hcpDefaultCCPUPct,
+		CEtcdP99S:                 hcpDefaultCEtcdP99S,
+		WindowHours:               hcpDefaultWindowHours,
+		SkewMinutes:               hcpDefaultSkewMinutes,
+		FreshnessHours:            hcpDefaultFreshnessHours,
+		ExpiryHours:               hcpDefaultAdvisoryExpHrs,
+		ZombieIdleReqPerDay:       hcpDefaultZombieIdleReqPerDay,
+		ZombieIdleCPUFloorMC:      hcpDefaultZombieIdleCPUFloorMC,
+		ZombieShortWindowDays:     hcpDefaultZombieShortWindowDays,
+		ZombieShortRequiredDays:   hcpDefaultZombieShortRequiredDays,
+		ZombieIdleWindowDays:      hcpDefaultZombieIdleWindowDays,
+		SleepWindowDays:           hcpDefaultSleepWindowDays,
+		SleepBHActivityFloorMC:    hcpDefaultSleepBHActivityFloorMC,
+		SleepOutsideBHIdleFloorMC: hcpDefaultSleepOutsideBHIdleFloor,
 	}
 }
 
@@ -191,6 +217,15 @@ func hcpCorrelationSettingsFromConfig(cfg *config.Config) HCPCorrelationSettings
 	}
 	if cfg.HCPZombieIdleWindowDays > 0 {
 		result.ZombieIdleWindowDays = cfg.HCPZombieIdleWindowDays
+	}
+	if cfg.HCPSleepWindowDays > 0 {
+		result.SleepWindowDays = cfg.HCPSleepWindowDays
+	}
+	if cfg.HCPSleepBHActivityFloorMC > 0 {
+		result.SleepBHActivityFloorMC = cfg.HCPSleepBHActivityFloorMC
+	}
+	if cfg.HCPSleepOutsideBHIdleFloorMC > 0 {
+		result.SleepOutsideBHIdleFloorMC = cfg.HCPSleepOutsideBHIdleFloorMC
 	}
 	return result
 }
@@ -249,6 +284,15 @@ func applyHCPStoredOverlay(result *HCPCorrelationSettings, overlay hcpCorrelatio
 	if overlay.ZombieIdleWindowDays != nil {
 		result.ZombieIdleWindowDays = *overlay.ZombieIdleWindowDays
 	}
+	if overlay.SleepWindowDays != nil {
+		result.SleepWindowDays = *overlay.SleepWindowDays
+	}
+	if overlay.SleepBHActivityFloorMC != nil {
+		result.SleepBHActivityFloorMC = *overlay.SleepBHActivityFloorMC
+	}
+	if overlay.SleepOutsideBHIdleFloorMC != nil {
+		result.SleepOutsideBHIdleFloorMC = *overlay.SleepOutsideBHIdleFloorMC
+	}
 }
 
 // HCPCorrelationSettingsToResponse renders the API response with lock state.
@@ -258,13 +302,16 @@ func HCPCorrelationSettingsToResponse(s HCPCorrelationSettings) HCPCorrelationSe
 		CCPUPct: s.CCPUPct, CEtcdP99S: s.CEtcdP99S,
 		WindowHours: s.WindowHours, SkewMinutes: s.SkewMinutes,
 		FreshnessHours: s.FreshnessHours, ExpiryHours: s.ExpiryHours,
-		ZombieIdleReqPerDay:     s.ZombieIdleReqPerDay,
-		ZombieIdleCPUFloorMC:    s.ZombieIdleCPUFloorMC,
-		ZombieShortWindowDays:   s.ZombieShortWindowDays,
-		ZombieShortRequiredDays: s.ZombieShortRequiredDays,
-		ZombieIdleWindowDays:    s.ZombieIdleWindowDays,
-		LockedFields:            LockedFieldsForAPI(hcpCorrelationRecommendationType, lockedHCPFieldsFromEnv()),
-		SettingsLocked:          IsSettingsLocked(hcpCorrelationRecommendationType),
+		ZombieIdleReqPerDay:       s.ZombieIdleReqPerDay,
+		ZombieIdleCPUFloorMC:      s.ZombieIdleCPUFloorMC,
+		SleepWindowDays:           s.SleepWindowDays,
+		SleepBHActivityFloorMC:    s.SleepBHActivityFloorMC,
+		SleepOutsideBHIdleFloorMC: s.SleepOutsideBHIdleFloorMC,
+		ZombieShortWindowDays:     s.ZombieShortWindowDays,
+		ZombieShortRequiredDays:   s.ZombieShortRequiredDays,
+		ZombieIdleWindowDays:      s.ZombieIdleWindowDays,
+		LockedFields:              LockedFieldsForAPI(hcpCorrelationRecommendationType, lockedHCPFieldsFromEnv()),
+		SettingsLocked:            IsSettingsLocked(hcpCorrelationRecommendationType),
 	}
 }
 
@@ -289,12 +336,15 @@ func validateHCPCorrelationSettingsUpdate(rawUpdate json.RawMessage) error {
 		"h_p99_threshold_s": {}, "h_baseline_multiple": {},
 		"c_cpu_pct": {}, "c_etcd_p99_s": {},
 		"window_h": {}, "skew_m": {}, "freshness_h": {}, "expiry_h": {},
-		"z_idle_req_per_day":    {},
-		"z_idle_cpu_floor_mc":   {},
-		"z_short_window_days":   {},
-		"z_short_required_days": {},
-		"z_idle_window_days":    {},
-		"locked_fields":         {},
+		"z_idle_req_per_day":             {},
+		"z_idle_cpu_floor_mc":            {},
+		"z_short_window_days":            {},
+		"z_short_required_days":          {},
+		"z_idle_window_days":             {},
+		"sleep_window_days":              {},
+		"sleep_bh_activity_floor_mc":     {},
+		"sleep_outside_bh_idle_floor_mc": {},
+		"locked_fields":                  {},
 	}
 	v := &FieldValidator{}
 	for key := range top {
@@ -338,6 +388,9 @@ func validateHCPCorrelationSettingsUpdate(rawUpdate json.RawMessage) error {
 	shortWindow := getInt("z_short_window_days", 1, 90)
 	requiredDays := getInt("z_short_required_days", 1, 90)
 	idleWindow := getInt("z_idle_window_days", 1, 90)
+	getInt("sleep_window_days", 1, 90)
+	getInt("sleep_bh_activity_floor_mc", 1, 100000)
+	getInt("sleep_outside_bh_idle_floor_mc", 1, 100000)
 	window := getInt("window_h", 1, 168)
 	getInt("skew_m", 0, 60)
 	freshness := getInt("freshness_h", 1, 720)
@@ -387,6 +440,9 @@ func UpdateHCPCorrelationSettings(ctx context.Context, pool *pgxpool.Pool, orgID
 	put("z_short_window_days", update.ZombieShortWindowDays)
 	put("z_short_required_days", update.ZombieShortRequiredDays)
 	put("z_idle_window_days", update.ZombieIdleWindowDays)
+	put("sleep_window_days", update.SleepWindowDays)
+	put("sleep_bh_activity_floor_mc", update.SleepBHActivityFloorMC)
+	put("sleep_outside_bh_idle_floor_mc", update.SleepOutsideBHIdleFloorMC)
 	if err := UpsertThresholdOverrides(ctx, pool, orgID, hcpCorrelationRecommendationType, overrides); err != nil {
 		return err
 	}
@@ -479,6 +535,15 @@ func applyHCPEnvLocks(base HCPCorrelationSettings, cfg *config.Config) HCPCorrel
 	}
 	if _, ok := os.LookupEnv("ROS_HCP_ZOMBIE_IDLE_WINDOW_DAYS"); ok && cfg.HCPZombieIdleWindowDays > 0 {
 		base.ZombieIdleWindowDays = cfg.HCPZombieIdleWindowDays
+	}
+	if _, ok := os.LookupEnv("ROS_HCP_SLEEP_WINDOW_DAYS"); ok && cfg.HCPSleepWindowDays > 0 {
+		base.SleepWindowDays = cfg.HCPSleepWindowDays
+	}
+	if _, ok := os.LookupEnv("ROS_HCP_SLEEP_BH_ACTIVITY_FLOOR_MC"); ok && cfg.HCPSleepBHActivityFloorMC > 0 {
+		base.SleepBHActivityFloorMC = cfg.HCPSleepBHActivityFloorMC
+	}
+	if _, ok := os.LookupEnv("ROS_HCP_SLEEP_OUTSIDE_BH_IDLE_FLOOR_MC"); ok && cfg.HCPSleepOutsideBHIdleFloorMC > 0 {
+		base.SleepOutsideBHIdleFloorMC = cfg.HCPSleepOutsideBHIdleFloorMC
 	}
 	return base
 }

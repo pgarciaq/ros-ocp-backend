@@ -254,7 +254,7 @@ func TestZombieCustomIdleWindow_EndToEnd(t *testing.T) {
 	mgmt := "eeeeeeee-0000-4000-8000-000000000001"
 	hc := "ffffffff-0000-4000-8000-000000000001"
 
-	body := `{"h_p99_threshold_s": 0.3, "h_baseline_multiple": 3, "c_cpu_pct": 80, "c_etcd_p99_s": 0.01, "window_h": 1, "skew_m": 5, "freshness_h": 2, "expiry_h": 24, "z_idle_req_per_day": 100, "z_idle_cpu_floor_mc": 10, "z_short_window_days": 3, "z_short_required_days": 3, "z_idle_window_days": 5}`
+	body := `{"h_p99_threshold_s": 0.3, "h_baseline_multiple": 3, "c_cpu_pct": 80, "c_etcd_p99_s": 0.01, "window_h": 1, "skew_m": 5, "freshness_h": 2, "expiry_h": 24, "z_idle_req_per_day": 100, "z_idle_cpu_floor_mc": 10, "z_short_window_days": 3, "z_short_required_days": 3, "z_idle_window_days": 5, "sleep_window_days": 14, "sleep_bh_activity_floor_mc": 10, "sleep_outside_bh_idle_floor_mc": 10}`
 	require.NoError(t, engine.UpdateHCPCorrelationSettings(ctx, pool, orgID, json.RawMessage(body)))
 
 	end := time.Now().UTC().Truncate(24 * time.Hour)

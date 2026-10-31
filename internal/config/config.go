@@ -321,9 +321,12 @@ type Config struct {
 	// W3 short-window settings (Child B, #674): trailing short window,
 	// required covered days, and the standard idle window (tunable since
 	// the 14d-lock overturn; coverage stays full-window automatically).
-	HCPZombieShortWindowDays   int `mapstructure:"ROS_HCP_ZOMBIE_SHORT_WINDOW_DAYS"`
-	HCPZombieShortRequiredDays int `mapstructure:"ROS_HCP_ZOMBIE_SHORT_REQUIRED_DAYS"`
-	HCPZombieIdleWindowDays    int `mapstructure:"ROS_HCP_ZOMBIE_IDLE_WINDOW_DAYS"`
+	HCPZombieShortWindowDays     int `mapstructure:"ROS_HCP_ZOMBIE_SHORT_WINDOW_DAYS"`
+	HCPZombieShortRequiredDays   int `mapstructure:"ROS_HCP_ZOMBIE_SHORT_REQUIRED_DAYS"`
+	HCPZombieIdleWindowDays      int `mapstructure:"ROS_HCP_ZOMBIE_IDLE_WINDOW_DAYS"`
+	HCPSleepWindowDays           int `mapstructure:"ROS_HCP_SLEEP_WINDOW_DAYS"`
+	HCPSleepBHActivityFloorMC    int `mapstructure:"ROS_HCP_SLEEP_BH_ACTIVITY_FLOOR_MC"`
+	HCPSleepOutsideBHIdleFloorMC int `mapstructure:"ROS_HCP_SLEEP_OUTSIDE_BH_IDLE_FLOOR_MC"`
 
 	// GPU recommendation engine thresholds (Classification / MIG sizing).
 	GPUIdleThreshold                float64 `mapstructure:"ROS_GPU_IDLE_THRESHOLD"`

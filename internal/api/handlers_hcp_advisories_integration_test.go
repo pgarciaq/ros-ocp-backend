@@ -30,9 +30,9 @@ func TestGetHCPAdvisories_Integration(t *testing.T) {
 	cRatio := float32(0.92)
 
 	seed := func(org, hc, mgmt, verdict, confidence string, p99, thr float32, cr *float32, signals []string, expired bool) {
-		expiry := "timestamptz '2026-10-31T00:00:00Z'"
+		expiry := "now() + interval '24 hours'"
 		if expired {
-			expiry = "timestamptz '2026-10-29T00:00:00Z'"
+			expiry = "now() - interval '24 hours'"
 		}
 		_, err := pool.Exec(ctx, `
 			INSERT INTO hcp_correlation_advisories (
@@ -64,6 +64,11 @@ func TestGetHCPAdvisories_Integration(t *testing.T) {
 	rejectedRate := float32(0.31)
 	seed(testutil.TestOrgID, "", mgmtA, "tune_noisy_webhook", "high",
 		4.1, 3.0, &rejectedRate, []string{"webhook:/mutate", "p99:4.100", "rejected_rate:0.3100"}, false)
+	// Sleep candidate (W8 #716): h_p99_s carries the BH-activity peak,
+	// h_threshold_s the outside-BH peak; the rest parses from signals.
+	seed(testutil.TestOrgID, "hc-delta", mgmtB, "schedule_nonprod_sleep", "high",
+		300, 0, nil,
+		[]string{"hc:hc-delta", "declared_tier:non-prod", "bh_active_peak_mc:300", "outside_bh_peak_mc:0", "bh_schedule:monday..friday 09:00-17:00 UTC", "worker_nodes:2", "reclaim_node_hours_per_week:160", "action:nodepool-scale-to-zero + pausedUntil (runbook); CP keeps running; wake ~= 20 min reprovision"}, false)
 	// Other org — must be invisible.
 	seed("9999999", "hc-other-org", mgmtA, "review_unused_hosted_cluster", "high",
 		1, 1, nil, []string{"hc:hc-other-org"}, false)
@@ -86,8 +91,8 @@ func TestGetHCPAdvisories_Integration(t *testing.T) {
 	var resp api.HCPAdvisoriesResponse
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	assert.Equal(t, 4, resp.Meta.Count)
-	require.Len(t, resp.Data, 4)
+	assert.Equal(t, 5, resp.Meta.Count)
+	require.Len(t, resp.Data, 5)
 
 	byVerdict := map[string][]api.HCPAdvisory{}
 	for _, row := range resp.Data {
@@ -96,6 +101,7 @@ func TestGetHCPAdvisories_Integration(t *testing.T) {
 	require.Len(t, byVerdict["review_unused_hosted_cluster"], 2)
 	require.Len(t, byVerdict["do_not_add_workers_first"], 1)
 	require.Len(t, byVerdict["tune_noisy_webhook"], 1)
+	require.Len(t, byVerdict["schedule_nonprod_sleep"], 1)
 
 	// Zombie, high confidence: every typed field mapped with distinct values.
 	var zAlpha api.HCPAdvisory
@@ -128,6 +134,16 @@ func TestGetHCPAdvisories_Integration(t *testing.T) {
 	assert.InDelta(t, 2.4, h.Details["hosted_api_p99_seconds"], 0.001)
 	assert.InDelta(t, 1.8, h.Details["hosted_api_threshold_seconds"], 0.001)
 	assert.InDelta(t, 0.92, h.Details["control_plane_capacity_ratio"], 0.001)
+
+	// Sleep candidate: typed fields per the ADR-0349 field table.
+	sl := byVerdict["schedule_nonprod_sleep"][0]
+	require.NotNil(t, sl.HostedClusterID)
+	assert.Equal(t, "hc-delta", *sl.HostedClusterID)
+	assert.Equal(t, float64(300), sl.Details["bh_active_peak_cpu_mc"])
+	assert.Equal(t, float64(0), sl.Details["outside_bh_peak_cpu_mc"])
+	assert.Equal(t, "non-prod", sl.Details["declared_tier"])
+	assert.Equal(t, float64(2), sl.Details["worker_node_count"])
+	assert.Equal(t, float64(160), sl.Details["reclaim_node_hours_per_week"])
 
 	// Api-tax: cluster-scoped row has null hosted_cluster_id.
 	w := byVerdict["tune_noisy_webhook"][0]
@@ -177,7 +193,7 @@ func TestGetHCPAdvisories_UpsertInvariant_Integration(t *testing.T) {
 				org_id, hc_cluster_id, management_cluster_uuid, window_start, window_end,
 				verdict, confidence, h_p99_s, h_threshold_s, c_ratio, n_signals, expires_at
 			) VALUES ($1, 'hc-invariant', '33333333-3333-3333-3333-333333333333'::uuid, '2026-10-16T00:00:00Z', '2026-10-30T00:00:00Z',
-				$2, 'high', $3, 1, NULL, '{}', timestamptz '2026-10-31T00:00:00Z')
+				$2, 'high', $3, 1, NULL, '{}', now() + interval '24 hours')
 			ON CONFLICT (org_id, hc_cluster_id, window_start) DO UPDATE SET
 				verdict = EXCLUDED.verdict, h_p99_s = EXCLUDED.h_p99_s`,
 			testutil.TestOrgID, verdict, p99)

@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **W8 non-prod HC sleep advisory ([#716](https://github.com/pgarciaq/ros-ocp-backend/issues/716), [ADR-0348](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0348-w8-nonprod-sleep-advisory.md)):**
+  the correlator now emits `schedule_nonprod_sleep` advisories for hosted
+  clusters that are **declared** non-prod (label
+  `insights.cost-management/hc-tier=non-prod`, carried by the operator's
+  topology emission) **and** show the business-hours usage signature (user
+  workloads active during the org's org/cluster-level business hours, idle
+  outside them — a labeled cluster with overnight workloads is never
+  advised). The advisory recommends the two-step sleep from the validated
+  experiment (NodePool→0 + pause with a finite drain timeout), states that
+  only worker capacity is reclaimed (the control plane keeps running) and
+  that waking takes ~20 minutes of reprovision, and estimates the reclaim
+  in node-hours/week. Three per-org policy fields join the correlator
+  settings (`sleep_window_days`, `sleep_bh_activity_floor_mc`,
+  `sleep_outside_bh_idle_floor_mc`). The tier is read latest-wins
+  (mid-window relabels and label removal take effect immediately), and the
+  advisory is partitioned from the zombie rule by predicate.
 - **HCP advisories serving API ([#717](https://github.com/pgarciaq/ros-ocp-backend/issues/717), [ADR-0349](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0349-hcp-advisories-serving-api-contract.md)):**
   `GET /api/cost-management/v1/recommendations/openshift/hcp/advisories`
   returns the org's live correlator advisories — the first serving surface

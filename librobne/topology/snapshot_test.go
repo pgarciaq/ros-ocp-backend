@@ -24,7 +24,8 @@ func TestHCPSnapshotEntry_JSONContract(t *testing.T) {
 		`"namespaceCreatedAt":"2026-09-26T19:10:57Z",` +
 		`"observedAt":"2026-09-28T12:00:00Z",` +
 		`"complete":true,` +
-		`"diagnostics":""}` +
+		`"diagnostics":"",` +
+		`"hcTier":"non-prod"}` +
 		`],"hostedControlPlaneNamespaces":["hc01-infra-hc01"]}`
 
 	var f TopologyFacts
@@ -40,6 +41,7 @@ func TestHCPSnapshotEntry_JSONContract(t *testing.T) {
 	assert.Equal(t, "2026-09-28T12:00:00Z", e.ObservedAt)
 	assert.True(t, e.Complete)
 	assert.Empty(t, e.Diagnostics)
+	assert.Equal(t, "non-prod", e.HcTier, "hcTier must parse (W8 #715/#716 contract)")
 
 	round, err := json.Marshal(f)
 	require.NoError(t, err)

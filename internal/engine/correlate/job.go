@@ -157,6 +157,14 @@ func RunCycle(ctx context.Context, pool *pgxpool.Pool) (CycleResult, error) {
 	} else if zombieFired > 0 {
 		logging.GetLogger().Infof("correlator: fired %d zombie advisories", zombieFired)
 	}
+	// W8 non-prod sleep candidates (#716, ADR-0348): declared-gated BH
+	// signature. Partitioned from the zombie rule by predicate; shares its
+	// enumeration, sweep, metrics, and never-fail contract.
+	if sleepFired, err := RunSleepCandidateCycle(ctx, pool); err != nil {
+		logging.GetLogger().Warnf("correlator: sleep candidate cycle failed: %v", err)
+	} else if sleepFired > 0 {
+		logging.GetLogger().Infof("correlator: fired %d sleep candidate advisories", sleepFired)
+	}
 	// W3 short lane (Child B, #674): parked-pool fast lane. Independent
 	// windows per HC; never suppresses the standard lane above.
 	if shortFired, err := RunZombieShortCycle(ctx, pool); err != nil {
