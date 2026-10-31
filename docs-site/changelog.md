@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI: W5 api-tax advisory ([#724](https://github.com/pgarciaq/ros-ocp-backend/issues/724)):**
+  the `tune_noisy_webhook` advisory joins the `hcp_advisories` sibling
+  with full parity to the server's thin W5 rule — the hottest webhook on
+  the primary payload's api-tax CSVs fires when its p99 >= 2.0 s or its
+  rejected rate >= 5% (consts, not knobs). Cluster-scoped by design: the
+  advisory carries an empty `hosted_cluster_id` (shared-plane evidence
+  names no single HC). Per-source histogram coherence and counter-reset
+  resolution mirror the server; the fire window shares the headroom
+  rule's hours.
 - **robne CLI: W2 headroom advisory ([#723](https://github.com/pgarciaq/ros-ocp-backend/issues/723)):**
   the `do_not_add_workers_first` advisory joins the `hcp_advisories`
   sibling with full parity to the server's precision-first correlator —

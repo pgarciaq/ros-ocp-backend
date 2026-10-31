@@ -152,6 +152,7 @@ The zombie verdict (#722) additionally needs **mgmt container CSVs** in the asso
 | zombie parity: fires medium not high | Medium = the mgmt payload lacks trailing-day rows in the assoc namespace (CP proof unknown); high needs CP requests >= 100mC there |
 | headroom parity: robne silent | All three legs must be KNOWN: SLO CSVs with a pre-window baseline snapshot (the delta needs two snapshots 30m+ apart), mgmt digests in the assoc namespace, and node recs — unknown legs are silence, never calm |
 | headroom parity: window proof fails | The mgmt snapshot's `observedAt` must be within the fire window minus 5m skew (default window 1h); a 72h-fresh snapshot is still too stale for headroom |
+| api-tax parity: robne silent | The webhook p99 needs two cumulative snapshots 30m+ apart with the earlier one BEFORE the fire window (the delta baseline); one job's snapshots must not be split across `source` values |
 
 ## Interrupted Runs
 

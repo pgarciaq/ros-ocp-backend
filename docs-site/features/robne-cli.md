@@ -389,6 +389,25 @@ headroom_advisory:
 The SLO CSVs (`ros-openshift-slo-YYYYMM.csv`) may ride either payload —
 rows naming other clusters are invisible by design (the identity join).
 
+### API-tax advisory (#724)
+
+The W5 noisy-webhook advisory (verdict `tune_noisy_webhook`) is
+**cluster-scoped**: a management-plane webhook serves N hosted clusters,
+so the advisory carries an empty `hosted_cluster_id` — naming one would
+be misattribution. It fires for the hottest webhook on the primary
+payload's api-tax CSVs (`ros-openshift-apitax-YYYYMM.csv`) when either:
+
+- the per-webhook p99 is **>= 2.0 s** (admission webhook p99s live in
+  milliseconds; 2 s is unambiguous pain), or
+- the rejected rate is **>= 5%** (a material rejection share).
+
+The p99 comes from the same histogram math as the headroom H leg, with
+per-source coherence: a webhook's snapshots from different Prometheus
+jobs never mix into one histogram. Counter resets resolve to the
+post-reset value. The thresholds are consts, not knobs (precision-first:
+advisories must be rare and credible); the fire window shares
+`headroom_advisory.window_hours`.
+
 ## Manpages and offline docs (#703)
 
 `make man` regenerates roff manpages (`docs/man/man1/robne.1` plus one page

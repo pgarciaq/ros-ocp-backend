@@ -246,6 +246,25 @@ func computeHeadroomAdvisory(fl fileLoad) []advisory.Advisory {
 	return nil
 }
 
+// computeAPITaxAdvisory runs the W5 webhook evaluation (#724) over the
+// primary payload's api-tax rows — the run's cluster identity (a
+// management-plane webhook serves N hosted clusters; naming one would be
+// misattribution, so the advisory carries an empty hosted_cluster_id).
+// The window shares the headroom rule's hours (the server's shared
+// HWindowHours knob); the thresholds are consts, not knobs.
+func computeAPITaxAdvisory(fl fileLoad) []advisory.Advisory {
+	if len(fl.apiTaxRows) == 0 {
+		return nil
+	}
+	pol := headroomPolicyFromYAML(fl.cfg.HeadroomAdvisory)
+	windowEnd := fl.now.UTC().Truncate(time.Hour)
+	windowStart := windowEnd.Add(-time.Duration(pol.HWindowHours) * time.Hour)
+	if got := advisory.EvaluateAPITax(fl.apiTaxRows, windowStart, windowEnd, time.Duration(advisory.HeadroomMinDataMinutes)*time.Minute); got != nil {
+		return []advisory.Advisory{*got}
+	}
+	return nil
+}
+
 // sortAdvisoryOut orders output deterministically (by HC then verdict).
 func sortAdvisoryOut(a []advisory.Advisory) {
 	sort.Slice(a, func(i, j int) bool {

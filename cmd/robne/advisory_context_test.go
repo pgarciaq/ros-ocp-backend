@@ -418,3 +418,78 @@ func TestComputeHeadroomAdvisory_StaleSnapshotIsSilent(t *testing.T) {
 // the load to succeed) also feeds node digests, so node recs always
 // compute. The semantics are pinned at the core level
 // (TestHeadroom_VerdictMatrix_Silence, "unknown N is silence not calm").
+
+// #724: the api-tax assembly — a single primary payload carrying an
+// api-tax CSV with a storming webhook. No context payload needed (the
+// verdict is cluster-scoped).
+
+func TestComputeAPITaxAdvisory_AssemblyFires(t *testing.T) {
+	root := t.TempDir()
+	guestDir := filepath.Join(root, "guest")
+	require.NoError(t, os.MkdirAll(guestDir, 0o750))
+
+	hdr := "report_period_start,report_period_end,interval_start,interval_end,container_name,pod,owner_name,owner_kind,workload,workload_type,namespace,image_name,node,resource_id,node_capacity_cpu_cores,node_capacity_memory_bytes,node_capacity_pods,node_allocatable_cpu_cores,node_allocatable_memory_bytes,node_allocatable_gpu_count,instance_type,machineset_name,node_role,cpu_request_container_avg,cpu_request_container_sum,cpu_limit_container_avg,cpu_limit_container_sum,cpu_usage_container_avg,cpu_usage_container_min,cpu_usage_container_max,cpu_usage_container_sum,cpu_throttle_container_avg,cpu_throttle_container_max,cpu_throttle_container_min,cpu_throttle_container_sum,memory_request_container_avg,memory_request_container_sum,memory_limit_container_avg,memory_limit_container_sum,memory_usage_container_avg,memory_usage_container_min,memory_usage_container_max,memory_usage_container_sum,memory_rss_usage_container_avg,memory_rss_usage_container_min,memory_rss_usage_container_max,memory_rss_usage_container_sum,oom_count,restart_count,workload_pod_count,desired_replicas,available_replicas,accelerator_model_name,accelerator_profile_name,gpu_uuid,accelerator_frame_buffer_usage_min,accelerator_frame_buffer_usage_max,accelerator_frame_buffer_usage_avg,tensor_pipe_active_min,tensor_pipe_active_max,tensor_pipe_active_avg,dram_active_min,dram_active_max,dram_active_avg,sm_active_min,sm_active_max,sm_active_avg\n"
+	rows := ""
+	for _, d := range []int{28, 29} {
+		rows += zombieContainerRow(d, "demo-app", "web", "0.2", "0.3")
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(guestDir, "ros-openshift-container-202610.csv"), []byte(hdr+rows), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(guestDir, "manifest.json"), []byte(`{"cluster_id": "dddddddd-1111-1111-1111-111111111111"}`), 0o600))
+
+	// API-tax CSV: two consecutive hourly cumulative snapshots around the
+	// fire window [2026-10-29T23:00, 2026-10-30T00:00).
+	tax := "webhook_name,window_start,window_end,le,bucket_count,total_count,rejected_count,collected_at,source\n"
+	les := []string{"0.1", "0.5", "1.0", "2.0", "3.0", "10.0"}
+	for i, ws := range []time.Time{
+		time.Date(2026, 10, 29, 22, 0, 0, 0, time.UTC),
+		time.Date(2026, 10, 29, 23, 0, 0, 0, time.UTC),
+	} {
+		scale := 1.0 + 0.05*float64(i)
+		collected := ws.Add(50 * time.Minute)
+		cum := int64(0)
+		for _, le := range les {
+			d := int64(1)
+			if le == "3.0" {
+				d = int64(float64(1000) * scale)
+			}
+			cum += d
+			total, rejected := "", ""
+			if le == les[len(les)-1] {
+				total = fmt.Sprint(int64(float64(5000) * scale))
+				rejected = fmt.Sprint(int64(float64(10) * scale))
+			}
+			tax += "slow.mutating.example," + ws.Format(csvTimeFmt) + "," + ws.Add(time.Hour).Format(csvTimeFmt) +
+				"," + le + "," + fmt.Sprint(cum) + "," + total + "," + rejected + "," + collected.Format(csvTimeFmt) + ",kubernetes\n"
+		}
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(guestDir, "ros-openshift-apitax-202610.csv"), []byte(tax), 0o600))
+
+	f := commonFlags{
+		inputs:       []string{guestDir},
+		noUserConfig: true,
+		now:          "2026-10-30T00:00:00Z",
+	}
+	result, err := executeRecommend(f)
+	require.NoError(t, err)
+	require.NotEmpty(t, result.HCPAdvisories, "p99 ~3s webhook must fire")
+	adv := result.HCPAdvisories[0]
+	assert.Equal(t, "tune_noisy_webhook", adv.Verdict)
+	assert.Equal(t, "high", adv.Confidence)
+	assert.Equal(t, "", adv.HostedClusterID, "shared-plane evidence names no single HC")
+	assert.Equal(t, "slow.mutating.example", adv.Details["webhook"])
+	p99 := adv.Details["webhook_p99_seconds"].(float64)
+	assert.GreaterOrEqual(t, p99, 2.0)
+	assert.Equal(t, 2.0, adv.Details["webhook_p99_threshold_seconds"])
+}
+
+func TestComputeAPITaxAdvisory_QuietClusterIsSilent(t *testing.T) {
+	guestDir, _ := writeZombieFixture(t, zombieDays14(), "0.5", "0.5", "")
+	f := commonFlags{
+		inputs:       []string{guestDir},
+		noUserConfig: true,
+		now:          "2026-10-30T00:00:00Z",
+	}
+	result, err := executeRecommend(f)
+	require.NoError(t, err)
+	assert.Empty(t, result.HCPAdvisories, "no api-tax rows means silence, never an error")
+}

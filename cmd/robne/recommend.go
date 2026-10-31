@@ -579,6 +579,12 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 		out.HCPAdvisories = append(out.HCPAdvisories, advs...)
 		sortAdvisoryOut(out.HCPAdvisories)
 	}
+	// W5 api-tax advisory (#724): the hottest webhook over the primary
+	// payload's api-tax rows (cluster-scoped, no HC attribution).
+	if advs := computeAPITaxAdvisory(fl); len(advs) > 0 {
+		out.HCPAdvisories = append(out.HCPAdvisories, advs...)
+		sortAdvisoryOut(out.HCPAdvisories)
+	}
 	if err := attachFileOnlyRecs(&out, fl); err != nil {
 		return out, err
 	}
@@ -992,6 +998,12 @@ func computeRecommendations(f commonFlags) (recommendResult, error) {
 	// W2 headroom advisory (#723): H && C && !N over the SLO rows, the
 	// context CP evidence, and the computed node recommendations.
 	if advs := computeHeadroomAdvisory(fl); len(advs) > 0 {
+		out.HCPAdvisories = append(out.HCPAdvisories, advs...)
+		sortAdvisoryOut(out.HCPAdvisories)
+	}
+	// W5 api-tax advisory (#724): the hottest webhook over the primary
+	// payload's api-tax rows (cluster-scoped, no HC attribution).
+	if advs := computeAPITaxAdvisory(fl); len(advs) > 0 {
 		out.HCPAdvisories = append(out.HCPAdvisories, advs...)
 		sortAdvisoryOut(out.HCPAdvisories)
 	}
