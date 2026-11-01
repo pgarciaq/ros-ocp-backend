@@ -115,7 +115,7 @@ When the `gpu` plugin is disabled, `GET .../recommendations/openshift/gpu/mig` a
 `/gpu/*` paths return **404** with `plugin 'gpu' is not enabled` (route guards), not a container
 detail 400. GPU threshold settings (`GET .../settings/gpu`) follow the same plugin gating.
 
-See [Plugin architecture](../architecture/plugin-architecture.md) for registry, phases, and
+See [Plugin architecture](../docs-site/architecture/plugin-architecture.md) for registry, phases, and
 trait design. Integration coverage:
 [`handlers_gpu_mig_integration_test.go`](../../internal/api/handlers_gpu_mig_integration_test.go).
 

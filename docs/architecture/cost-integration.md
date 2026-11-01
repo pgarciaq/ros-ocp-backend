@@ -423,7 +423,7 @@ Existing `_usd` JSON field names are unchanged for backward compatibility — us
 
 When Masu is unavailable or savings are disabled, ROS defaults to `"USD"`.
 Deploy **koku** (Masu `effective_rates` currency field) before or with
-ros-ocp-backend. See [upgrade-runbook.md](../upgrade-runbook.md).
+ros-ocp-backend. See [upgrade-runbook.md](../../docs-site/operations/upgrade-runbook.md).
 
 ### MoneyAmount.Units consistency
 
@@ -752,7 +752,7 @@ Masu lists one S3 prefix per day in the date range, presigns each object (48h TT
 | [`internal/reship/poller.go`](../../internal/reship/poller.go) | Retries when `reship_pending_since` is set |
 | [`internal/reship/service.go`](../../internal/reship/service.go) | Single-flight lock, trailing reship, metrics |
 
-Configuration: `KOKU_MASU_URL`, `ROS_RESHIP_CONCURRENCY`, `ROS_RESHIP_POLLER_INTERVAL_SECS`, `ROS_RESHIP_MAX_RETRIES` — see [configurability.md](configurability.md) and [upgrade-runbook.md](../upgrade-runbook.md).
+Configuration: `KOKU_MASU_URL`, `ROS_RESHIP_CONCURRENCY`, `ROS_RESHIP_POLLER_INTERVAL_SECS`, `ROS_RESHIP_MAX_RETRIES` — see [configurability.md](../../docs-site/architecture/configurability.md) and [upgrade-runbook.md](../../docs-site/operations/upgrade-runbook.md).
 
 ### Authentication
 

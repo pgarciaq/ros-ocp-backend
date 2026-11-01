@@ -76,7 +76,7 @@ See [ADR-0298](../adr/0298-composite-key-sweep-stale-detection.md).
 | `ROS_STALE_DATA_THRESHOLD_HOURS` | (alias) | Same as `ROS_STALENESS_THRESHOLD_HOURS` (requirements spec name) |
 | `ROS_STALE_CLEANUP_DAYS` | 30 | Days before stale rows are deleted in the retention sweep |
 
-See also [configurability](../architecture/configurability.md) and
+See also [configurability](../../docs-site/architecture/configurability.md) and
 [retention](retention.md).
 
 ## API filter

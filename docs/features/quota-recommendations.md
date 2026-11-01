@@ -320,4 +320,4 @@ pod_quota_savings = pods_freed × cost_per_pod_slot
 - [Plugin Execution Phases](../architecture/plugin-phases.md) — phase and priority table
 - [REQ-8.4](../archive/requirements.md) — requirements traceability
 - [ClusterResourceQuota recommendations](cluster-resource-quota.md) — `cluster-quota` plugin
-- [Known issues](../known-issues.md) — ClusterResourceQuota and remaining gaps
+- [Known issues](../docs-site/known-issues.md) — ClusterResourceQuota and remaining gaps

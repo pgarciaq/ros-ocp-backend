@@ -278,7 +278,7 @@ Design detail: [`docs/design/vm-recommendations.md`](../design/vm-recommendation
 
 | Codes | Intended domain | Notes |
 |-------|-----------------|-------|
-| 4 | MachineSet / PDB | [`docs/known-issues.md`](../known-issues.md) |
+| 4 | MachineSet / PDB | [`docs-site/known-issues.md`](../../docs-site/known-issues.md) |
 | 14, 16–17 | MachineAutoscaler | Tier 3 MachineAutoscaler (not node idle) |
 | 21–22 | HPA | Replica display exists; scaling advice does not |
 | 23–24 | Cloud instance catalog | Node MachineSet tier 2 |
@@ -309,6 +309,6 @@ A recommendation can be:
 ## Related documentation
 
 - Native engine notification mapping: [`docs/archive/native-engine-notification-gap.md`](../archive/native-engine-notification-gap.md)
-- UI integration (partial table): [`docs/ui-integration-guide.md`](../ui-integration-guide.md)
-- Consolidated feature notes: [`docs/known-issues.md`](../known-issues.md) (notification sections)
+- UI integration (partial table): [`docs-site/ui-integration-guide.md`](../../docs-site/ui-integration-guide.md)
+- Consolidated feature notes: [`docs-site/known-issues.md`](../../docs-site/known-issues.md) (notification sections)
 - Migrations: `migrations/000027_*.sql` through `migrations/000098_*.sql`

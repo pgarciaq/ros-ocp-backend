@@ -27,7 +27,7 @@ Do not debug `unauthorized_client` or hunt client secrets for API calls.
 |------|------|
 | Which production plugins exist | `internal/plugins/plugins.go` (blank imports; example plugin is excluded on purpose) |
 | HTTP routes | `internal/api` server wiring |
-| Plugin design | `docs/architecture/plugin-architecture.md` |
+| Plugin design | `docs-site/architecture/plugin-architecture.md` |
 | List/pagination helpers | `internal/api` listoptions |
 | Business hours product contract | `docs-site/features/business-hours.md` and `docs/adr/` (ADR-0036). One line: dual **digests**, all-hours **persisted recs**, Peak hours is GET-time **detail** nest. Do not restate the matrix here. |
 | Public docs contracts | `docs-site/` (not `README.md`, not registry error strings) |

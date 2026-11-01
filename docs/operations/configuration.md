@@ -6,7 +6,7 @@ via [Viper](https://github.com/spf13/viper) from process environment (and
 connection settings are injected automatically from the platform.
 
 For algorithm-specific thresholds (container percentiles, GPU classification,
-snapshot staleness, etc.), see [Configurability Reference](../architecture/configurability.md).
+snapshot staleness, etc.), see [Configurability Reference](../../docs-site/architecture/configurability.md).
 This document focuses on **platform wiring**, **performance tuning**, and
 **operational controls**.
 
@@ -17,7 +17,7 @@ This document focuses on **platform wiring**, **performance tuning**, and
 ## Configuration Precedence (Thresholds)
 
 Recommendation thresholds follow a three-tier model documented in
-[configurability.md](../architecture/configurability.md):
+[configurability.md](../../docs-site/architecture/configurability.md):
 
 1. **Admin env var** (`ROS_*`) — locks the field platform-wide
 2. **Tenant Settings API** — per-`org_id` overrides when not locked
@@ -454,7 +454,7 @@ See [idle-detection.md](../features/idle-detection.md).
 
 Platform-wide defaults for sizing and classification. Each can lock the
 corresponding Settings API field when set. Full descriptions and tenant
-override behavior: [configurability.md](../architecture/configurability.md).
+override behavior: [configurability.md](../../docs-site/architecture/configurability.md).
 
 ### Container
 
@@ -662,7 +662,7 @@ All defaults and validation logic: [`internal/config/config.go`](../../internal/
 
 | Document | Scope |
 |----------|-------|
-| [Configurability Reference](../architecture/configurability.md) | Threshold semantics and Settings API |
+| [Configurability Reference](../../docs-site/architecture/configurability.md) | Threshold semantics and Settings API |
 | [Monitoring](monitoring.md) | Metrics tied to these settings |
 | [Retention](retention.md) | Data lifecycle env vars |
 | [RBAC](rbac.md) | Authorization configuration |

@@ -26,21 +26,21 @@ Expected differences (do **not** “fix” by wholesale copy):
 |---|---|
 | `docs/operations/configuration.md` | `docs-site/configuration.md` (also `docs-site/operations/configuration.md`) |
 | `docs/testing/validating-native-engine.md` | `docs-site/testing/validating-native-engine.md` (**stub pair**: the internal file is a pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, #741) |
-| `docs/testing/iqe-requirements-registration.md` | `docs-site/testing/iqe-requirements-registration.md` |
-| `docs/ui-integration-guide.md` | `docs-site/ui-integration-guide.md` |
-| `docs/upgrade-runbook.md` | `docs-site/operations/upgrade-runbook.md` |
+| `docs/testing/iqe-requirements-registration.md` | `docs-site/testing/iqe-requirements-registration.md` (**stub pair**: pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, docs dedup pass) |
+| `docs/ui-integration-guide.md` | `docs-site/ui-integration-guide.md` (**stub pair**: pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, docs dedup pass) |
+| `docs/upgrade-runbook.md` | `docs-site/operations/upgrade-runbook.md` (**stub pair**: pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, docs dedup pass) |
 | `docs/operations/monitoring.md` | `docs-site/monitoring.md` |
 | `docs/operations/query-performance.md` | `docs-site/query-performance.md` |
-| `docs/known-issues.md` | `docs-site/known-issues.md` |
+| `docs/known-issues.md` | `docs-site/known-issues.md` (**stub pair**: pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, docs dedup pass) |
 | `docs/features/idle-detection.md` | `docs-site/plugin-reference/idle-detection.md` |
 | `docs/features-business-hours.md` | `docs-site/plugin-reference/business-hours.md` |
 | `docs/features/quota-recommendations.md` | `docs-site/plugin-reference/quota.md` |
 | `docs/features/cluster-resource-quota.md` | `docs-site/plugin-reference/cluster-quota.md` |
 | `docs/operations/api-query-parameters.md` | `docs-site/plugin-reference/query-parameters.md` |
 | `docs/architecture/recommendation-engines.md` | `docs-site/architecture/recommendation-engines.md` |
-| `docs/architecture/configurability.md` | `docs-site/architecture/configurability.md` |
+| `docs/architecture/configurability.md` | `docs-site/architecture/configurability.md` (**stub pair**: pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, docs dedup pass) |
 | `docs/architecture/cost-integration.md` | `docs-site/architecture/cost-integration.md` |
-| `docs/architecture/plugin-architecture.md` | `docs-site/architecture/plugin-architecture.md` |
+| `docs/architecture/plugin-architecture.md` | `docs-site/architecture/plugin-architecture.md` (**stub pair**: pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, docs dedup pass) |
 | `docs/architecture/native-migration.md` | `docs-site/architecture/native-migration.md` |
 | `docs/architecture/notification-codes.md` | `docs-site/api-reference/notification-codes.md` |
 

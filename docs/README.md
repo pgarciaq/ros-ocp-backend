@@ -4,7 +4,7 @@
 
 | Document | Description |
 |----------|-------------|
-| [ui-integration-guide.md](ui-integration-guide.md) | **Frontend integration guide** — REST API reference for koku-ui: recommendations, settings, notifications, pagination, UX patterns |
+| [ui-integration-guide.md](../docs-site/ui-integration-guide.md) | **Frontend integration guide** — REST API reference for koku-ui: recommendations, settings, notifications, pagination, UX patterns |
 
 ## Architecture & Design
 
@@ -15,9 +15,9 @@
 | [design/vm-test-plan.md](design/vm-test-plan.md) | VM recommendations test inventory (unit, E2E, IQE) |
 | [design/java-recommendations.md](design/java-recommendations.md) | **Planned** — Java/JVM heap, GC, thread pools, non-heap OOM, MaxRAMPercentage (Phase 9) |
 | [design/network-recommendations.md](design/network-recommendations.md) | **Planned** — NetObserv integration, egress/DNS/drops, SaaS cost attribution, cross-zone v2 |
-| [plugin-architecture.md](architecture/plugin-architecture.md) | Recommendation plugin architecture — registry, traits, optional legacy Kruize path |
+| [plugin-architecture.md](../docs-site/architecture/plugin-architecture.md) | Recommendation plugin architecture — registry, traits, optional legacy Kruize path |
 | [recommendation-engines.md](architecture/recommendation-engines.md) | Plugin thresholds, percentiles, terms, and engine behavior |
-| [configurability.md](architecture/configurability.md) | **Environment variable reference** — all `ROS_*` vars, Settings API routes, precedence model, tuning guidance |
+| [configurability.md](../docs-site/architecture/configurability.md) | **Environment variable reference** — all `ROS_*` vars, Settings API routes, precedence model, tuning guidance |
 | [database-conventions.md](architecture/database-conventions.md) | **Schema design** — when to use JSONB vs normalized tables, decision matrix, anti-patterns |
 | [recommendation-math.md](architecture/recommendation-math.md) | Recommendation algorithms — decay weighting, adaptive margin, trend detection |
 | [gpu-classification.md](architecture/gpu-classification.md) | GPU utilization classification thresholds and MIG profile selection |
@@ -38,7 +38,7 @@
 | [Stale Detection](operations/stale-detection.md) | ROS staleness (code 2) and Koku SaaS stale-source checks |
 | [RBAC Model](operations/rbac.md) | Permission types, filtering logic, endpoint coverage |
 | [GPU Catalog](operations/gpu-catalog.md) | How to add new GPU models, specs, monitoring for gaps |
-| [Upgrade Runbook](upgrade-runbook.md) | Database migration procedures and advisory lock patterns |
+| [Upgrade Runbook](../docs-site/operations/upgrade-runbook.md) | Database migration procedures and advisory lock patterns |
 | [migrations/README.md](../migrations/README.md) | Migration best practices (CONCURRENTLY indexes, pre-steps) |
 
 ## Feature Documentation
@@ -51,7 +51,7 @@
 | [features-f-snapshot-staleness.md](features-f-snapshot-staleness.md) | Snapshot staleness detection |
 | [features-business-hours.md](features-business-hours.md) | Business hours recommendations — design specification |
 | [business-hours-admin-guide.md](business-hours-admin-guide.md) | Business hours — admin and operator guide |
-| [known-issues.md](known-issues.md) | Feature status report — executive summary, implementation status, caveats |
+| [known-issues.md](../docs-site/known-issues.md) | Feature status report — executive summary, implementation status, caveats |
 | [kruize-vs-native-comparison.md](kruize-vs-native-comparison.md) | Comparison between Kruize and native engine |
 | [native-engine-performance.md](native-engine-performance.md) | Native engine performance benchmarks |
 

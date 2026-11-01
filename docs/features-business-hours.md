@@ -802,7 +802,7 @@ In steady state (99.9% of API calls), recommendations are served from the precom
 6. Deploy ros-ocp-backend with feature flag optional (`ROS_BUSINESS_HOURS_ENABLED`)
 7. Update cost-onprem-chart Helm values to enable BH env vars
 8. No automatic backfill — operators/customers trigger re-ship after configuring schedules
-9. Document in upgrade runbook ([`docs/upgrade-runbook.md`](upgrade-runbook.md))
+9. Document in upgrade runbook ([`docs-site/operations/upgrade-runbook.md`](docs-site/operations/upgrade-runbook.md))
 
 ### Deploy Order (Three Repos)
 
