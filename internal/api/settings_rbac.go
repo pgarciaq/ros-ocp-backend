@@ -31,13 +31,18 @@ func hasSettingsWritePermission(c echo.Context) bool {
 	return false
 }
 
-// requireSettingsWrite returns nil when the caller may PUT/DELETE settings endpoints.
+// requireSettingsWrite returns nil only when the caller may mutate settings.
+// Writing a denial response is not control flow: return a non-nil error even
+// when JSON succeeds so every caller stops before persistence or side effects.
 func requireSettingsWrite(c echo.Context) error {
 	if hasSettingsWritePermission(c) {
 		return nil
 	}
-	return c.JSON(http.StatusForbidden, echo.Map{
+	if err := c.JSON(http.StatusForbidden, echo.Map{
 		"status":  "error",
 		"message": "User does not have permission to modify settings",
-	})
+	}); err != nil {
+		return err
+	}
+	return echo.ErrForbidden
 }

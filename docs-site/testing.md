@@ -84,7 +84,15 @@ Pre-native ros-ocp-backend was essentially a Kruize glue layer (~49 tests). The 
 ### API Layer
 
 - All CRUD operations for settings (thresholds, terms, business hours, snapshots, idle-detection)
-- RBAC enforcement (read-only users blocked from PUT/DELETE)
+- RBAC enforcement: read-only PUT/DELETE callers receive 403 **and leave seeded
+  settings/pending state unchanged**, without digest pruning, recalculation,
+  reship or cache invalidation. Status-only assertions are insufficient. The
+  settings regression matrix covers registered domains, deprecated aliases and
+  business-hours scopes, with valid unlocked requests and authorized writer
+  controls. See `internal/api/settings_rbac_persistence_test.go` in the repository.
+  This RBAC regression coverage was verified on 2026-11-01 for
+  [#751](https://github.com/pgarciaq/ros-ocp-backend/issues/751); the inventory
+  estimates elsewhere on this page have not been recounted by that fix.
 - OpenAPI spec/route parity (no spec drift)
 - Pagination, filtering, engine selection, CSV export (including `currency` column)
 - Tag filtering (`filter[tag:key]`, `meta.warnings`, savings-summary `group_by[tag:key]`)

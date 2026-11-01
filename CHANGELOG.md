@@ -73,6 +73,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Settings authorization stops denied writes ([#751](https://github.com/pgarciaq/ros-ocp-backend/issues/751)):**
+  a caller without wildcard `cost-management:settings:write` permission could
+  receive HTTP 403 while the settings handler continued into a PUT or DELETE.
+  Permission denial now terminates processing before persistence,
+  recalculation, business-hours digest pruning, reship/pending-state updates
+  or cache invalidation. The existing denial status and JSON body are unchanged;
+  legitimate writers, environment locks and RBAC-disabled behavior are preserved.
+
 - **HCP `incomplete` no longer fires on management-overhead rows
   ([#695](https://github.com/pgarciaq/ros-ocp-backend/issues/695)):**
   previously every `filter[scope]=management` row was flagged

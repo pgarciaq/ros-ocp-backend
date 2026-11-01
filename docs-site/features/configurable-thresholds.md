@@ -1,6 +1,6 @@
 # Configurable Thresholds
 
-> **Last verified:** 2026-10-05
+> **Last verified:** 2026-11-01
 
 !!! info "Quick Facts"
     **API:** Per-plugin `GET/PUT/DELETE` under `/api/cost-management/v1/recommendations/openshift/settings/`  
@@ -84,9 +84,22 @@ Full route-by-route table:
 
 ## RBAC
 
-When RBAC is enabled, PUT and DELETE require **`cost-management:settings:write`**
-(mapped to `settings.write` in the identity header). GET is available to authenticated
-users with recommendation read access.
+When RBAC is enabled, PUT and DELETE require wildcard
+**`cost-management:settings:write`** permission (`settings.write` is derived from
+the RBAC access response, not supplied as a writable identity-header attribute).
+GET is available to authenticated users with recommendation read access.
+
+A permission-denied request returns HTTP **403** with:
+
+```json
+{"status":"error","message":"User does not have permission to modify settings"}
+```
+
+It does **not** change stored overrides, prune business-hours digests, trigger
+recalculation/reship, update reship-pending state or invalidate caches. This
+applies to PUT and DELETE, including deprecated aliases and org, cluster and
+namespace business-hours settings. Environment locks remain a separate reason
+for denial, with their existing response fields.
 
 ## Full reference
 

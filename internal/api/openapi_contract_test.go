@@ -41,7 +41,8 @@ const apiV1Prefix = "/api/cost-management/v1"
 type openAPISpecDoc struct {
 	Paths      map[string]json.RawMessage `json:"paths"`
 	Components struct {
-		Schemas map[string]json.RawMessage `json:"schemas"`
+		Schemas   map[string]json.RawMessage `json:"schemas"`
+		Responses map[string]json.RawMessage `json:"responses"`
 	} `json:"components"`
 }
 
@@ -61,6 +62,7 @@ type openAPIOperation struct {
 }
 
 type openAPIResponse struct {
+	Ref     string `json:"$ref"`
 	Content map[string]struct {
 		Schema json.RawMessage `json:"schema"`
 	} `json:"content"`
@@ -83,6 +85,61 @@ func loadOpenAPISpec(t *testing.T) openAPISpecDoc {
 	require.NoError(t, json.Unmarshal(raw, &spec))
 	require.NotEmpty(t, spec.Paths)
 	return spec
+}
+
+func TestOpenAPISettingsMutations_DocumentPermissionDenied403(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	e := settingsRBACApp(t, &settingsRBACEffects{})
+	for path, raw := range spec.Paths {
+		if !strings.Contains(path, "/settings/") {
+			continue
+		}
+		var item openAPIPathItem
+		require.NoError(t, json.Unmarshal(raw, &item))
+		for method, op := range map[string]*openAPIOperation{http.MethodPut: item.Put, http.MethodDelete: item.Delete} {
+			if op == nil {
+				continue
+			}
+			t.Run(method+" "+path, func(t *testing.T) {
+				response, ok := op.Responses["403"]
+				require.True(t, ok, "settings mutation must document the actual RBAC permission denial")
+				if response.Ref != "" {
+					const prefix = "#/components/responses/"
+					require.True(t, strings.HasPrefix(response.Ref, prefix))
+					component, found := spec.Components.Responses[strings.TrimPrefix(response.Ref, prefix)]
+					require.True(t, found, "403 response reference must resolve")
+					var resolved openAPIResponse
+					require.NoError(t, json.Unmarshal(component, &resolved))
+					response = resolved
+				}
+				content, ok := response.Content["application/json"]
+				require.True(t, ok, "403 must describe its JSON response, not just a status label")
+				schema := spec.resolveSchema(content.Schema)
+				require.NotNil(t, schema)
+				variants, ok := schema["oneOf"].([]any)
+				require.True(t, ok, "403 documents both RBAC and environment-lock response shapes")
+				var permissionSchema map[string]any
+				for _, variant := range variants {
+					candidate, valid := variant.(map[string]any)
+					require.True(t, valid, "403 schema variant must be an object")
+					props, _ := candidate["properties"].(map[string]any)
+					if props["status"] != nil && props["message"] != nil {
+						permissionSchema = candidate
+					}
+				}
+				require.NotNil(t, permissionSchema, "403 schema omits permission-denied status/message")
+				requestPath := apiV1Prefix + strings.ReplaceAll(strings.ReplaceAll(path, "{cluster_id}", settingsRBACCluster), "{namespace}", "rbac-ns")
+				if strings.HasSuffix(path, "/settings/terms") || strings.HasSuffix(path, "/settings/thresholds") {
+					requestPath += "?recommendation_type=container"
+				}
+				rec := settingsRBACRequest(e, "org-openapi-settings-rbac", "settings-reader", method, requestPath, "{}")
+				require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+				assertObjectHasSpecProperties(t, body, permissionSchema, "permission denial")
+			})
+		}
+	}
 }
 
 func (spec openAPISpecDoc) resolveSchema(raw json.RawMessage) map[string]interface{} {

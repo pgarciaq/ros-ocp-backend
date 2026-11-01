@@ -800,6 +800,9 @@
           }
         },
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "200": {
             "description": "Updated term settings",
             "content": {
@@ -866,6 +869,9 @@
           }
         ],
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "200": {
             "description": "Default term settings (after reset)",
             "content": {
@@ -926,6 +932,9 @@
           }
         },
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "202": {
             "description": "Accepted; re-ingestion triggered asynchronously",
             "content": {
@@ -952,6 +961,9 @@
         "operationId": "deleteBusinessHoursOrgDefault",
         "x-plugin-required": "business-hours",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "204": {
             "description": "Override removed"
           },
@@ -1079,6 +1091,9 @@
           }
         },
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "202": {
             "description": "Accepted; re-ingestion triggered asynchronously",
             "content": {
@@ -1117,6 +1132,9 @@
           }
         ],
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "204": {
             "description": "Override removed"
           },
@@ -1212,6 +1230,9 @@
           }
         },
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "202": {
             "description": "Accepted; re-ingestion triggered asynchronously",
             "content": {
@@ -1259,6 +1280,9 @@
           }
         ],
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "204": {
             "description": "Override removed"
           },
@@ -3934,7 +3958,14 @@
             "description": "User is not authorized"
           },
           "403": {
-            "description": "Field is locked by environment variable"
+            "description": "Field is locked by environment variable, or the caller lacks wildcard cost-management:settings:write permission. A permission denial does not modify settings or trigger dependent work.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsWriteForbidden"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error"
@@ -3947,6 +3978,9 @@
         ],
         "summary": "Reset snapshot settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "204": {
             "description": "No Content"
           }
@@ -4384,6 +4418,9 @@
         ],
         "summary": "Update container recommendation settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -4402,6 +4439,9 @@
         ],
         "summary": "Reset container recommendation settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "204": {
             "description": "No Content"
           }
@@ -4433,6 +4473,9 @@
         ],
         "summary": "Update HCP correlation policy settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -4451,6 +4494,9 @@
         ],
         "summary": "Reset HCP correlation policy settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "204": {
             "description": "No Content"
           }
@@ -4483,6 +4529,9 @@
         ],
         "summary": "Update GPU recommendation settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -4501,6 +4550,9 @@
         ],
         "summary": "Reset GPU recommendation settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "204": {
             "description": "No Content"
           }
@@ -4548,6 +4600,9 @@
         ],
         "summary": "Update idle detection settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -4566,6 +4621,9 @@
         ],
         "summary": "Reset idle detection settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "204": {
             "description": "No Content"
           }
@@ -4597,6 +4655,9 @@
         ],
         "summary": "Update namespace recommendation settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -4615,6 +4676,9 @@
         ],
         "summary": "Reset namespace recommendation settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "204": {
             "description": "No Content"
           }
@@ -4646,6 +4710,9 @@
         ],
         "summary": "Update node recommendation settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -4664,6 +4731,9 @@
         ],
         "summary": "Reset node recommendation settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "204": {
             "description": "No Content"
           }
@@ -4695,6 +4765,9 @@
         ],
         "summary": "Update PVC recommendation settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -4713,6 +4786,9 @@
         ],
         "summary": "Reset PVC recommendation settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "204": {
             "description": "No Content"
           }
@@ -4769,6 +4845,9 @@
         ],
         "summary": "Update quota recommendation settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -4787,6 +4866,9 @@
         ],
         "summary": "Reset quota recommendation settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "204": {
             "description": "No Content"
           }
@@ -4843,6 +4925,9 @@
         ],
         "summary": "Update cluster-quota recommendation settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -4861,6 +4946,9 @@
         ],
         "summary": "Reset cluster-quota recommendation settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "204": {
             "description": "No Content"
           }
@@ -4892,6 +4980,9 @@
         ],
         "summary": "Update threshold settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -4910,6 +5001,9 @@
         ],
         "summary": "Reset threshold settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "204": {
             "description": "No Content"
           }
@@ -4997,6 +5091,9 @@
         ],
         "summary": "Update VM settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -5015,6 +5112,9 @@
         ],
         "summary": "Reset VM settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "204": {
             "description": "No Content"
           }
@@ -5046,6 +5146,9 @@
         ],
         "summary": "Update VM term settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "200": {
             "description": "OK",
             "content": {
@@ -5064,6 +5167,9 @@
         ],
         "summary": "Reset VM term settings",
         "responses": {
+          "403": {
+            "$ref": "#/components/responses/SettingsWriteForbidden"
+          },
           "204": {
             "description": "No Content"
           }
@@ -7170,7 +7276,48 @@
     }
   },
   "components": {
+    "responses": {
+      "SettingsWriteForbidden": {
+        "description": "When RBAC is enabled, PUT/DELETE require wildcard cost-management:settings:write permission. A permission denial returns one JSON error and does not modify settings or trigger recalculation, pruning, reship, pending-state or cache changes. Platform or field environment locks can independently return 403.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SettingsWriteForbidden"
+            },
+            "examples": {
+              "permissionDenied": {
+                "value": {
+                  "status": "error",
+                  "message": "User does not have permission to modify settings"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "schemas": {
+      "SettingsWriteForbidden": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["status", "message"],
+            "properties": {
+              "status": {"type": "string", "enum": ["error"]},
+              "message": {"type": "string"},
+              "locked_fields": {"type": "array", "items": {"type": "string"}}
+            }
+          },
+          {
+            "type": "object",
+            "required": ["error", "locked"],
+            "properties": {
+              "error": {"type": "string"},
+              "locked": {"type": "boolean", "enum": [true]}
+            }
+          }
+        ]
+      },
       "HCPAdvisory": {
         "type": "object",
         "description": "One HCP advisory (ADR-0349). At most one advisory exists per (org, hosted cluster, window) — correlator rules are predicate-partitioned. details carries typed per-verdict fields; unmapped (future) verdicts surface their evidence only. Field evolution is additive-only.",
