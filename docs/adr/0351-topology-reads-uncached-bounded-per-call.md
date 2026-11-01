@@ -22,7 +22,7 @@ The reconciler held the manager's **cached** client. In controller-runtime
 v0.24.1 a cached read of a type whose informer is not yet synced enters
 `internal.Informers.Get` with `shouldBlock` defaulting to `true` and parks in
 `cache.WaitForCacheSync(ctx.Done(), HasSynced)`
-(`vendor/sigs.k8s.io/controller-runtime/pkg/cache/internal/informers.go:322-334`).
+(`vendor/sigs.k8s.io/controller-runtime/pkg/cache/internal/informers.go:324-334`).
 A LIST or WATCH denied by RBAC never syncs, so `HasSynced()` stays false forever:
 the read does not return an error, it does not return at all, and the
 `CollectionError` path never runs. The reconcile context is the only escape
@@ -63,9 +63,9 @@ deadline could be added later without touching them, and the reverse is not true
 On expiry the reads error out, the existing `CollectionError` path names the
 resource, and the reconcile continues.
 
-5s is a backstop, not a budget: four LISTs whose normal latency is well under a
-second. It was chosen as the narrowest value that a slow (not denied) apiserver
-could still satisfy, and it is bounded by the reconcile's own 5-minute requeue,
+5s is a backstop, not a budget: a `GET` and three or four `LIST`s whose normal
+latency is well under a second. It is the value in the fix plan reviewed on #729
+before implementation, and it is bounded by the reconcile's own 5-minute requeue,
 so a degraded cycle costs at most one interval.
 
 ### 3. Degradation is recorded, never silent
@@ -82,7 +82,7 @@ healthy renderings.
 `cache.BlockUntilSynced(false)` exists, but it is an `InformerGetOption` on
 `cache.Informers.Get`; the reconciler path goes through `client.Reader.Get`,
 which calls `getInformerForKind` with a zero `GetOptions`
-(`pkg/cache/informer_cache.go:104-114, 175-182`) — the blocking behaviour is not
+(`pkg/cache/informer_cache.go:65-84, 172-173`) — the blocking behaviour is not
 reachable from reconcile code at all. Even if it were, it would trade a visible
 stall for a **silent empty read**: topology would report zero facts with no
 `collectionError`, which is precisely the failure mode ADR-0328's `unknown`
@@ -114,9 +114,8 @@ permission on a customer cluster.
   resource in milliseconds and clears the same way.
 - RBAC is unchanged: `config/rbac/role.yaml` already grants more than an uncached
   read needs. The `watch` verbs on the cluster-scoped types are now unnecessary
-  but stay, because they are generated from the kubebuilder markers and their
-  removal is not required by this decision (deferred, unverified need to keep
-  them).
+  but stay, because they are generated from the kubebuilder markers; removing
+  them is a separate change with no evidence yet about other consumers.
 - The same class of defect remains elsewhere: `configurePVC` reads through the
   cached client under `context.Background()`
   (`costmanagementmetricsconfig_controller.go:641`) and is tracked separately,
