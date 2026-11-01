@@ -6,10 +6,9 @@
 > the precedence model, and the tuning guidance live on that page.
 
 **Why this page is a stub:** until 2026-11-01 this file duplicated the docs-site
-guide (internal link styling; several of its relative feature-doc links were
-broken in this tree). The pair was 95% identical, so the duplication was removed
-in the docs dedup pass. The full prior content is preserved in git history
-(through commit `440efc95`).
+guide with internal link styling. The pair was 95% identical, so the
+duplication was removed in the docs dedup pass. The full prior content is
+preserved in git history (through commit `440efc95`).
 
 **Rule for agents:** configuration fact edits go to the docs-site page only; do
 not restore duplicated content here. The pair still appears in

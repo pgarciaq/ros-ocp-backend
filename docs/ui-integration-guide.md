@@ -7,11 +7,9 @@
 
 **Why this page is a stub:** until 2026-11-01 this file duplicated the docs-site
 guide — the largest duplicated pair in the repo (1,354 ↔ 1,441 lines, 96%
-identical), with no internal-only content (its relative links to
-`openapi.md`, `pagination.md`, and feature docs were broken in this tree — those
-files exist only docs-site side). The duplication was removed in the docs dedup
-pass; the full prior content is preserved in git history (through commit
-`440efc95`).
+identical), with no internal-only content. The duplication was removed in the
+docs dedup pass; the full prior content is preserved in git history (through
+commit `440efc95`).
 
 **Rule for agents:** UI-contract fact edits go to the docs-site page only; do
 not restore duplicated content here. The pair still appears in
