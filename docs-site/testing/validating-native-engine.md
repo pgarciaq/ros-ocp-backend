@@ -1,8 +1,8 @@
 # Validating the Native Engine
 
-> **Last verified:** 2026-10-31
+> **Last verified:** 2026-11-01
 
-This guide is for senior QE engineers (and developers) validating the **entire ROS-OCP native recommendation engine** (Go) on **x86-64** hardware. The native engine is a **complete rewrite** of recommendation logic previously handled by **Kruize** (Java / Autotune). Validation must cover **all plugins**, **cross-cutting platform features**, **legacy-compatible API shapes** (99% — plot endpoints return percentile bands instead of boxplots per [ADR-0292](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0292-digest-based-plot-percentile-bands.md); all other shapes unchanged, so **koku-ui** needs no other changes), **performance**, and **regression vs legacy**—not only OpenShift Virtualization (VM) recommendations.
+This guide is for senior QE engineers (and developers) validating the **entire ROS-OCP native recommendation engine** (Go) on **x86-64 or aarch64** hardware (check your cluster's node architecture before building images — SNO does not imply either; the reference lab cluster is aarch64). The native engine is a **complete rewrite** of recommendation logic previously handled by **Kruize** (Java / Autotune). Validation must cover **all plugins**, **cross-cutting platform features**, **legacy-compatible API shapes** (99% — plot endpoints return percentile bands instead of boxplots per [ADR-0292](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0292-digest-based-plot-percentile-bands.md); all other shapes unchanged, so **koku-ui** needs no other changes), **performance**, and **regression vs legacy**—not only OpenShift Virtualization (VM) recommendations.
 
 **Document organization:** general platform and bread-and-butter features first (containers, API compat, cross-cutting), then specialized plugins (GPU, node, PVC, quota, snapshot), then VM scenarios and checklists at the end.
 
@@ -11,10 +11,10 @@ This guide is for senior QE engineers (and developers) validating the **entire R
 If you are validating the native engine for the first time:
 
 1. **Read** [Validation priority](#validation-priority-suggested-order) — follow **P0 → P3** order.
-2. **Deploy** [Path A: Integrated Koku on-prem + native ROS](#path-a-integrated-koku-on-prem-native-ros) locally, or use **cost-onprem-chart** on OpenShift (`scripts/deploy-test-cost-onprem.sh`).
+2. **Deploy** [Path A: Integrated Koku on-prem + native ROS](#path-a-integrated-koku-on-prem-native-ros) locally, or use **cost-onprem-chart** on OpenShift (`scripts/deploy-test-cost-onprem.sh`). *The chart is the working lab deployment path today; it is deprecated upstream in favor of koku-service-operator — the migration is tracked in [#682](https://github.com/pgarciaq/ros-ocp-backend/issues/682), and this page moves when that lands.*
 3. **Ingest** NISE data (`--ros-ocp-info --write-monthly`) and run the [API smoke script](#2-verify-each-plugin-api-smoke).
-4. **Automated gate:** latest cost-onprem-chart full suite on phase12 images (point-in-time): **501 passed, 2 failed, 35 skipped** (`NAMESPACE=cost-onprem ./scripts/run-pytest.sh --all`). CI default without `--extended` is ~**88** tests.
-5. **Deeper coverage:** [IQE integration tests](#4-iqe-integration-tests-iqe-cost-management-plugin) and Bruno collections in `costmgmt-api-cheatsheet`.
+4. **Automated gate:** the cost-onprem-chart full suite (`NAMESPACE=cost-onprem ./scripts/run-pytest.sh --all --no-ui`; the suite has grown to ~900 selected tests). CI default without `--extended` is ~**88** tests. Numbers are point-in-time — see [step 3 of the QE workflow](#3-automated-tests-cost-onprem-chart) for the latest verified run.
+5. **Deeper coverage:** [IQE integration tests](#4-iqe-integration-tests-iqe-ros-ocp-plugin) and Bruno collections in `costmgmt-api-cheatsheet`.
 6. **Compare vs Kruize locally:** [Kruize vs Native comparison CLI](#kruize-vs-native-comparison-cli) — run the same nise CSV through both engines and get a side-by-side `comparison.csv`.
 
 **No recommendations while everything looks green?** Confirm the operator reconciled before debugging the engine: `oc get costmanagementmetricsconfig -n <operator-ns> costmanagementmetricscfg -o json | jq .status`. An empty `.status` is an operator problem, not an engine one — see [Operator looks green but nothing uploads](#operator-looks-green-but-nothing-uploads).
@@ -95,6 +95,8 @@ See also: [Native migration guide](../architecture/native-migration.md), [Featur
 | **cluster-quota** | ClusterResourceQuota vs namespace sums | `ocp_ros_cluster_quota.csv` | `GET .../cluster-quota` |
 | **snapshot** | Stale / orphaned / never-restored VolumeSnapshots | `ocp_snapshot_inventory.csv` | `GET .../snapshots` |
 | **vm** | KubeVirt guest sizing (Preview/Beta) | `ocp_ros_vm_usage.csv` (+ optional GPU device CSV) | `GET .../vm`, `/vm/detail` |
+| **hcp** | Hosted control-plane capacity (fleet max-HC scenarios) | `ros-openshift-hcp-capacity-*.csv` (management cluster) | `GET .../hcp`, `/hcp/fleet-capacity` |
+| **slo** | Hosted API latency buckets (correlator input) | `ros-openshift-slo-*.csv` | Feeds the correlator (no standalone list API) |
 
 **Not separate plugins but required:** idle/zombie detection (inside container/GPU produce paths), business hours (dual metric streams), savings via `KOKU_MASU_URL`.
 
@@ -105,6 +107,7 @@ See also: [Native migration guide](../architecture/native-migration.md), [Featur
 | Idle / zombie detection | `filter[category]=idle` or `zombie`, `category`, `estimated_monthly_waste`, notification codes **5–7** |
 | Business hours | `business_hours` block on detail engines; settings `.../settings/business-hours` |
 | Fleet summary | `GET .../fleet-summary` |
+| HCP advisories (W2/W3/W5/W8 correlator verdicts) | `GET .../hcp/advisories` (all verdicts, org-scoped; cluster-scoped verdicts carry a null `hosted_cluster_id`); correlator policy at `GET/PUT/DELETE .../settings/hcp-correlation` (whole-domain PUT — all fields required) |
 | Savings summary | `GET .../savings-summary?engine=cost&term=medium` (defaults: cost + medium term) |
 | History & quality | `GET .../history`, `GET .../quality` |
 | Configurable terms | `GET/PUT .../settings/terms?recommendation_type=<plugin>` |
@@ -218,7 +221,7 @@ Native recommendations run in the **processor** after CSV ingestion (`process*CS
 
 | Resource | Recommendation |
 |----------|----------------|
-| **Architecture** | **x86-64** (amd64) — matches CI images and `podman build` defaults |
+| **Architecture** | **x86-64 (amd64) or aarch64 (arm64)** — check the target cluster's node architecture before building (`oc get nodes -o custom-columns=ARCH:.status.nodeInfo.architecture`); build natively where possible, cross-build with `--platform` otherwise |
 | **RAM** | **16 GB+** for full Koku + Kafka + MinIO + ROS locally; **8 GB** minimum for ROS-only quickstart |
 | **CPU** | 4+ cores (parallel ingestion uses worker goroutines) |
 | **Disk** | ~20 GB free for container images and NISE output |
@@ -264,7 +267,7 @@ Container and namespace recommendations work with **stock upstream `main`** on k
 |------------|------|--------------|---------|
 | **koku-ui** | `~/dev/koku/koku-ui` | **`main`** | React UI (optional for API-only QE; required for Optimizations smoke) |
 | **nise** | `~/dev/koku/nise` | **`pgarciaq-rosocp-superpowers-phase17`** | Synthetic OCP/ROS CSVs (`--ros-ocp-info`, `--write-monthly`) |
-| **cost-onprem-chart** | `~/dev/koku/cost-onprem-chart` | **`main`** | Helm deploy on OpenShift + **pytest** E2E (`scripts/run-pytest.sh`) |
+| **cost-onprem-chart** | `~/dev/koku/cost-onprem-chart` | **`pgarciaq-rosocp-superpowers-phase17`** | Helm deploy on OpenShift + **pytest** E2E (`scripts/run-pytest.sh`); deprecated upstream — migration to koku-service-operator tracked in [#682](https://github.com/pgarciaq/ros-ocp-backend/issues/682) |
 | **costmgmt-api-cheatsheet** | `~/dev/koku/costmgmt-api-cheatsheet` | **`main`** | Bruno collections under `bruno/Optimizations/` |
 
 On a real OpenShift cluster, the operator may come from the downstream stable OLM channel instead of a local `main` checkout — that is fine for container/namespace Kruize comparison as long as you are not testing phase17-only CSV columns.
@@ -297,7 +300,7 @@ git -C nise checkout pgarciaq-rosocp-superpowers-phase17
 
 Build images or binaries in dependency order so downstream services pick up compatible artifacts:
 
-| Step | Component | Commands (x86-64) | Notes |
+| Step | Component | Commands | Notes |
 |------|-----------|-------------------|--------|
 | 1 | **koku-metrics-operator** | `make build` / `make docker-build` | Only when testing against a real cluster (not NISE-only) |
 | 2 | **ros-ocp-backend** | `go build ./...` or `podman build -t ros-ocp-backend:tag -f Dockerfile .` | Run `go run rosocp.go db migrate up` before API/processor |
@@ -457,7 +460,7 @@ make run-api-server          # :8000, PROMETHEUS_PORT=5007
 make run-processor           # PROMETHEUS_PORT=5005
 ```
 
-**Option 5b — Container image (x86-64):**
+**Option 5b — Container image (build for the target cluster's architecture):**
 
 ```bash
 cd ~/dev/koku/ros-ocp-backend
@@ -970,6 +973,10 @@ Base URL: `http://localhost:8000/api/cost-management/v1` (Koku proxy) or direct 
 | **Cluster quota** | GET | `/recommendations/openshift/cluster-quota` | CRQ recs |
 | **Notification catalog** | GET | `/recommendations/openshift/notification-codes` | **No** identity header; `meta.count` > 0 |
 | **Savings** | GET | `/recommendations/openshift/savings-summary?engine=cost&term=medium` | `total` / `by_plugin` populated when Masu + cost model configured |
+| **HCP capacity** | GET | `/recommendations/openshift/hcp?limit=1` | `meta.count` > 0 when HCP capacity CSVs ingested (0 = correct empty state without them) |
+| **HCP fleet-capacity** | GET | `/recommendations/openshift/hcp/fleet-capacity` | Latest snapshot per management cluster |
+| **HCP advisories** | GET | `/recommendations/openshift/hcp/advisories` | All correlator verdicts (sleep/zombie/headroom/api-tax); empty when the correlator has not fired |
+| **Correlation settings** | GET | `/recommendations/openshift/settings/hcp-correlation` | The 16-field correlator policy domain + `locked_fields` |
 
 Example smoke script:
 
@@ -986,6 +993,9 @@ curl -s "${H[@]}" "${BASE}/recommendations/openshift/vm?filter[cluster]=${CLUSTE
 curl -s "${H[@]}" "${BASE}/recommendations/openshift/gpu/timeslicing?limit=1" | jq '.meta.count'
 curl -s "${BASE}/recommendations/openshift/notification-codes" | jq '.meta.count'
 curl -s "${H[@]}" "${BASE}/recommendations/openshift/savings-summary?engine=cost&term=medium" | jq '.total'
+curl -s "${H[@]}" "${BASE}/recommendations/openshift/hcp?limit=1" | jq '.meta.count'
+curl -s "${H[@]}" "${BASE}/recommendations/openshift/hcp/fleet-capacity" | jq '.meta.count'
+curl -s "${H[@]}" "${BASE}/recommendations/openshift/hcp/advisories" | jq '.meta.count'
 ```
 
 ### 3. Automated tests (cost-onprem-chart)
@@ -1002,36 +1012,33 @@ NAMESPACE=cost-onprem ./scripts/run-pytest.sh --all    # full suite incl. extend
 
 **Latest full-suite baseline (phase12 images, June 2026):** **501 passed, 2 failed, 35 skipped** with `--all`. Rebuild and push **new image tags** before every E2E run; never run raw `pytest` without `run-pytest.sh` (venv + env setup). Cluster rebuild/tag/log rules: [AGENTS.md](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/AGENTS.md) and [sno-cluster-operations](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/agents/sno-cluster-operations.md). Chart pytest still lives in cost-onprem-chart until that harness is replaced.
 
-### 4. IQE integration tests (iqe-cost-management-plugin)
+### 4. IQE integration tests (iqe-ros-ocp-plugin)
 
-For **deeper API and data-accuracy validation** than chart pytest (~88 tests), use **IQE** (Insights QE) tests in `iqe-cost-management-plugin`. These exercise ROS recommendations end-to-end against on-prem clusters (via `cost_ocp_on_prem` marker) or SaaS stage/prod.
+For **deeper API and data-accuracy validation** than chart pytest (~88 tests), use **IQE** (Insights QE) tests in `iqe-ros-ocp-plugin`. These exercise ROS recommendations end-to-end against on-prem clusters (via `cost_ocp_on_prem` marker) or SaaS stage/prod.
 
-Each ROS recommendation area has a **`requirements:` marker** in test docstrings, declared in `iqe_cost_management/conf/requirements.yaml`. Pass `--requirements=<id>` to run a **targeted subset** (for example quota-only) instead of a full `smoke` or `extended` profile.
+Each test carries a **`requirements:` marker** in its docstring metadata, declared in `iqe_ros_ocp/conf/requirements.yaml`. Pass `--requirements=<id>` or `--requirements-priority=<p>` to run a **targeted subset** (for example quota-only, or all high-priority) instead of a full `smoke` or `extended` profile. The registry covers **24 declared IDs** across every recommendation surface and reportable feature — the full inventory, the marker convention (the `cost_ros_ocp` catch-all default; specific IDs minted only for targetable capabilities), and the app-interface follow-ups live in **[IQE requirement registration](./iqe-requirements-registration.md)**. Representative IDs:
 
-| Native plugin | IQE requirement ID | Example test module |
-|---------------|-------------------|---------------------|
-| Container, namespace, settings, cross-cutting | `cost_ros_ocp` | `test_ros.py`, `test_ros_namespace_recommendations.py` |
-| VM | `cost_ros_ocp_vm` | `test_ros_vm_recommendations.py` |
-| Node | `cost_ros_ocp_nodes` | `test_ros_node_recommendations.py` |
-| GPU | `cost_ros_ocp_gpu` | `test_ros_gpu_recommendations.py` |
-| PVC | `cost_ros_ocp_pvc` | `test_pvc_recommendations.py` |
-| Snapshot | `cost_ros_ocp_snapshot` | `iqe_ros_ocp/tests/rest/test_snapshot_recommendations.py` |
-| ClusterResourceQuota | `cost_ros_ocp_cluster_quota` | `test_ros_cluster_quota_recommendations.py` |
-| Namespace ResourceQuota | `cost_ros_ocp_quota` | `test_ros_quota_recommendations.py` |
+| Surface | IQE requirement ID |
+|---------|-------------------|
+| Container, list mechanics, settings, cross-cutting | `cost_ros_ocp` |
+| HCP (capacity, fleet-capacity, advisories, correlator settings) | `cost_ros_ocp_hcp` |
+| Namespace family | `cost_ros_ocp_namespace` |
+| Node / VM / GPU / PVC / snapshot | `cost_ros_ocp_nodes` / `_vm` / `_gpu` / `_pvc` / `_snapshot` |
+| Quota / ClusterResourceQuota | `cost_ros_ocp_quota` / `_cluster_quota` |
 
 **Full-profile on-prem runs** (all ROS tests matching `cost_ocp_on_prem`):
 
 ```bash
 cd ~/dev/koku/cost-onprem-chart
 ./scripts/deploy-test-cost-onprem.sh --iqe-only --listener-cpu max --iqe-profile smoke
-# or locally (requires iqe-core + iqe-cost-management-plugin clones):
+# or locally (requires iqe-core + iqe-ros-ocp-plugin clones):
 ./scripts/run-iqe-tests-local.sh --profile smoke
 ```
 
 **Requirement-filtered runs** (one recommendation type at a time):
 
 ```bash
-iqe tests plugin cost_management \
+iqe tests plugin ros_ocp \
   --force-default-user cost_onprem_user \
   -m "cost_ocp_on_prem" \
   --requirements=cost_ros_ocp_quota \
@@ -1040,7 +1047,7 @@ iqe tests plugin cost_management \
 
 Replace `cost_ros_ocp_quota` with any requirement ID from the table. IQE collects only tests whose `requirements:` markers intersect the requested set.
 
-**Registration:** All eight ROS requirement IDs are declared in the plugin's `requirements.yaml`. Automated requirement-scoped CI jobs also need matching IDs in **app-interface**. See **[IQE requirement registration](./iqe-requirements-registration.md)** for the full matrix, app-interface MR checklist, and which types share the broad `cost_ros_ocp` marker.
+**Registration:** All 24 ROS requirement IDs are declared in the plugin's `requirements.yaml`, enforced by a CI guard that fails on undeclared markers. Automated requirement-scoped CI jobs also need matching IDs in **app-interface**. See **[IQE requirement registration](./iqe-requirements-registration.md)** for the full matrix, app-interface MR checklist, and which types share the broad `cost_ros_ocp` marker.
 
 Setup prerequisites: `cost-onprem-chart/docs/development/iqe-testing-setup.md`.
 
