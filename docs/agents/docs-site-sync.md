@@ -25,7 +25,7 @@ Expected differences (do **not** “fix” by wholesale copy):
 | Internal docs path | Public docs-site equivalent |
 |---|---|
 | `docs/operations/configuration.md` | `docs-site/configuration.md` (also `docs-site/operations/configuration.md`) |
-| `docs/testing/validating-native-engine.md` | `docs-site/testing/validating-native-engine.md` |
+| `docs/testing/validating-native-engine.md` | `docs-site/testing/validating-native-engine.md` (**stub pair**: the internal file is a pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, #741) |
 | `docs/testing/iqe-requirements-registration.md` | `docs-site/testing/iqe-requirements-registration.md` |
 | `docs/ui-integration-guide.md` | `docs-site/ui-integration-guide.md` |
 | `docs/upgrade-runbook.md` | `docs-site/operations/upgrade-runbook.md` |

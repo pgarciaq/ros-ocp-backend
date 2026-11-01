@@ -68,7 +68,7 @@ Use `filter[field]` with comma-separated values (OR within the same field):
 namespace, node, VM, history, and quality list endpoints. Omitted engine blocks are excluded
 from nested `recommendation_engines` on list responses. Fleet rollup uses
 `GET .../savings-summary?engine=cost|performance` (default `cost`). See
-[validating-native-engine.md](../testing/validating-native-engine.md#dual-engine-testing-cost-vs-performance).
+[validating-native-engine.md](../../docs-site/testing/validating-native-engine.md#dual-engine-testing-cost-vs-performance).
 
 ## Filtering (flat syntax)
 

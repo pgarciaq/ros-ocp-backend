@@ -100,7 +100,7 @@ classification and MIG sizing:
 
 Package typed monthly files into a tarball with `manifest.json` (`start`/`end` dates, `files`,
 `resource_optimization_files`) and upload via ingress. See
-[validating-native-engine](../testing/validating-native-engine.md) for on-prem E2E flow.
+[validating-native-engine](../../docs-site/testing/validating-native-engine.md) for on-prem E2E flow.
 
 ## Plugin Management
 

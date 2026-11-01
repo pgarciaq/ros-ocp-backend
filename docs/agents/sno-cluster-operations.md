@@ -43,8 +43,8 @@ Never run cluster E2E against images that may be stale:
 4. Then run tests.
 
 Go unit tests for this repo are `make test`. Chart pytest (`run-pytest.sh`) is not
-in this repository — see `docs/testing/validating-native-engine.md` until that
-harness is replaced.
+in this repository — see `docs-site/testing/validating-native-engine.md` (section
+3, Automated tests) until that harness is replaced.
 
 ## ROS API Authentication
 

@@ -19,7 +19,7 @@ This is **not** a full feature-status matrix.
 |-------|--------|----------|
 | Namespace recs can be disabled per-org | Cloud: Unleash `rosocp.namespace_disabled`. On-prem: always on. | By design |
 | Node recommendation cold start (~3 days) | `GET .../nodes` empty until enough digest history | Low — by design |
-| No recommendations while every pod looks green | CSV `Succeeded` + pod `Running` only prove OLM installed the bundle; the operator can still have never reconciled. An empty `CostManagementMetricsConfig` `.status` means nothing was uploaded — see [Operator looks green but nothing uploads](testing/validating-native-engine.md#operator-looks-green-but-nothing-uploads) | Medium — check `.status` before debugging the engine |
+| No recommendations while every pod looks green | CSV `Succeeded` + pod `Running` only prove OLM installed the bundle; the operator can still have never reconciled. An empty `CostManagementMetricsConfig` `.status` means nothing was uploaded — see [Operator looks green but nothing uploads](../docs-site/testing/validating-native-engine.md#operator-looks-green-but-nothing-uploads) | Medium — check `.status` before debugging the engine |
 | Operator log repeats `is forbidden: … cannot list resource` | Only the logger field decides: `collector.*` is best-effort (one CSV column stays empty, e.g. `machineset_name` → [#739](https://github.com/pgarciaq/ros-ocp-backend/issues/739)); any other logger is a reconcile stall that blocks uploads | Low (best-effort) → High (stall) |
 | Legacy Kruize code still present | Optional path / dual-write work; native is default when enabled | Low when native-only |
 | `workload_metrics` JSONB not dropped | Bypassed by native ingest; leftover schema | Low |
