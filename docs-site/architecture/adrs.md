@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-> **Last verified:** 2026-10-12
+> **Last verified:** 2026-11-01
 
 Architecture Decision Records (ADRs) document significant design choices in
 ros-ocp-backend: the problem context, the decision made, and its consequences.
@@ -8,7 +8,7 @@ They preserve the reasoning behind the native recommendation engine, plugin
 architecture, ingestion pipeline, API contracts, and operational policies so
 future contributors can understand *why* the system works the way it does.
 
-The project maintains **334 ADRs** in the repository under `docs/adr/`. Each
+The project maintains **342 ADRs** in the repository under `docs/adr/`. Each
 record follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions).
 
 ## Full ADR index
@@ -91,6 +91,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0348](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0348-w8-nonprod-sleep-advisory.md) | W8 non-prod sleep advisory: advisory-first, declared classification | Label-gated BH signature (declaration classifies, data gates); `insights.cost-management/hc-tier`; latest-wins tier read (majority-wins rejected — fails dangerous on relabel); org/cluster-level schedule only; zombie partition; ADR-0333 copy carry-over |
 | [0349](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0349-hcp-advisories-serving-api-contract.md) | HCP advisories serving API: typed per-verdict contract + one-advisory-per-HC invariant | API is the primary consumer surface (typed `details` over raw evidence); names derived from attested conventions, `_mc` uniform, additive-only evolution; predicate partition constrains future rules, verdict-joins-PK is the escape hatch; nullable `hosted_cluster_id` for cluster-scoped verdicts |
 | [0350](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0350-robne-multi-payload-input.md) | robne multi-payload input: first-is-primary, identity-based joins | Repeatable --input (first = recommendation cluster, later = advisory context); per-payload consistency guard unchanged; identity-based joins eliminate role ambiguity; advisory independent of the hcp capacity plugin; content-conditional envelope version; deferred generalizations in #725 |
+| [0351](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0351-topology-reads-uncached-bounded-per-call.md) | Topology reads cluster-scoped facts uncached, bounded per call | `r.apiReader` instead of the cached client — a denied or unsynced informer blocks forever inside controller-runtime before any error exists to record; 5s per-call deadline scoped to topology, never the reconcile context; degradation named in `topology.collectionError` |
 
 ## Domains covered
 
