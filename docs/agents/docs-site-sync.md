@@ -39,9 +39,9 @@ Expected differences (do **not** “fix” by wholesale copy):
 | `docs/operations/api-query-parameters.md` | `docs-site/plugin-reference/query-parameters.md` |
 | `docs/architecture/recommendation-engines.md` | `docs-site/architecture/recommendation-engines.md` |
 | `docs/architecture/configurability.md` | `docs-site/architecture/configurability.md` (**stub pair**: pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, docs dedup pass) |
-| `docs/architecture/cost-integration.md` | `docs-site/architecture/cost-integration.md` |
+| `docs/architecture/cost-integration.md` | `docs-site/architecture/cost-integration.md` (**stub pair**: pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, docs dedup pass) |
 | `docs/architecture/plugin-architecture.md` | `docs-site/architecture/plugin-architecture.md` (**stub pair**: pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, docs dedup pass) |
-| `docs/architecture/native-migration.md` | `docs-site/architecture/native-migration.md` |
+| `docs/architecture/native-migration.md` | `docs-site/architecture/native-migration.md` (**stub pair**: pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, docs dedup pass) |
 | `docs/architecture/notification-codes.md` | `docs-site/api-reference/notification-codes.md` |
 
 Inventory / checklist: `make docs-sync-check` (`scripts/check-docs-sync.sh`).

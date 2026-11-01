@@ -8,7 +8,7 @@ and tuning guidance, see [Configurability Reference](configurability.md).
 
 For algorithm details (adaptive margin formula, trend detection), see
 [Recommendation Math](recommendation-math.md). For dollar estimates and savings
-formulas, see [Cost Integration](cost-integration.md).
+formulas, see [Cost Integration](../../docs-site/architecture/cost-integration.md).
 
 For decay weighting — formula, visual charts, edge-weight tables, and configuration —
 see the dedicated [Decay Weights](decay-weights.md) page. Decay weights use
@@ -156,7 +156,7 @@ once per (node, term); sizing and consolidation differ by engine.
 Stranded imbalance per day: `|cpu_util_p95 − mem_util_p95| / max(cpu_util_p95, mem_util_p95)`.
 The stranded resource label is `cpu` or `memory` depending on which dimension is higher.
 
-Default terms: same as container (1d / 7d / 15d). See [Cost Integration — Node Savings](cost-integration.md#node-savings-cpumemory-utilization).
+Default terms: same as container (1d / 7d / 15d). See [Cost Integration — Node Savings](../../docs-site/architecture/cost-integration.md#node-savings-cpumemory-utilization).
 
 ---
 
@@ -396,7 +396,7 @@ Provider-accurate costing is upstream **[COST-7523](https://redhat.atlassian.net
 (effective cost internal endpoint). v1 is **detection-only** — no automated restore,
 safe-delete, or Velero/OADP workflows.
 
-See [Cost Integration — Snapshot cost](cost-integration.md#snapshot-cost-dynamic-default-from-effective-rates).
+See [Cost Integration — Snapshot cost](../../docs-site/architecture/cost-integration.md#snapshot-cost-dynamic-default-from-effective-rates).
 
 ---
 
@@ -548,7 +548,7 @@ Admin guide: [Business Hours](../business-hours-admin-guide.md).
 | [Decay Weights](decay-weights.md) | Exponential decay formula, charts, edge weights, configuration |
 | [Recommendation Math](recommendation-math.md) | Adaptive margin, trend detection algorithms |
 | [GPU Classification](gpu-classification.md) | GPU decision tree, MIG, confidence scoring, two-tier support |
-| [Cost Integration](cost-integration.md) | Savings formulas, kill-switch, fleet summary, plugin savings matrix |
+| [Cost Integration](../../docs-site/architecture/cost-integration.md) | Savings formulas, kill-switch, fleet summary, plugin savings matrix |
 | [Plugin Architecture](plugin-architecture.md) | Plugin traits, term provider, registry |
 | [Configurability Reference](configurability.md) | All `ROS_*` env vars, Settings API, precedence, tuning |
 

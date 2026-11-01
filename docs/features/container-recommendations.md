@@ -227,7 +227,7 @@ GET /api/cost-management/v1/recommendations/openshift/savings-summary?engine=cos
 
 Query `engine` (`cost` or `performance`; default `cost`) and `term` (`short`, `medium`, `long`;
 default `medium`) select which persisted engine rows are aggregated. See
-[cost-integration.md](../architecture/cost-integration.md#fleet-savings-summary).
+[cost-integration.md](../docs-site/architecture/cost-integration.md#fleet-savings-summary-api).
 
 ---
 

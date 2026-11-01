@@ -158,7 +158,7 @@ Uses existing GPU basis-point metrics from operator reports (see
 | **active** | Otherwise | — |
 
 Savings for idle GPUs follow existing API pattern: full `gpu_cost_per_month` per
-[Cost Integration — GPU savings](../architecture/cost-integration.md#gpu-savings).
+[Cost Integration — GPU savings](../docs-site/architecture/cost-integration.md#gpu-savings).
 
 **Implementation (Phase 4):** [`ClassifyGPUIdleFromDigests()`](../../internal/engine/gpu_idle_classification.go)
 runs inside [`RecommendGPUWithSettings()`](../../librobne/gpu/recommend.go) when
@@ -813,7 +813,7 @@ until Phase 2 validation completes.
 
 - [Savings estimations](../../docs-site/features/savings-estimations.md)
 - [Configurable thresholds](../../docs-site/features/configurable-thresholds.md)
-- [Cost integration](../architecture/cost-integration.md)
+- [Cost integration](../docs-site/architecture/cost-integration.md)
 - [Container recommendations](../../docs-site/features/container-recommendations.md)
 - [Public feature page](../../docs-site/features/idle-detection.md)
 - Inline classifier: [`idle_classification.go`](../../internal/engine/idle_classification.go)

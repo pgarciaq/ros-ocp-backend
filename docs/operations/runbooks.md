@@ -438,7 +438,7 @@ GROUP BY state;
 
 ### Diagnosis
 
-- Check whether savings are intentionally disabled: `ROS_SAVINGS_ESTIMATES_ENABLED=false` skips all Masu calls by design (see [cost-integration.md](../architecture/cost-integration.md)).
+- Check whether savings are intentionally disabled: `ROS_SAVINGS_ESTIMATES_ENABLED=false` skips all Masu calls by design (see [cost-integration.md](../../docs-site/architecture/cost-integration.md)).
 - Check `KOKU_MASU_URL` is set on **both** ros-processor and ros-api.
 - Check Koku/Masu health: `curl http://koku-server:8000/api/cost-management/v1/status/`
 - Verify migrations **000070**–**000072** applied if node/PVC savings columns or nested node engines are missing:
@@ -462,7 +462,7 @@ GROUP BY state;
 - Trigger cost model recalculation: `curl http://masu-server:5042/api/cost-management/v1/update_cost_model_costs/?provider_uuid=UUID&schema=orgNNNNN`
 - Wait for the next ingestion cycle (container/node/PVC) or re-query GPU endpoints after Masu recovery.
 
-See [cost-integration.md](../architecture/cost-integration.md) for formulas, plugin matrix, and [upgrade-runbook.md](../../docs-site/operations/upgrade-runbook.md) for migrations **000070**–**000072**.
+See [cost-integration.md](../../docs-site/architecture/cost-integration.md) for formulas, plugin matrix, and [upgrade-runbook.md](../../docs-site/operations/upgrade-runbook.md) for migrations **000070**–**000072**.
 
 ---
 

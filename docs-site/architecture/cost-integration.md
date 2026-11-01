@@ -23,15 +23,15 @@ when configured).
 
 | Integration | Direction | Contract | ROS implementation | Koku implementation |
 |-------------|-----------|----------|-------------------|---------------------|
-| **Data ingestion** | Koku → ROS (Kafka + S3) | [Data ingestion](#data-ingestion-contract) · [`kafka-schema.md`](kafka-schema.md) | `internal/kafka/consumer.go`, `internal/services/report_processor.go` | [`masu/external/ros_report_shipper.py`](https://github.com/RedHatInsights/koku/blob/main/koku/masu/external/ros_report_shipper.py), [`kafka_msg_handler.py`](https://github.com/RedHatInsights/koku/blob/main/koku/masu/external/kafka_msg_handler.py) |
-| **Effective rates** | ROS → Koku (HTTP GET) | [Effective rates](#effective-rates-endpoint) | [`internal/costdata/provider.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/costdata/provider.go) | [`masu/api/effective_rates.py`](https://github.com/RedHatInsights/koku/blob/main/koku/masu/api/effective_rates.py) |
-| **Savings recalculation** | Koku → ROS (HTTP POST) | [Savings recalculation](#savings-recalculation-after-cost-model-changes) | [`internal/engine/savings_recalculate.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/savings_recalculate.go) | [`masu/processor/ros_savings_recalc.py`](https://github.com/RedHatInsights/koku/blob/main/koku/masu/processor/ros_savings_recalc.py) |
-| **Tag filtering** | DB (on-prem) or HTTP push (SaaS) | [Tag filtering](#tag-filtering-enabled-tag-keys) | [`internal/tags/`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/tags/) | [`masu/processor/ros_tag_sync.py`](https://github.com/RedHatInsights/koku/blob/main/koku/masu/processor/ros_tag_sync.py) (SaaS only) |
-| **Business-hours reship** | ROS → Koku (HTTP POST) | [Reship](#business-hours-reship-reship_ros) | [`internal/reship/`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/reship/) | [`masu/api/reship_ros.py`](https://github.com/RedHatInsights/koku/blob/main/koku/masu/api/reship_ros.py) |
-| **User currency** | ROS → Koku (HTTP GET) | [Multi-currency](#multi-currency-savings-conversion) | [`internal/costdata/provider.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/costdata/provider.go) | [`masu/api/user_currency.py`](https://github.com/RedHatInsights/koku/blob/main/koku/masu/api/user_currency.py) |
-| **Exchange rate** | ROS → Koku (HTTP GET) | [Multi-currency](#multi-currency-savings-conversion) | [`internal/costdata/provider.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/costdata/provider.go) | [`masu/api/exchange_rate.py`](https://github.com/RedHatInsights/koku/blob/main/koku/masu/api/exchange_rate.py) |
+| **Data ingestion** | Koku → ROS (Kafka + S3) | [Data ingestion](#data-ingestion-contract) · [`kafka-schema.md`](kafka-schema.md) | `internal/kafka/consumer.go`, `internal/services/report_processor.go` | [`masu/external/ros_report_shipper.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/external/ros_report_shipper.py), [`kafka_msg_handler.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/external/kafka_msg_handler.py) |
+| **Effective rates** | ROS → Koku (HTTP GET) | [Effective rates](#effective-rates-endpoint) | [`internal/costdata/provider.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/costdata/provider.go) | [`masu/api/effective_rates.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/api/effective_rates.py) |
+| **Savings recalculation** | Koku → ROS (HTTP POST) | [Savings recalculation](#savings-recalculation-after-cost-model-changes) | [`internal/engine/savings_recalculate.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/savings_recalculate.go) | [`masu/processor/ros_savings_recalc.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/processor/ros_savings_recalc.py) |
+| **Tag filtering** | DB (on-prem) or HTTP push (SaaS) | [Tag filtering](#tag-filtering-enabled-tag-keys) | [`internal/tags/`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/tags/) | [`masu/processor/ros_tag_sync.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/processor/ros_tag_sync.py) (SaaS only) |
+| **Business-hours reship** | ROS → Koku (HTTP POST) | [Reship](#business-hours-reship-reship_ros) | [`internal/reship/`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/reship/) | [`masu/api/reship_ros.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/api/reship_ros.py) |
+| **User currency** | ROS → Koku (HTTP GET) | [Multi-currency](#multi-currency-savings-conversion) | [`internal/costdata/provider.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/costdata/provider.go) | [`masu/api/user_currency.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/api/user_currency.py) |
+| **Exchange rate** | ROS → Koku (HTTP GET) | [Multi-currency](#multi-currency-savings-conversion) | [`internal/costdata/provider.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/costdata/provider.go) | [`masu/api/exchange_rate.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/api/exchange_rate.py) |
 
-Koku architecture overview: [`koku/docs/architecture/ros-ocp-integration.md`](https://github.com/RedHatInsights/koku/blob/main/docs/architecture/ros-ocp-integration.md) (sibling repository).
+Koku architecture overview: [`koku/docs/architecture/ros-ocp-integration.md`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/docs/architecture/ros-ocp-integration.md) (sibling repository).
 
 ---
 
@@ -42,7 +42,7 @@ ROS does **not** read Koku PostgreSQL line-item tables for recommendations. Usag
 ### Pipeline
 
 1. **koku-metrics-operator** uploads a tarball to ingress (`/api/ingress/v1/upload`) containing `manifest.json` with `resource_optimization_files` (ROS container, namespace, GPU, storage, VM, quota CSVs).
-2. **Koku listener** processes cost CSVs; [`ROSReportShipper`](https://github.com/RedHatInsights/koku/blob/main/koku/masu/external/ros_report_shipper.py) copies ROS files to the ROS S3 bucket and publishes one Kafka announce per file.
+2. **Koku listener** processes cost CSVs; [`ROSReportShipper`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/external/ros_report_shipper.py) copies ROS files to the ROS S3 bucket and publishes one Kafka announce per file.
 3. **ROS processor** consumes `platform.upload.announce`, filters `category == "ros"`, downloads the presigned CSV URL, parses rows, and writes digests/recommendations to the **ROS PostgreSQL** database.
 
 ROS and Koku use **separate databases**. The only shared persistence in on-prem **advanced** mode is PostgreSQL **instance** access for tag filtering (`ROS_TAGS_SOURCE=db`). The cost-onprem chart defaults to `api` (push sync into `org_container_keys.resolved_tags`).
@@ -64,18 +64,18 @@ CSV column headers must match koku-metrics-operator output ([`librobne/csv/csv_c
 
 ## Tag filtering (enabled tag keys)
 
-ROS recommendation list APIs support `filter[tag:key]=value`. Tag **keys** are governed by Koku's **enabled tag keys** (`reporting_enabledtagkeys`, managed via Cost Management **Settings → Tags** and [`masu/api/enabled_tags.py`](https://github.com/RedHatInsights/koku/blob/main/koku/masu/api/enabled_tags.py) for pipeline enablement). Tags do **not** flow through `effective_rates` or the ingestion Kafka message; they are a parallel concern.
+ROS recommendation list APIs support `filter[tag:key]=value`. Tag **keys** are governed by Koku's **enabled tag keys** (`reporting_enabledtagkeys`, managed via Cost Management **Settings → Tags** and [`masu/api/enabled_tags.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/api/enabled_tags.py) for pipeline enablement). Tags do **not** flow through `effective_rates` or the ingestion Kafka message; they are a parallel concern.
 
 | Deployment | Chart default | Binary default | How tags reach ROS |
 |------------|---------------|----------------|-------------------|
-| **On-prem** (cost-onprem chart) | `api` | `db` | **api:** Koku Celery [`sync_ros_ocp_tags`](https://github.com/RedHatInsights/koku/blob/main/koku/masu/processor/ros_tag_sync.py) POSTs to ROS `POST /api/cost-management/v1/internal/tags/sync` (chart default). **db (advanced):** ROS JOINs Koku tenant tables `reporting_enabledtagkeys` + `reporting_ocptags_values` at query time on a shared PostgreSQL instance — no HTTP sync |
+| **On-prem** (cost-onprem chart) | `api` | `db` | **api:** Koku Celery [`sync_ros_ocp_tags`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/processor/ros_tag_sync.py) POSTs to ROS `POST /api/cost-management/v1/internal/tags/sync` (chart default). **db (advanced):** ROS JOINs Koku tenant tables `reporting_enabledtagkeys` + `reporting_ocptags_values` at query time on a shared PostgreSQL instance — no HTTP sync |
 | **SaaS** | `api` | `api` | Same push path as on-prem `api` mode |
 
 Detailed docs:
 
 - [Tag Filtering](../features/tag-filtering.md) — filter syntax, lifecycle, SQL paths, and push-auth (`api` mode)
 - [Configuration — tags](../configuration.md#tag-filtering-enabled-tag-keys) — env vars and chart defaults
-- Koku: [`ros-ocp-integration.md` § Tag Sync](https://github.com/RedHatInsights/koku/blob/main/docs/architecture/ros-ocp-integration.md#tag-sync-koku--ros)
+- Koku: [`ros-ocp-integration.md` § Tag Sync](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/docs/architecture/ros-ocp-integration.md#tag-sync-koku--ros)
 
 ---
 
@@ -704,7 +704,7 @@ When an administrator changes a business-hours schedule, ROS must rebuild histor
 POST {KOKU_MASU_URL}/api/cost-management/v1/reship_ros/
 ```
 
-**Koku implementation:** [`masu/api/reship_ros.py`](https://github.com/RedHatInsights/koku/blob/main/koku/masu/api/reship_ros.py)
+**Koku implementation:** [`masu/api/reship_ros.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/api/reship_ros.py)
 
 **ROS client:** [`internal/reship/client.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/reship/client.go) (`PostReship`)
 
@@ -735,7 +735,7 @@ ROS builds the window from the container plugin max lookback (`PluginMaxWindowDa
 | `files_processed` | Kafka messages published |
 | `files_total` | S3 objects matched under `{schema}/source={provider_uuid}/date={day}/` |
 
-Masu lists one S3 prefix per day in the date range, presigns each object (48h TTL), and publishes to the ROS Kafka topic. Message shape matches [`ROSReportShipper.build_ros_msg`](https://github.com/RedHatInsights/koku/blob/main/koku/masu/external/ros_report_shipper.py) (`request_id`, `b64_identity`, `metadata`, `files`, `object_keys`).
+Masu lists one S3 prefix per day in the date range, presigns each object (48h TTL), and publishes to the ROS Kafka topic. Message shape matches [`ROSReportShipper.build_ros_msg`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/external/ros_report_shipper.py) (`request_id`, `b64_identity`, `metadata`, `files`, `object_keys`).
 
 ### Error responses
 
@@ -842,8 +842,8 @@ Internal Masu API — **no** `x-rh-identity` required (same as `effective_rates`
 | Conversion helper | [`internal/costdata/conversion.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/costdata/conversion.go) — `ConvertCents()` |
 | API currency helpers | [`internal/api/currency.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/currency.go) — `resolveUserCurrency()`, `fetchExchangeRate()`, `convertAndPatchAmount()` |
 | Money formatting | [`internal/money/format.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/money/format.go) — `ConvertAmount()`, `ParseCentsFromAmount()`, `SetAmountFromCents()` |
-| Koku user_currency view | [`masu/api/user_currency.py`](https://github.com/RedHatInsights/koku/blob/main/koku/masu/api/user_currency.py) |
-| Koku exchange_rate view | [`masu/api/exchange_rate.py`](https://github.com/RedHatInsights/koku/blob/main/koku/masu/api/exchange_rate.py) |
+| Koku user_currency view | [`masu/api/user_currency.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/api/user_currency.py) |
+| Koku exchange_rate view | [`masu/api/exchange_rate.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/api/exchange_rate.py) |
 
 ---
 

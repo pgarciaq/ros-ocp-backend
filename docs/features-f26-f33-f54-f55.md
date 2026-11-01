@@ -273,7 +273,7 @@ snapshot). Complements fleet-summary (container health counts only).
 ```
 
 GPU savings are excluded because they are computed at API read time, not persisted
-at ingestion. See [architecture/cost-integration.md](architecture/cost-integration.md)
+at ingestion. See [architecture/cost-integration.md](docs-site/architecture/cost-integration.md)
 for formulas, negative savings semantics, and v2 roadmap (real-time recalculation,
 GPU persistence, COST-7523 snapshot metric).
 

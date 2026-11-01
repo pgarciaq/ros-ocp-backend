@@ -154,7 +154,7 @@ Do not treat v1 dollar fields as CUR-backed invoice amounts. Tune the flat rate 
 demos and on-prem Ceph/ODF pools; wait for COST-7523 for SaaS CUR alignment.
 
 Details: [snapshot staleness feature](../features-f-snapshot-staleness.md),
-[cost-integration.md — Snapshot cost](../architecture/cost-integration.md#snapshot-cost-dynamic-default-from-effective-rates),
+[cost-integration.md — Snapshot cost](../../docs-site/architecture/cost-integration.md#snapshot-cost-dynamic-default-from-effective-rates),
 [docs-site snapshot staleness](../../docs-site/features/snapshot-staleness.md).
 
 ## Snapshot restore automation (v1 = detection only)

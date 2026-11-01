@@ -85,7 +85,7 @@ when both Koku sources are configured — no ROS-side correlation work is needed
 
 Plugin coverage, OCP-on-cloud details, currency field, fleet savings summary
 (`GET .../savings-summary`), and troubleshooting:
-[architecture/cost-integration.md](architecture/cost-integration.md).
+[architecture/cost-integration.md](docs-site/architecture/cost-integration.md).
 
 ### Schedule inheritance
 

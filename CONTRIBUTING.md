@@ -1195,6 +1195,7 @@ branch.
 | `docs-site/quickstart.md` | Example native-engine checkout branch |
 | `docs-site/testing/validating-native-engine.md` | Repo table, `BRANCH=`, checkout commands |
 | `docs-site/security/index.md` | Blob links only when OSCAL artifacts were regenerated on the new branch |
+| `docs-site/architecture/cost-integration.md` | Koku cross-repo blob links (pgarciaq/koku fork branch) |
 | Forward-looking plan text | Cherry-pick **source** branch in `docs/plans/robne-upstreaming-plan.md` (operational guidance only) |
 | Cross-repo clone/deploy docs | Branches readers should use **now** |
 

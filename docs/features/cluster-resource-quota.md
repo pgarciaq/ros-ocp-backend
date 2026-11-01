@@ -193,7 +193,7 @@ values, and notification codes are unchanged by savings recalc.
 
 Implementation: [`internal/engine/savings_recalculate.go`](../../internal/engine/savings_recalculate.go)
 (`TestRecalculateClusterQuotaSavings_Unit`). See also
-[cost-integration.md](../architecture/cost-integration.md#savings-recalculation-after-cost-model-changes).
+[cost-integration.md](../docs-site/architecture/cost-integration.md#savings-recalculation-after-cost-model-changes).
 
 ---
 
