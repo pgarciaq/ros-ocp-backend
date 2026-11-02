@@ -73,6 +73,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Native-mode container compatibility list date window ([#782](https://github.com/pgarciaq/ros-ocp-backend/issues/782)):**
+  the legacy `/recommendations/openshift/container` list alias now uses the
+  documented current-month `updated_at` window in native mode, matching the
+  canonical list while preserving the compatibility response and UUID alias
+  fallback. Kruize-only mode retains its legacy `monitoring_end_time` filter;
+  the detail alias remains unchanged.
+
 - **Settings authorization stops denied writes ([#751](https://github.com/pgarciaq/ros-ocp-backend/issues/751)):**
   a caller without wildcard `cost-management:settings:write` permission could
   receive HTTP 403 while the settings handler continued into a PUT or DELETE.

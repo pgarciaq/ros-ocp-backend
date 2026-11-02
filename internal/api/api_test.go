@@ -83,6 +83,19 @@ func TestMapQueryParameters(t *testing.T) {
 	}
 }
 
+func TestMapNativeCompatQueryParametersUsesUpdatedAt(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?start_date=2026-10-25&end_date=2026-10-31", nil)
+	c := e.NewContext(req, httptest.NewRecorder())
+
+	queryParams, err := MapNativeCompatQueryParameters(c)
+	require.NoError(t, err)
+	assert.Equal(t, time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC), queryParams["recommendation_sets.updated_at >= ?"])
+	assert.Equal(t, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), queryParams["recommendation_sets.updated_at < ?"])
+	assert.NotContains(t, queryParams, "recommendation_sets.monitoring_end_time >= ?")
+	assert.NotContains(t, queryParams, "recommendation_sets.monitoring_end_time < ?")
+}
+
 func TestMapQueryParametersKokuFilterSyntax(t *testing.T) {
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/?filter%5Bproject%5D=alpha&filter%5Bexact%3Aworkload_type%5D=deployment", nil)

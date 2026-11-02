@@ -23,6 +23,18 @@ import (
 )
 
 func GetRecommendationSetList(c echo.Context) error {
+	return getRecommendationSetList(c, MapQueryParameters)
+}
+
+// GetNativeCompatRecommendationSetList preserves the compatibility response
+// while applying the native-mode updated_at date window.
+func GetNativeCompatRecommendationSetList(c echo.Context) error {
+	return getRecommendationSetList(c, MapNativeCompatQueryParameters)
+}
+
+type containerListQueryMapper func(echo.Context) (map[string]interface{}, error)
+
+func getRecommendationSetList(c echo.Context, mapQueryParameters containerListQueryMapper) error {
 	xrhid, err := requireXRHID(c)
 	if err != nil {
 		return err
@@ -40,7 +52,7 @@ func GetRecommendationSetList(c echo.Context) error {
 		})
 	}
 
-	queryParams, err := MapQueryParameters(c)
+	queryParams, err := mapQueryParameters(c)
 	if err != nil {
 		return apiErrResponse(c, err, http.StatusBadRequest, err.Error())
 	}

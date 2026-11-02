@@ -513,12 +513,10 @@ func TestContractResponseShape_ContainerListDirect(t *testing.T) {
 	require.NotEmpty(t, data)
 	item, ok := data[0].(map[string]interface{})
 	require.True(t, ok)
-	// cluster_alias exercises the COALESCE fallback branch pinned here: the
-	// seeded recs join no clusters row, so the alias falls back to the rec's
-	// own cluster_uuid::text (pre-fix this exact branch 503'd on the
-	// text/uuid mismatch from migration 000041). Non-empty proves the
-	// fallback resolves instead of erroring.
-	assert.NotEmpty(t, item["cluster_alias"])
+	// setupContractTestApp seeds a matching clusters row, so this direct route
+	// must surface its friendly alias; the missing-row UUID fallback is pinned
+	// separately by the orphan branch in TestContractCompatListDisplayParity.
+	assert.Equal(t, "contract-cluster", item["cluster_alias"])
 	assert.NotEmpty(t, item["cluster_uuid"])
 }
 

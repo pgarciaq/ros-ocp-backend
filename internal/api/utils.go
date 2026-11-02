@@ -140,11 +140,27 @@ func buildLinks(req *http.Request, count, limit, offset int) Links {
 }
 
 func MapQueryParameters(c echo.Context) (map[string]interface{}, error) {
+	return mapContainerQueryParameters(c, "recommendation_sets.monitoring_end_time", false)
+}
+
+// MapNativeCompatQueryParameters uses the native list's updated_at date window
+// while retaining the compatibility query's denormalized filter columns.
+func MapNativeCompatQueryParameters(c echo.Context) (map[string]interface{}, error) {
+	return mapContainerQueryParameters(c, "recommendation_sets.updated_at", true)
+}
+
+// mapContainerQueryParameters shares the container compatibility filters while
+// allowing the native-mode alias to match the canonical list's date semantics.
+// dateColumn is a static internal SQL fragment, never user-controlled input.
+func mapContainerQueryParameters(c echo.Context, dateColumn string, nativeDateWindow bool) (map[string]interface{}, error) {
 	log := logging.GetLogger()
 	queryParams := make(map[string]interface{})
 	var startTimestamp, endTimestamp time.Time
 
-	now := time.Now().UTC().Truncate(time.Second)
+	now := time.Now().UTC()
+	if !nativeDateWindow {
+		now = now.Truncate(time.Second)
+	}
 	firstOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 
 	startDateStr := c.QueryParam("start_date")
@@ -159,11 +175,14 @@ func MapQueryParameters(c echo.Context) (map[string]interface{}, error) {
 			return queryParams, err
 		}
 	}
-	queryParams["recommendation_sets.monitoring_end_time >= ?"] = startTimestamp
+	queryParams[dateColumn+" >= ?"] = startTimestamp
 
 	endDateStr := c.QueryParam("end_date")
 	if endDateStr == "" {
 		endTimestamp = now
+		if nativeDateWindow {
+			endTimestamp = now.Add(time.Second)
+		}
 	} else {
 		var err error
 		endTimestamp, err = time.Parse(timeLayout, endDateStr)
@@ -174,7 +193,7 @@ func MapQueryParameters(c echo.Context) (map[string]interface{}, error) {
 		// Inclusive user-provided end_date timestamp
 		endTimestamp = endTimestamp.Add(24 * time.Hour)
 	}
-	queryParams["recommendation_sets.monitoring_end_time < ?"] = endTimestamp
+	queryParams[dateColumn+" < ?"] = endTimestamp
 
 	var errs []error
 	if err := applyParamFilter(c, queryParams, "cluster", "recommendation_sets.cluster_uuid", model.ClusterMaxLen, true, SkipSanitizationForContainer); err != nil {

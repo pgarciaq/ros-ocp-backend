@@ -1,6 +1,6 @@
 # ROS UI Integration Guide
 
-> **Last verified:** 2026-10-27
+> **Last verified:** 2026-11-02
 
 Practical API reference for **koku-ui** developers building OpenShift Resource Optimization
 (ROS) pages against the native Go engine in `ros-ocp-backend`.
@@ -123,6 +123,15 @@ GET /recommendations/openshift
 
 Returns one row per **container** (paginated by distinct containers), with all term/engine
 variants nested under `recommendations`.
+
+Compatibility list alias: `GET /recommendations/openshift/container`. In native
+mode it uses the same `start_date` / `end_date` window on `updated_at` as the
+canonical route (default: current UTC month). With Kruize-only mode, the legacy
+handler retains its `monitoring_end_time` filter. The alias keeps the legacy
+response shape, including empty `source_id` and UUID `cluster_alias` fallback
+when the org has no matching cluster metadata; it is not byte-identical to the
+canonical native response. Use the canonical route for new clients. The detail
+alias remains on the compatibility handler.
 
 List ordering and pagination represent each container by its **short-term cost row**
 (the primary recommendation — same row served by detail and CSV expansion). A container

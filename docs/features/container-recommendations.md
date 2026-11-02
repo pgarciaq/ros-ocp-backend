@@ -118,7 +118,15 @@ Bracket syntax (`filter[field]`) and legacy flat params are both accepted
 
 Exact and exclude variants: `filter[exact:<field>]`, `exclude[<field>]`.
 
-Date window on `updated_at`: `start_date`, `end_date` (`YYYY-MM-DD`).
+Date window on the canonical native list uses `updated_at`: `start_date`,
+`end_date` (`YYYY-MM-DD`), defaulting to the current UTC month. The legacy
+`/recommendations/openshift/container` list alias keeps its compatibility
+response fields (`source_id` remains empty; `cluster_alias` uses the org's
+friendly alias or falls back to the UUID). In native mode its date window also
+uses `updated_at`; Kruize-only mode retains the legacy `monitoring_end_time`
+filter. The detail alias remains unchanged. Prefer the canonical path for new
+clients; see the [public UI integration guide](../../docs-site/ui-integration-guide.md#2-recommendation-list-container-namespace)
+for the customer-facing contract.
 
 ---
 

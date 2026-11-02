@@ -5695,7 +5695,7 @@
         ],
         "summary": "Get all recommendations",
         "x-plugin-required": "container",
-        "description": "This feature is in limited preview for select customers. Refer to [this link](https://github.com/RedHatInsights/ros-ocp-backend/blob/main/openapi.json) if you want checkout the OpenAPI spec file. Legacy alias retained for backward compatibility; prefer the canonical path.",
+        "description": "This feature is in limited preview for select customers. Legacy compatibility list alias; prefer the canonical path. In native mode, start_date/end_date filter updated_at with the same current-month default as /recommendations/openshift. In Kruize-only mode, the legacy handler filters monitoring_end_time. The response retains the compatibility payload, including an empty source_id and UUID cluster_alias fallback when cluster metadata is absent; it is not byte-identical to the native DTO.",
         "externalDocs": {
           "description": "Please refer to this blog post if you want to be included in the preview",
           "url": "https://www.redhat.com/en/blog/red-hat-insights-brings-resource-optimization-red-hat-openshift"

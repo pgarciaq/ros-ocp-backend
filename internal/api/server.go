@@ -233,6 +233,9 @@ func StartAPIServer(ctx context.Context) {
 	// Container recommendations — native engine with Kruize fallback, or legacy-only.
 	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift", GetRecommendationSetListWithFallback)
+		// The deprecated compatibility list retains its legacy response/query
+		// shape, but its native-mode date window matches the canonical list.
+		v1.GET("/recommendations/openshift/container", GetNativeCompatRecommendationSetList)
 	} else {
 		v1.GET("/recommendations/openshift", GetRecommendationSetList)
 	}

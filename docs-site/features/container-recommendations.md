@@ -1,6 +1,6 @@
 # Container Right-Sizing
 
-> **Last verified:** 2026-09-14
+> **Last verified:** 2026-11-02
 
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift` (list),
@@ -115,6 +115,14 @@ GET /api/cost-management/v1/recommendations/openshift
 
 Returns one row per container with nested `recommendations.recommendation_terms` for
 short/medium/long windows and cost/performance engines.
+
+The compatibility list alias `/recommendations/openshift/container` retains its
+legacy response fields and UUID alias fallback. In native mode, its date window
+uses `updated_at` like the canonical list; in Kruize-only mode the legacy
+`monitoring_end_time` filter remains. Its detail alias remains on the legacy
+handler. Prefer the canonical path for new clients; see the
+[UI integration guide](../ui-integration-guide.md#2-recommendation-list-container-namespace)
+for the compatibility differences.
 
 **Keyset pagination** (preferred): use `after` with `meta.next_cursor` when `meta.has_next` is true. Offset pagination remains for legacy clients:
 

@@ -38,6 +38,7 @@ func RegisterV1RoutesForTest(v1 *echo.Group, bhTrigger reship.Triggerer) {
 
 	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift", GetRecommendationSetListWithFallback)
+		v1.GET("/recommendations/openshift/container", GetNativeCompatRecommendationSetList)
 		v1.GET("/recommendations/openshift/settings/terms", GetTermSettings)
 		v1.PUT("/recommendations/openshift/settings/terms", PutTermSettings)
 		v1.DELETE("/recommendations/openshift/settings/terms", DeleteTermSettings)
