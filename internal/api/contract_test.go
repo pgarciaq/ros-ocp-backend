@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -600,14 +601,94 @@ func TestContractContainerListFiltersMatchDenormalized(t *testing.T) {
 	}
 }
 
-// TestContractCompatListDisplayParity pins the compat list display contract
-// (#600): denormalized fallbacks serve every display field while the
-// workloads/clusters linkage is dead. Survives JOIN removal unchanged.
+// TestContractCompatListDisplayParity pins the compat list display contract.
+// #600 established denormalized fallbacks for every display field; #692
+// superseded the alias rule with COALESCE(scalar subquery into clusters,
+// cluster_uuid text): a seeded clusters row surfaces its friendly alias, an
+// orphan cluster (no clusters row) falls back to the UUID text. The scalar
+// subquery (not JOIN) survives clusters having no UNIQUE(org_id, cluster_uuid).
 func TestContractCompatListDisplayParity(t *testing.T) {
-	app, identityHeader, _ := setupContractTestApp(t)
+	app, identityHeader, ctx := setupContractTestApp(t)
 
+	// Orphan cluster: a recommendation row whose UUID has no clusters row.
+	// monitoring_end is 40 days old — ALWAYS before the first-of-current-month
+	// default window start (40 > any month length), so this row is visible
+	// ONLY through the test's explicit start_date/end_date params: the test
+	// proves the explicit window does the work instead of relying on the
+	// calendar-relative default (which, on the 1st of a month, also excludes
+	// the engine fixture's latest row — RecentStart is now-7d at midnight).
+	const orphanUUID = "77777777-7777-7777-7777-777777777777"
+	pool := database.Pool
+	require.NotNil(t, pool)
+	_, err := pool.Exec(ctx, `INSERT INTO recommendation_sets (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, term, engine, stale, notification_codes, updated_at, container_id,
+			monitoring_start_time, monitoring_end_time
+		) VALUES ($1, $2::uuid, 'ns-a', 'orphan-deploy', 'Deployment', 'orphan-ctr',
+			'short', 'cost', false, '{}', now(), $3,
+			now() - interval '47 days', now() - interval '40 days')`,
+		testutil.TestOrgID, orphanUUID,
+		pgrec.NativeContainerID(orphanUUID, "ns-a", "orphan-deploy", "Deployment", "orphan-ctr"))
+	require.NoError(t, err)
+
+	// Explicit window, independent of the calendar-relative default
+	// (first-of-month..now): covers the engine fixture (latest
+	// monitoring_end = yesterday midnight) and the 40-day-old orphan on
+	// every date. Without it, the 1st of any month excludes the engine
+	// rows and the orphan is never visible at all.
+	startDate := time.Now().UTC().AddDate(0, 0, -45).Format("2006-01-02")
+	endDate := time.Now().UTC().Format("2006-01-02")
+
+	for _, tc := range []struct {
+		name      string
+		container string
+		wantAlias string
+		rulesOut  string
+	}{
+		{
+			name:      "aliased cluster",
+			container: testutil.TestContainer,
+			wantAlias: "contract-cluster",
+			// Pre-fix (pre-#692) behavior ruled out: alias hardcoded to UUID
+			// text, ignoring the clusters row the ingest path maintains.
+			rulesOut: "losing #692 alias resolution — alias must come from the clusters row",
+		},
+		{
+			name:      "orphan cluster",
+			container: "orphan-ctr",
+			wantAlias: orphanUUID,
+			// Rules out the opposite regression: dropping the COALESCE
+			// fallback would leave orphan aliases NULL/empty.
+			rulesOut: "losing the UUID fallback — orphan with no clusters row must alias to its UUID text",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			code, resp := contractGET(t, app, identityHeader,
+				"/api/cost-management/v1/recommendations/openshift/container?filter[limit]=10&filter[container]="+
+					tc.container+"&start_date="+startDate+"&end_date="+endDate)
+			require.Equal(t, http.StatusOK, code)
+			data, _ := resp["data"].([]interface{})
+			require.NotEmpty(t, data)
+			matched := false
+			for _, row := range data {
+				item, _ := row.(map[string]interface{})
+				if item["container"] != tc.container {
+					continue
+				}
+				matched = true
+				assert.Equal(t, tc.wantAlias, item["cluster_alias"], "%s", tc.rulesOut)
+				// source_id stays '' (denormalized, linkage-free) — #600 remnant.
+				assert.Equal(t, "", item["source_id"])
+				assert.NotEmpty(t, item["last_reported"])
+			}
+			require.True(t, matched, "seeded container row must be present")
+		})
+	}
+
+	// The aliased cluster's remaining display fields stay denormalized-stable (#600).
 	code, resp := contractGET(t, app, identityHeader,
-		"/api/cost-management/v1/recommendations/openshift/container?filter[limit]=10&filter[container]="+testutil.TestContainer)
+		"/api/cost-management/v1/recommendations/openshift/container?filter[limit]=10&filter[container]="+
+			testutil.TestContainer+"&start_date="+startDate+"&end_date="+endDate)
 	require.Equal(t, http.StatusOK, code)
 	data, _ := resp["data"].([]interface{})
 	require.NotEmpty(t, data)
@@ -620,10 +701,6 @@ func TestContractCompatListDisplayParity(t *testing.T) {
 		assert.Equal(t, testutil.TestWorkload, item["workload"])
 		assert.Equal(t, testutil.TestWorkloadType, item["workload_type"])
 		assert.Equal(t, testutil.TestClusterUUID, item["cluster_uuid"])
-		// Linkage dead → alias falls back to uuid text, source_id to ''.
-		assert.Equal(t, testutil.TestClusterUUID, item["cluster_alias"])
-		assert.Equal(t, "", item["source_id"])
-		assert.NotEmpty(t, item["last_reported"])
 	}
 }
 
