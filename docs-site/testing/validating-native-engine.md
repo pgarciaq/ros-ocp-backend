@@ -1007,10 +1007,32 @@ cd ~/dev/koku/cost-onprem-chart
 NAMESPACE=cost-onprem ./scripts/run-pytest.sh          # CI mode (~88 tests)
 NAMESPACE=cost-onprem ./scripts/run-pytest.sh --ros    # ROS-focused suite
 NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended  # longer VM/GPU scenarios
-NAMESPACE=cost-onprem ./scripts/run-pytest.sh --all    # full suite incl. extended (~538 tests)
+NAMESPACE=cost-onprem ./scripts/run-pytest.sh --all --no-ui  # extended non-UI selection; counts below
 ```
 
-**Latest full-suite baseline (phase12 images, June 2026):** **501 passed, 2 failed, 35 skipped** with `--all`. Rebuild and push **new image tags** before every E2E run; never run raw `pytest` without `run-pytest.sh` (venv + env setup). Cluster rebuild/tag/log rules: [AGENTS.md](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/AGENTS.md) and [sno-cluster-operations](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/agents/sno-cluster-operations.md). Chart pytest still lives in cost-onprem-chart until that harness is replaced.
+**Latest completed harness run (2026-11-01, `--all --no-ui`):** **371 passed,
+51 failed, 426 skipped, 55 errors**, with **99 deselected** out of **1,002
+collected** (**903 selected**). Runtime: **2:03:30**; runner exit code **1**.
+The console summary and JUnit report independently agree on the selected-test
+counts. The runner selected `not ui and not performance`, so this is not UI or
+performance validation and is **not a passing deployment/release baseline**.
+
+Observed unsuccessful-test signatures include Keycloak password-grant
+`invalid_grant` / `Account is not fully set up`, and later `oc exec` failures
+with a cluster API TCP `i/o timeout`. These observations do not establish the
+root cause of every failure or turn setup errors/skips into product passes.
+Restore cluster connectivity and resolve the authentication prerequisites before
+another live run; do not retry around a failed VPN/sshuttle precondition. These
+counts alone do not certify the current source checkout or a particular rebuilt
+image; no deployed-image freshness claim is made here.
+
+Rebuild and push **new image tags** before every E2E run; never run raw `pytest`
+without `run-pytest.sh` (venv + env setup). Cluster rebuild/tag/log rules:
+[AGENTS.md](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/AGENTS.md)
+and [sno-cluster-operations](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/agents/sno-cluster-operations.md).
+Chart pytest still lives in cost-onprem-chart until that harness is replaced;
+this run is a record of the existing lab harness, not an endorsement of the
+deprecated chart as the supported deployment path.
 
 ### 4. IQE integration tests (iqe-ros-ocp-plugin)
 
