@@ -137,8 +137,14 @@ func GetFleetHeatmap(c echo.Context) error {
 
 	rbacScoped := fleetSummaryNeedsClusterFilter(userPerms)
 	cacheKey := fleetheatmap.CacheKey(orgID, rbacScoped, userPerms, metric, term, engine, clusterFilter)
+	maxNodes := config.GetConfig().FleetHeatmapMaxNodes
 	if cached, ok := fleetheatmap.Get(cacheKey); ok {
-		return c.JSON(http.StatusOK, cached)
+		// #754: node RBAC scope is applied per request on EVERY path; the
+		// cache holds the org-level pool, never a per-user filtered response.
+		if p, ok := cached.(fleetHeatmapCachePayload); ok {
+			return c.JSON(http.StatusOK, applyNodeScopeToHeatmap(p, userPerms, metric, term, engine, maxNodes))
+		}
+		// Unexpected cached type: fall through and recompute.
 	}
 
 	var allowedClusters []string
@@ -166,7 +172,7 @@ func GetFleetHeatmap(c echo.Context) error {
 		}
 	}
 
-	maxNodes := config.GetConfig().FleetHeatmapMaxNodes
+	// maxNodes was read before the cache lookup (#754: the warm path needs it).
 
 	var nodes []FleetHeatmapNode
 	var latestUpdate time.Time
@@ -236,37 +242,9 @@ func GetFleetHeatmap(c echo.Context) error {
 		})
 	}
 
-	if restrictNodes, allowedNodes := openshiftNodeRBACScope(userPerms); restrictNodes {
-		allowedSet := make(map[string]bool, len(allowedNodes))
-		for _, name := range allowedNodes {
-			allowedSet[name] = true
-		}
-		filtered := nodes[:0]
-		for _, n := range nodes {
-			if allowedSet[n.Node] {
-				filtered = append(filtered, n)
-			}
-		}
-		nodes = filtered
-	}
-
-	var warnings []string
-	if len(nodes) > maxNodes {
-		nodes = nodes[:maxNodes]
-		warnings = append(warnings, fmt.Sprintf(
-			"Results capped at %d nodes. Filter by cluster to narrow scope.", maxNodes))
-	}
-	if scanErrors > 0 {
-		rowWord := "rows"
-		if scanErrors == 1 {
-			rowWord = "row"
-		}
-		warnings = append(warnings, fmt.Sprintf("%d %s could not be read", scanErrors, rowWord))
-	}
-
-	if nodes == nil {
-		nodes = []FleetHeatmapNode{}
-	}
+	// #754: no node filtering or truncation here — the cache stores the
+	// org-level pre-truncation pool; per-user rendering happens in
+	// applyNodeScopeToHeatmap on every request (cold and warm).
 
 	storedCurrency := resolveFleetCurrency(ctx, orgID, allowedClusters)
 	userCurrency := resolveUserCurrency(ctx, orgID)
@@ -286,24 +264,89 @@ func GetFleetHeatmap(c echo.Context) error {
 		latestStr = latestUpdate.Format(time.RFC3339)
 	}
 
-	resp := FleetHeatmapResponse{
+	if nodes == nil {
+		nodes = []FleetHeatmapNode{}
+	}
+
+	payload := fleetHeatmapCachePayload{
+		Nodes:           nodes,
+		LatestUpdate:    latestStr,
+		ScanErrors:      scanErrors,
+		DisplayCurrency: displayCurrency,
+	}
+	if config.GetConfig() != nil {
+		fleetheatmap.Put(cacheKey, payload)
+	}
+	return c.JSON(http.StatusOK, applyNodeScopeToHeatmap(payload, userPerms, metric, term, engine, maxNodes))
+}
+
+// fleetHeatmapCachePayload is the org-level cached state: the
+// pre-truncation node pool and org-level metadata. Per-user concerns (node
+// RBAC scope, maxNodes truncation, Count, cap warning) are applied per
+// request by applyNodeScopeToHeatmap and are never baked into the shared
+// cache (#754). The pool is treated as immutable after Put: only read-only
+// views are handed out.
+type fleetHeatmapCachePayload struct {
+	Nodes           []FleetHeatmapNode
+	LatestUpdate    string
+	ScanErrors      int
+	DisplayCurrency string
+}
+
+// applyNodeScopeToHeatmap renders a per-user response from the org-level
+// cached pool: the node RBAC filter builds a NEW slice (the shared pool is
+// never mutated — #754 criterion: no in-place filtering), then maxNodes
+// truncation and per-user Count/cap warning. Pure function of its inputs.
+//
+// Immutability contract (#754 review): when no restriction and no truncation
+// apply, the returned Data aliases the cached pool's backing array. That is
+// safe only because the handler serializes the response and nothing further
+// touches Data — any future response enrichment or in-place edit of Data
+// MUST copy first, or it corrupts the shared cache for every other caller.
+func applyNodeScopeToHeatmap(p fleetHeatmapCachePayload, userPerms map[string][]string, metric, term, engine string, maxNodes int) FleetHeatmapResponse {
+	nodes := p.Nodes
+	if restrict, allowed := openshiftNodeRBACScope(userPerms); restrict {
+		allowedSet := make(map[string]bool, len(allowed))
+		for _, name := range allowed {
+			allowedSet[name] = true
+		}
+		filtered := make([]FleetHeatmapNode, 0, len(nodes))
+		for _, n := range nodes {
+			if allowedSet[n.Node] {
+				filtered = append(filtered, n)
+			}
+		}
+		nodes = filtered
+	}
+	var warnings []string
+	if len(nodes) > maxNodes {
+		nodes = nodes[:maxNodes]
+		warnings = append(warnings, fmt.Sprintf(
+			"Results capped at %d nodes. Filter by cluster to narrow scope.", maxNodes))
+	}
+	if p.ScanErrors > 0 {
+		rowWord := "rows"
+		if p.ScanErrors == 1 {
+			rowWord = "row"
+		}
+		warnings = append(warnings, fmt.Sprintf("%d %s could not be read", p.ScanErrors, rowWord))
+	}
+	if nodes == nil {
+		nodes = []FleetHeatmapNode{}
+	}
+	return FleetHeatmapResponse{
 		Meta: FleetHeatmapMeta{
 			Count:        len(nodes),
 			Metric:       metric,
 			Term:         term,
 			Engine:       engine,
-			LatestUpdate: latestStr,
+			LatestUpdate: p.LatestUpdate,
 			DataWindow:   dataWindowLabel(term),
-			Currency:     displayCurrency,
+			Currency:     p.DisplayCurrency,
 			Warnings:     warnings,
 		},
 		Data: nodes,
 	}
-
-	if config.GetConfig() != nil {
-		fleetheatmap.Put(cacheKey, resp)
-	}
-	return c.JSON(http.StatusOK, resp)
 }
 
 // fleetHeatmapSQL is the fleet heatmap node query. Org scoping is on
@@ -328,6 +371,11 @@ func fleetHeatmapSQL(filterClusters bool) string {
 				FROM node_recommendations nr
 				LEFT JOIN clusters c ON nr.cluster_uuid = c.cluster_uuid AND c.org_id = $1
 				WHERE nr.org_id = $1 AND nr.term = $2 AND nr.engine = $3` + clusterPred + `
-				ORDER BY nr.machineset_name NULLS LAST, nr.node
+				-- #754 review: (machineset_name, node) is not a total order —
+				-- the same names can exist in multiple clusters, leaving ties
+				-- at the LIMIT boundary. cluster_uuid breaks every remaining
+				-- tie (PK: org, cluster, node, term, engine), so which nodes
+				-- survive maxNodes truncation is deterministic.
+				ORDER BY nr.machineset_name NULLS LAST, nr.node, nr.cluster_uuid
 				LIMIT ` + limitParam
 }
