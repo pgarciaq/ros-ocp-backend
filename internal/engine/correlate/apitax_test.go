@@ -20,7 +20,11 @@ var apitaxLEs = []float64{0.1, 0.5, 1.0, 2.0, 3.0, 10.0}
 // peakLE concentrates ~99% mass for a deterministic p99; totals grow 5%.
 func seedAPITaxWindow(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, cluster, webhook string, windowStart time.Time, peakLE float64, total, rejected int64) {
 	t.Helper()
+	// #779: the -1h snapshot can fall in the previous month (window straddling
+	// a month boundary) — ensure BOTH inserted windows' partitions, not just
+	// windowStart's month.
 	require.NoError(t, ingestion.EnsureAPITaxPartitionsForMonth(ctx, pool, windowStart))
+	require.NoError(t, ingestion.EnsureAPITaxPartitionsForMonth(ctx, pool, windowStart.Add(-time.Hour)))
 	for i, ws := range []time.Time{windowStart.Add(-time.Hour), windowStart} {
 		scale := 1.0 + 0.05*float64(i)
 		collected := ws.Add(50 * time.Minute)
@@ -149,4 +153,27 @@ func TestAPITax_SilentWithoutEvidence(t *testing.T) {
 	fired, err := RunAPITaxCycle(ctx, pool)
 	require.NoError(t, err)
 	assert.Equal(t, 0, fired, "no evidence means silence, never error")
+}
+
+// TestSeedAPITaxWindow_MonthBoundary (#779): a window starting 00:30 on the
+// 1st has its -1h snapshot in the previous month — the seeder must ensure
+// that month's partition too. Pre-fix behavior ruled out: the insert fails
+// with SQLSTATE 23514 (no partition) whenever the window straddles a month
+// boundary, which is every first-of-month 00:00-01:00 UTC CI run.
+func TestSeedAPITaxWindow_MonthBoundary(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := testutil.TestOrgID + "-apitax-boundary"
+	cluster := "22222222-2222-2222-2222-222222222222"
+
+	n := time.Now().UTC()
+	windowStart := time.Date(n.Year(), n.Month(), 1, 0, 30, 0, 0, time.UTC)
+	seedAPITaxWindow(t, ctx, pool, orgID, cluster, "boundary.mutating.example", windowStart, 1.0, 100, 0)
+
+	var rows int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT count(*) FROM hosted_api_tax_rollups WHERE org_id = $1 AND window_start IN ($2, $3)`,
+		orgID, windowStart.Add(-time.Hour), windowStart).Scan(&rows))
+	assert.Equal(t, len(apitaxLEs)*2, rows,
+		"both hourly windows (previous-month 23:30 and current-month 00:30) must be seeded")
 }
