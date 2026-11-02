@@ -33,8 +33,8 @@ func (p *historyDeclPlugin) HistoryRetentionTables() []string {
 // TestHistoryRetention_PluginDeclarationUsesDaysCutoff (#701 Review Focus 1):
 // with NON-DEFAULT config values (retentionMonths=3, historyDays=45 — the
 // test pins which CONFIG feeds which class, not the default values), a
-// plugin-declared history table drops its 2-month-old partition (outside
-// 45 days, inside 3 months) — the months cutoff would keep it.
+// plugin-declared history table drops its fixture-month partition (wholly
+// outside 45 days, at/inside 3 months) — the months cutoff would keep it.
 func TestHistoryRetention_PluginDeclarationUsesDaysCutoff(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -48,9 +48,12 @@ func TestHistoryRetention_PluginDeclarationUsesDaysCutoff(t *testing.T) {
 		`CREATE TABLE IF NOT EXISTS %s (observed_at timestamptz NOT NULL) PARTITION BY RANGE (observed_at)`, table))
 	require.NoError(t, err)
 
-	// Two months old: outside historyDays=45, inside retentionMonths=3.
-	old := time.Now().UTC().AddDate(0, -2, 0)
-	monthStart := time.Date(old.Year(), old.Month(), 1, 0, 0, 0, 0, time.UTC)
+	// Fixture month computed to lie wholly outside historyDays=45 and at/inside
+	// retentionMonths=3 on every calendar date (#779; see retentionFixtureMonth —
+	// the pre-fix "now minus 2 months" choice can overlap the days cutoff).
+	fixtureMonth, err := retentionFixtureMonth(time.Now().UTC(), 45, 3)
+	require.NoError(t, err)
+	monthStart := fixtureMonth
 	monthEnd := monthStart.AddDate(0, 1, 0)
 	partName := fmt.Sprintf("%s_%s", table, monthStart.Format("200601"))
 	_, err = pool.Exec(ctx, fmt.Sprintf(
@@ -104,11 +107,15 @@ func TestHistoryRetention_HcpCapacityHistoryUsesDaysConfig(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	old := time.Now().UTC().AddDate(0, -2, 0)
-	monthStart := time.Date(old.Year(), old.Month(), 1, 0, 0, 0, 0, time.UTC)
+	// Fixture month computed to lie wholly outside historyDays=45 and at/inside
+	// retentionMonths=3 on every calendar date (#779; see retentionFixtureMonth —
+	// the pre-fix "now minus 2 months" choice can overlap the days cutoff).
+	fixtureMonth, err := retentionFixtureMonth(time.Now().UTC(), 45, 3)
+	require.NoError(t, err)
+	monthStart := fixtureMonth
 	monthEnd := monthStart.AddDate(0, 1, 0)
 	partName := fmt.Sprintf("hcp_capacity_history_%s", monthStart.Format("200601"))
-	_, err := pool.Exec(ctx, fmt.Sprintf(
+	_, err = pool.Exec(ctx, fmt.Sprintf(
 		`CREATE TABLE IF NOT EXISTS %s PARTITION OF hcp_capacity_history FOR VALUES FROM ('%s') TO ('%s')`,
 		partName, monthStart.Format("2006-01-02"), monthEnd.Format("2006-01-02")))
 	require.NoError(t, err)
