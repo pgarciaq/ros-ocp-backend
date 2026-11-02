@@ -135,6 +135,7 @@ nav:
       - Notification Codes: architecture/notification-codes.md
       - Native Migration: architecture/native-migration.md
       - HPA/VPA Deployment Modes: architecture/hpa-vpa-deployment-modes.md
+      - Kubernetes Ecosystem Comparison: architecture/ecosystem-comparison.md
   - Testing:
       - Validating the Native Engine: testing/validating-native-engine.md
       - Test Data Recipes: testing/test-data-recipes.md
