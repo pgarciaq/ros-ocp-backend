@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -67,6 +68,8 @@ func TestQualitySubtypes_Smoke(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 
 	ctx := context.Background()
+	// #779: ensure partitions for every seeded timestamp's month.
+	ensureQualityPartitions(t, ctx, pool, now)
 	_, err := pool.Exec(ctx, `INSERT INTO pvc_recommendation_quality
 		(measured_at, org_id, cluster_uuid, namespace, pvc_name, engine, stability_pct, adoption_detected, days_above_threshold, recommendation_age_hours)
 		VALUES ($1, $2, $3::uuid, 'ns-a', 'pvc-a', 'cost', 0.75, true, 5, 48)`,
@@ -160,6 +163,111 @@ func TestQualitySubtypes_Smoke(t *testing.T) {
 	})
 }
 
+// ensureQualityPartitions creates the monthly partition for every distinct
+// month in times on each partitioned quality table (#779). The 000159-000162
+// migrations create only the current and next two months, so fixture rows in
+// the previous month (first hours of a month, UTC) need explicit partitions —
+// pre-fix those inserts failed with SQLSTATE 23514.
+func ensureQualityPartitions(t *testing.T, ctx context.Context, pool *pgxpool.Pool, times ...time.Time) {
+	t.Helper()
+	tables := []string{
+		"pvc_recommendation_quality",
+		"vm_recommendation_quality",
+		"gpu_mig_recommendation_quality",
+		"snapshot_recommendation_quality",
+	}
+	seen := map[string]bool{}
+	for _, ts := range times {
+		ms := time.Date(ts.UTC().Year(), ts.UTC().Month(), 1, 0, 0, 0, 0, time.UTC)
+		me := ms.AddDate(0, 1, 0)
+		ym := ms.Format("200601")
+		if seen[ym] {
+			continue
+		}
+		seen[ym] = true
+		for _, table := range tables {
+			part := table + "_" + ym
+			var exists bool
+			require.NoError(t, pool.QueryRow(ctx,
+				`SELECT EXISTS (SELECT 1 FROM pg_class WHERE relname = $1)`, part).Scan(&exists))
+			if exists {
+				continue
+			}
+			_, err := pool.Exec(ctx, fmt.Sprintf(
+				`CREATE TABLE %s PARTITION OF %s FOR VALUES FROM ('%s') TO ('%s')`,
+				part, table, ms.Format("2006-01-02"), me.Format("2006-01-02")))
+			require.NoError(t, err)
+		}
+	}
+}
+
+// seedQualityPaginationRows seeds the three pvc_recommendation_quality rows
+// the pagination fixture uses (base-2h..base), ensuring partitions for every
+// seeded timestamp's month (#779: the 000159-000162 migrations create the
+// current and next two months only, so previous-month rows — the first hours
+// of a month, UTC — need explicit partitions or the insert fails with 23514).
+func seedQualityPaginationRows(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string, base time.Time) {
+	t.Helper()
+	ctx := context.Background()
+	ensureQualityPartitions(t, ctx, pool, base, base.Add(-time.Hour), base.Add(-2*time.Hour))
+	for i, name := range []string{"pvc-0", "pvc-1", "pvc-2"} {
+		_, err := pool.Exec(ctx, `INSERT INTO pvc_recommendation_quality
+			(measured_at, org_id, cluster_uuid, namespace, pvc_name, engine, stability_pct, adoption_detected)
+			VALUES ($1, $2, $3::uuid, 'ns-a', $4, 'cost', 0.5, false)`,
+			base.Add(time.Duration(-i)*time.Hour), orgID, clusterUUID, name)
+		require.NoError(t, err)
+	}
+}
+
+// TestQualitySubtypes_MonthBoundarySeed (#779): exercises the pagination
+// fixture's seeding path at a month boundary — base 00:30 on the 1st puts
+// two rows in the previous month, which the 000159-000162 migrations never
+// create (current + next 2 months only). Pre-fix: SQLSTATE 23514 on every
+// first-of-month CI run. The boundary month's partition is dropped first so
+// a leftover from an earlier test cannot mask a missing ensure (the shared
+// test DB keeps DDL across tests even though rows are truncated).
+func TestQualitySubtypes_MonthBoundarySeed(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	const orgID = "org-quality-boundary"
+	const clusterUUID = "66666666-6666-6666-6666-666666666666"
+	seedQualityBase(t, pool, 46, orgID, clusterUUID, "quality-boundary-cluster")
+
+	n := time.Now().UTC()
+	boundary := time.Date(n.Year(), n.Month(), 1, 0, 30, 0, 0, time.UTC)
+	ctx := context.Background()
+
+	// Drop the boundary month's partition so this test proves the seeding
+	// path creates it itself.
+	prevMonth := boundary.Add(-2 * time.Hour)
+	_, err := pool.Exec(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS pvc_recommendation_quality_%s`,
+		prevMonth.Format("200601")))
+	require.NoError(t, err)
+
+	// Same seeding path as the pagination fixture, at the boundary.
+	seedQualityPaginationRows(t, pool, orgID, clusterUUID, boundary)
+
+	// The rows must be served by the API. The window is explicit: the quality
+	// list's default start-of-month window would exclude the previous-month
+	// rows on the 1st, and boundary-2h can be up to a month before "now" on
+	// any later day of the month — so start at the boundary month itself.
+	app := setupQualitySubtypeApp()
+	body := getQuality(t, app, orgID,
+		"/api/cost-management/v1/recommendations/openshift/quality/pvcs?limit=10&offset=0&start_date="+
+			prevMonth.Format("2006-01-02"))
+	var resp struct {
+		Data []model.PVCQualityRow `json:"data"`
+		Meta struct {
+			Count int `json:"count"`
+		} `json:"meta"`
+	}
+	require.NoError(t, json.Unmarshal(body, &resp))
+	assert.Equal(t, 3, resp.Meta.Count,
+		"all three boundary-straddling rows served (two previous-month, one current-month)")
+}
+
 // Pagination slices must be stable with no dupes or loss across pages (#523:
 // OFFSET retained, so pin its contract). Order-independent assertions: pages
 // compared as sets, count stable on both.
@@ -173,19 +281,18 @@ func TestQualitySubtypes_PaginationStable(t *testing.T) {
 	seedQualityBase(t, pool, 51, orgID, clusterUUID, "quality-pages-cluster")
 	now := time.Now().UTC().Truncate(time.Second)
 
-	ctx := context.Background()
-	for i, name := range []string{"pvc-0", "pvc-1", "pvc-2"} {
-		_, err := pool.Exec(ctx, `INSERT INTO pvc_recommendation_quality
-			(measured_at, org_id, cluster_uuid, namespace, pvc_name, engine, stability_pct, adoption_detected)
-			VALUES ($1, $2, $3::uuid, 'ns-a', $4, 'cost', 0.5, false)`,
-			now.Add(time.Duration(-i)*time.Hour), orgID, clusterUUID, name)
-		require.NoError(t, err)
-	}
+	// Same seeding path the boundary test pins (#777/#779): the helper
+	// ensures partitions for every seeded timestamp's month.
+	seedQualityPaginationRows(t, pool, orgID, clusterUUID, now)
+
+	// Explicit window: the quality list's default start-of-month window
+	// would exclude the now-1h/now-2h rows on the 1st of a month.
+	startDate := now.AddDate(0, 0, -3).Format("2006-01-02")
 
 	app := setupQualitySubtypeApp()
 	var seen []string
 	for _, page := range []string{"limit=2&offset=0", "limit=2&offset=2"} {
-		body := getQuality(t, app, orgID, "/api/cost-management/v1/recommendations/openshift/quality/pvcs?"+page)
+		body := getQuality(t, app, orgID, "/api/cost-management/v1/recommendations/openshift/quality/pvcs?"+page+"&start_date="+startDate)
 		var resp struct {
 			Data []model.PVCQualityRow `json:"data"`
 			Meta struct {
@@ -217,6 +324,10 @@ func TestQualitySubtypes_CollidingClusterUUIDUsesOwnOrgAlias(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 
 	ctx := context.Background()
+	// #779 (deferred minor): plain-`now` seeds are always covered by the
+	// migration's current+2-month window, but ensure anyway so every quality
+	// fixture follows one rule.
+	ensureQualityPartitions(t, ctx, pool, now)
 	_, err := pool.Exec(ctx, `INSERT INTO pvc_recommendation_quality
 		(measured_at, org_id, cluster_uuid, namespace, pvc_name, engine, stability_pct, adoption_detected)
 		VALUES ($1, $2, $3::uuid, 'ns-a', 'pvc-a', 'cost', 0.5, false)`,
