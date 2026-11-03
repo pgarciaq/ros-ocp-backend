@@ -24,6 +24,7 @@ func enableSettingsRBACForTest(t *testing.T) {
 	t.Helper()
 	t.Setenv("RBAC_ENABLE", "true")
 	config.ResetForTest()
+	t.Cleanup(config.ResetForTest) // rebuild config from restored env — no RBACEnabled leak into later tests
 }
 
 func setupSettingsRBACEcho(t *testing.T, pool *pgxpool.Pool, orgID string, perms map[string][]string) *echo.Echo {
@@ -248,6 +249,7 @@ func TestRequireSettingsWrite_ResponseWriteFailure(t *testing.T) {
 	t.Cleanup(config.ResetForTest)
 	t.Setenv("RBAC_ENABLE", "true")
 	config.ResetForTest()
+	t.Cleanup(config.ResetForTest) // rebuild config from restored env — no RBACEnabled leak into later tests
 	want := errors.New("test response write failure")
 	w := &settingsRBACFailingWriter{header: make(http.Header), err: want}
 	c := echo.New().NewContext(httptest.NewRequest(http.MethodPut, "/settings", nil), w)

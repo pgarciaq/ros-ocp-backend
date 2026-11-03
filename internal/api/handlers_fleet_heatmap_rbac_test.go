@@ -83,6 +83,7 @@ func setupHeatmapRBAC(t *testing.T) {
 	t.Helper()
 	t.Setenv("RBAC_ENABLE", "true")
 	config.ResetForTest()
+	t.Cleanup(config.ResetForTest) // rebuild config from restored env — no RBACEnabled leak into later tests
 	pool := testutil.SetupTestDB(t)
 	database.DB = testutil.OpenTestGORM(pool)
 	database.Pool = pool
@@ -196,6 +197,7 @@ func TestFleetHeatmap_RBAC_MaxNodesPerUser(t *testing.T) {
 	t.Setenv("RBAC_ENABLE", "true")
 	t.Setenv("ROS_FLEET_HEATMAP_MAX_NODES", "2")
 	config.ResetForTest()
+	t.Cleanup(config.ResetForTest) // rebuild config from restored env — no leak into later tests
 	pool := testutil.SetupTestDB(t)
 	database.DB = testutil.OpenTestGORM(pool)
 	database.Pool = pool

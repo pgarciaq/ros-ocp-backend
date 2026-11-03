@@ -372,8 +372,10 @@ func TestHCPCapacityHistory_RBACAndCrossOrgNonDisclosing(t *testing.T) {
 	assert.Empty(t, hcpCapData(t, body))
 	assert.Equal(t, float64(0), body["meta"].(map[string]interface{})["count"])
 
-	// Authorized org reads only its own rows.
-	e2 := setupHCPCapEcho(t, nil)
+	// Authorized org reads only its own rows. The grant is affirmative
+	// (#753: absent grants deny); org scoping still provides the isolation
+	// this assertion checks.
+	e2 := setupHCPCapEcho(t, map[string][]string{"openshift.cluster": {testutil.TestClusterUUID}})
 	code, body = hcpCapGET(t, e2, orgID,
 		hcpCapBase+"/history?filter[cluster_uuid]="+testutil.TestClusterUUID)
 	require.Equal(t, http.StatusOK, code)
