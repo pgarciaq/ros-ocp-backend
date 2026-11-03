@@ -37,8 +37,11 @@ func AddRBACFilter(query *gorm.DB, userPermissions map[string][]string, resource
 
 	// #753: Koku's lattice starts empty — absent OpenShift grants are not
 	// unrestricted access. Settings-only identities get a deny-all clause.
+	// In-place clause per this function's existing mutation contract (the
+	// cluster filters below rely on it too); Session-cloned inputs are not
+	// a supported caller shape.
 	if !OpenShiftDataAccessEligible(userPermissions) {
-		query = query.Where("1 = 0")
+		query.Where("1 = 0")
 		return nil
 	}
 
