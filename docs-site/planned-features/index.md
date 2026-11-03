@@ -25,6 +25,5 @@ section. **[Visual Insights](../features/visual-insights.md)** and the
 | [hosted-control-plane-fleet-optimization.md](hosted-control-plane-fleet-optimization.md) | HCP / HyperShift & fleet control-plane FinOps (topology through API tax) — ADRs 0328–0335; [design plan](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/plans/hcp-fleet-optimization.md); **W0–W4 shipped** (see [shipped vs remaining](hosted-control-plane-fleet-optimization.md#shipped-vs-remaining)); the page is the roadmap record |
 | [native-recommendation-processing.md](native-recommendation-processing.md) | Separating CSV/digest ingestion from native recommendation generation (**under consideration; no delivery commitment**) |
 | [local-mode.md](local-mode.md) | On-cluster recommendations without CSV upload; [scale estimates](local-mode.md#scale-estimates-200k-containers) (200K+) |
-| [replica-count-optimization.md](replica-count-optimization.md) | Optimal replica count recommendations for Deployments and StatefulSets (3-phase rollout: resource-based, traffic-aware, HPA config) |
 
 Each page states its own status and may change before implementation; an under-consideration page is not a release commitment.

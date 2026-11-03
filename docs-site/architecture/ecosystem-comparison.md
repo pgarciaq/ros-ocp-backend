@@ -104,8 +104,7 @@ today). If you consume recommendations with automation, filter
 replica-count recommendations for autoscaler-managed workloads yourself.
 Autoscaler-aware suppression with a dedicated notification code is under
 consideration — see below. For replica recommendation behavior generally, see
-[Replica Count Optimization](../planned-features/replica-count-optimization.md)
-(documented status correction in progress, [#786](https://github.com/pgarciaq/ros-ocp-backend/issues/786)).
+[Replica Count Optimization](../features/replica-count-optimization.md).
 
 ## Under consideration (not committed)
 
