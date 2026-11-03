@@ -242,9 +242,13 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	argIdx := 3
 
 	if clusterFilter != "" {
-		baseFrom += " AND nr.cluster_uuid = $" + strconv.Itoa(argIdx)
-		args = append(args, clusterFilter)
-		argIdx++
+		// #790: alias values resolve through the clusters subquery; only
+		// UUIDs bind against the uuid column (pre-fix: 22P02 → 503).
+		if pred, predArgs, next, ok := clusterFilterPredicate(orgID, "nr.cluster_uuid", clusterFilter, argIdx); ok {
+			baseFrom += pred
+			args = append(args, predArgs...)
+			argIdx = next
+		}
 	}
 	if nodeFilter != "" {
 		baseFrom += " AND nr.node = $" + strconv.Itoa(argIdx)
@@ -486,7 +490,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		})
 	}
 
-	storedCurrency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+	storedCurrency := fetchClusterCurrency(ctx, orgID, resolveClusterFilterUUID(ctx, pool, orgID, clusterFilter))
 	userCurrency := resolveUserCurrency(ctx, orgID)
 	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 	displayCurrency := userCurrency

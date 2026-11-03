@@ -53,9 +53,13 @@ func buildPVCRecommendationFilterSQL(c echo.Context, orgID string, f pvcListFilt
 	argIdx = 3
 
 	if f.clusterFilter != "" {
-		filterSQL += ` AND cluster_uuid = $` + strconv.Itoa(argIdx)
-		args = append(args, f.clusterFilter)
-		argIdx++
+		// #790: alias values resolve through the clusters subquery; only
+		// UUIDs bind against the uuid column (pre-fix: 22P02 → 503).
+		if pred, predArgs, next, ok := clusterFilterPredicate(orgID, "cluster_uuid", f.clusterFilter, argIdx); ok {
+			filterSQL += pred
+			args = append(args, predArgs...)
+			argIdx = next
+		}
 	}
 	if f.namespaceFilter != "" {
 		filterSQL += ` AND namespace = $` + strconv.Itoa(argIdx)

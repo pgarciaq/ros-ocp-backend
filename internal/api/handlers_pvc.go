@@ -225,7 +225,7 @@ func GetPVCRecommendations(c echo.Context) error {
 	}
 	defer rows.Close()
 
-	storedCurrency := fetchClusterCurrency(ctx, orgID, listFilters.clusterFilter)
+	storedCurrency := fetchClusterCurrency(ctx, orgID, resolveClusterFilterUUID(ctx, pool, orgID, listFilters.clusterFilter))
 	userCurrency := resolveUserCurrency(ctx, orgID)
 	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 	displayCurrency := userCurrency

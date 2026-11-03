@@ -153,9 +153,13 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 	argIdx := 2
 
 	if clusterFilter != "" {
-		filterSQL += ` AND cluster_uuid = $` + strconv.Itoa(argIdx)
-		args = append(args, clusterFilter)
-		argIdx++
+		// #790: alias values resolve through the clusters subquery; only
+		// UUIDs bind against the uuid column (pre-fix: 22P02 → 503).
+		if pred, predArgs, next, ok := clusterFilterPredicate(orgID, "cluster_uuid", clusterFilter, argIdx); ok {
+			filterSQL += pred
+			args = append(args, predArgs...)
+			argIdx = next
+		}
 	}
 	// #752: server-owned cluster scope (composes with the client filter).
 	{
@@ -276,7 +280,7 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 	}
 	defer rows.Close()
 
-	storedCurrency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+	storedCurrency := fetchClusterCurrency(ctx, orgID, resolveClusterFilterUUID(ctx, pool, orgID, clusterFilter))
 	userCurrency := resolveUserCurrency(ctx, orgID)
 	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 	displayCurrency := userCurrency
