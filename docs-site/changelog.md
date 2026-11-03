@@ -130,8 +130,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   them entirely (snapshot cost-by-type, snapshot age-distribution,
   cluster instance-types). Settings routes remain fully usable by
   settings-only roles; no-access responses are unchanged (200 + empty).
-- **Security: fleet heatmap cache no longer serves nodes outside the caller RBAC scope ([#754](https://github.com/pgarciaq/ros-ocp-backend/issues/754)):**
-  the cache key carried only the cluster dimension, so a
+- **Cluster filter by alias on nodes, storage, snapshots, quota and cluster-quota ([#790](https://github.com/pgarciaq/ros-ocp-backend/issues/790)):**
+  `filter[cluster]=<alias>` (the form the UI cluster filter sends)
+  returned 503 on those five endpoints — they bound the raw value against
+  a uuid column. Alias values now resolve through an org-scoped
+  case-insensitive substring lookup on the cluster alias, matching the
+  container endpoints and Koku; UUID filters are unchanged, and an
+  unknown alias returns an empty result (200) rather than an error.
+  Savings currency also resolves correctly for alias filters now —
+  previously the raw alias silently fell back to USD for non-USD
+  organizations.
+- **Security: fleet heatmap cache no longer serves nodes outside the caller RBAC scope ([#754](https://github.com/pgarciaq/ros-ocp-backend/issues/754)):**  the cache key carried only the cluster dimension, so a
   wildcard-cluster role with a narrow `openshift.node` grant shared the
   `org:all` entry with an unrestricted role — cache hits bypassed the
   node filter (secret nodes served to restricted users; restricted
