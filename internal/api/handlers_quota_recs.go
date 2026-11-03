@@ -168,6 +168,22 @@ func GetQuotaRecommendations(c echo.Context) error {
 		args = append(args, clusterFilter)
 		argIdx++
 	}
+	// #752: server-owned cluster scope (composes with the client filter).
+	{
+		allowedClusters, scoped, scopeErr := dataClusterScope(ctx, orgID, get_user_permissions(c))
+		if scopeErr != nil {
+			hlog.Errorf("quota recommendations: cluster scope failed: %v", scopeErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
+				"status":  "error",
+				"message": "unable to resolve clusters for organization",
+			})
+		}
+		if scoped {
+			filterSQL += ` AND cluster_uuid::text = ANY($` + strconv.Itoa(argIdx) + `)`
+			args = append(args, allowedClusters)
+			argIdx++
+		}
+	}
 	if namespaceFilter != "" {
 		filterSQL += ` AND namespace = $` + strconv.Itoa(argIdx)
 		args = append(args, namespaceFilter)

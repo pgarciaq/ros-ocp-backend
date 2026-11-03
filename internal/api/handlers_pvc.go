@@ -141,6 +141,23 @@ func GetPVCRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": tagErr.Error()})
 	}
 
+	// #752: server-owned cluster scope — composes with (intersects) the
+	// client filter, never replaces it. An empty allowed set denies via
+	// ANY('{}') matching nothing.
+	allowedClusters, scoped, scopeErr := dataClusterScope(ctx, orgID, get_user_permissions(c))
+	if scopeErr != nil {
+		hlog.Errorf("PVC recommendations: cluster scope failed: %v", scopeErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to resolve clusters for organization",
+		})
+	}
+	if scoped {
+		filterSQL += ` AND cluster_uuid::text = ANY($` + strconv.Itoa(argIdx) + `)`
+		args = append(args, allowedClusters)
+		argIdx++
+	}
+
 	groupByCluster, groupByProject, groupByErr := parseStorageListGroupBy(c)
 	if groupByErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": groupByErr.Error()})
@@ -270,7 +287,7 @@ func GetPVCRecommendations(c echo.Context) error {
 		resp.Data = []PVCRecommendationResponse{}
 	}
 
-	attachTagWarningsToPVC(&resp, c, orgID, len(resp.Data))
+	attachTagWarningsToPVC(&resp, c, orgID, len(resp.Data), tagWarningScope(scoped, allowedClusters))
 	if responseFormat == listoptions.ResponseFormatCSV {
 		if resp.Data == nil {
 			resp.Data = []PVCRecommendationResponse{}

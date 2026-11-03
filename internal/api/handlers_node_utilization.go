@@ -544,7 +544,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	if deprecated {
 		resp.Meta.Warnings = append([]string{nodeUtilizationDeprecationMsg}, resp.Meta.Warnings...)
 	}
-	attachTagWarningsToNodeUtil(&resp, c, orgID, len(pagedRecs))
+	attachTagWarningsToNodeUtil(&resp, c, orgID, len(pagedRecs), nil)
 	resp.Warnings = resp.Meta.Warnings
 
 	setRecommendationNoStore(c)

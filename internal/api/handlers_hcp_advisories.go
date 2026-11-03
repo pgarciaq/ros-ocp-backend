@@ -164,15 +164,30 @@ func GetHCPAdvisories(c echo.Context) error {
 		})
 	}
 
-	rows, err := pool.Query(c.Request().Context(), `
+	// #752: server-owned cluster scope on the advisory's management cluster.
+	advQuery := `
 		SELECT hc_cluster_id, management_cluster_uuid::text, verdict, confidence,
 			window_start, window_end, expires_at,
 			h_p99_s::float8, h_threshold_s::float8, c_ratio::float8, n_signals
 		FROM hcp_correlation_advisories
-		WHERE org_id = $1 AND expires_at > now()
+		WHERE org_id = $1 AND expires_at > now()`
+	advArgs := []any{orgID}
+	if allowedClusters, scoped, scopeErr := dataClusterScope(c.Request().Context(), orgID, get_user_permissions(c)); scopeErr != nil {
+		hlog.Errorf("hcp advisories: cluster scope failed: %v", scopeErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to resolve clusters for organization",
+		})
+	} else if scoped {
+		advQuery += ` AND management_cluster_uuid::text = ANY($2)`
+		advArgs = append(advArgs, allowedClusters)
+	}
+	advQuery += `
 		ORDER BY window_start DESC, hc_cluster_id
-		LIMIT $2`,
-		orgID, hcpAdvisoriesMaxRows)
+		LIMIT $` + strconv.Itoa(len(advArgs)+1)
+	advArgs = append(advArgs, hcpAdvisoriesMaxRows)
+
+	rows, err := pool.Query(c.Request().Context(), advQuery, advArgs...)
 	if err != nil {
 		hlog.Errorf("hcp advisories: query failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{

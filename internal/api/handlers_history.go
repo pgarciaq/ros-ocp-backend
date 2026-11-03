@@ -209,7 +209,7 @@ func GetRecommendationHistory(c echo.Context) error {
 	default:
 		response := CollectionResponse(rows, c.Request(), count, opts.Limit, opts.Offset)
 		response.Meta.Currency = displayCurrency
-		attachTagWarningsToCollection(response, c, orgID, len(rows))
+		attachTagWarningsToCollection(response, c, orgID, len(rows), nil)
 		return c.JSON(http.StatusOK, response)
 	}
 }

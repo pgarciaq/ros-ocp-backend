@@ -22,7 +22,7 @@ const (
 
 // buildTagWarnings returns meta.warnings when tag filtering is active, results are empty,
 // and the catalog or sync state suggests the filter may be ineffective.
-func buildTagWarnings(ctx context.Context, orgID string, requestedTagKeys []string, resultCount int) []string {
+func buildTagWarnings(ctx context.Context, orgID string, requestedTagKeys []string, resultCount int, allowedClusters []string) []string {
 	if resultCount > 0 || len(requestedTagKeys) == 0 || !config.TagsFeatureEnabled() {
 		return nil
 	}
@@ -32,7 +32,7 @@ func buildTagWarnings(ctx context.Context, orgID string, requestedTagKeys []stri
 		return nil
 	}
 
-	known, err := knownTagKeysForOrg(ctx, pool, orgID)
+	known, err := knownTagKeysForOrg(ctx, pool, orgID, allowedClusters)
 	if err != nil {
 		return nil
 	}
@@ -81,7 +81,7 @@ func tagSyncWarning(ctx context.Context, pool *pgxpool.Pool, orgID string) strin
 	return ""
 }
 
-func knownTagKeysForOrg(ctx context.Context, pool *pgxpool.Pool, orgID string) (map[string]struct{}, error) {
+func knownTagKeysForOrg(ctx context.Context, pool *pgxpool.Pool, orgID string, allowedClusters []string) (map[string]struct{}, error) {
 	known := make(map[string]struct{})
 
 	provider := tags.GetProvider()
@@ -96,11 +96,18 @@ func knownTagKeysForOrg(ctx context.Context, pool *pgxpool.Pool, orgID string) (
 		}
 	}
 
-	rows, err := pool.Query(ctx, `
+	// #752: cluster-scope the data-derived key set — a scoped empty
+	// response must not reveal tag keys that exist elsewhere in the org.
+	keyQuery := `
 		SELECT DISTINCT jsonb_object_keys(resolved_tags)
 		FROM org_container_keys
-		WHERE org_id = $1`, orgID,
-	)
+		WHERE org_id = $1`
+	keyArgs := []any{orgID}
+	if allowedClusters != nil {
+		keyQuery += ` AND cluster_uuid::text = ANY($2)`
+		keyArgs = append(keyArgs, allowedClusters)
+	}
+	rows, err := pool.Query(ctx, keyQuery, keyArgs...)
 	if err != nil {
 		return known, err
 	}
@@ -137,36 +144,36 @@ func requestedTagKeysFromContext(c echo.Context) []string {
 	return keys
 }
 
-func attachTagWarningsToCollection[T any](resp *Collection[T], c echo.Context, orgID string, resultCount int) {
+func attachTagWarningsToCollection[T any](resp *Collection[T], c echo.Context, orgID string, resultCount int, allowedClusters []string) {
 	if resp == nil {
 		return
 	}
-	resp.Meta.Warnings = buildTagWarnings(c.Request().Context(), orgID, requestedTagKeysFromContext(c), resultCount)
+	resp.Meta.Warnings = buildTagWarnings(c.Request().Context(), orgID, requestedTagKeysFromContext(c), resultCount, allowedClusters)
 }
 
-func attachTagWarningsToPVC(resp *PVCRecommendationListResponse, c echo.Context, orgID string, resultCount int) {
+func attachTagWarningsToPVC(resp *PVCRecommendationListResponse, c echo.Context, orgID string, resultCount int, allowedClusters []string) {
 	if resp == nil {
 		return
 	}
-	resp.Meta.Warnings = buildTagWarnings(c.Request().Context(), orgID, requestedTagKeysFromContext(c), resultCount)
+	resp.Meta.Warnings = buildTagWarnings(c.Request().Context(), orgID, requestedTagKeysFromContext(c), resultCount, allowedClusters)
 }
 
-func attachTagWarningsToNodeUtil(resp *model.NodeUtilizationListResponse, c echo.Context, orgID string, resultCount int) {
+func attachTagWarningsToNodeUtil(resp *model.NodeUtilizationListResponse, c echo.Context, orgID string, resultCount int, allowedClusters []string) {
 	if resp == nil {
 		return
 	}
-	tagWarnings := buildTagWarnings(c.Request().Context(), orgID, requestedTagKeysFromContext(c), resultCount)
+	tagWarnings := buildTagWarnings(c.Request().Context(), orgID, requestedTagKeysFromContext(c), resultCount, allowedClusters)
 	if len(tagWarnings) == 0 {
 		return
 	}
 	resp.Meta.Warnings = append(resp.Meta.Warnings, tagWarnings...)
 }
 
-func attachTagWarningsToGPUMIG(resp *model.GPUMIGListResponse, c echo.Context, orgID string, resultCount int) {
+func attachTagWarningsToGPUMIG(resp *model.GPUMIGListResponse, c echo.Context, orgID string, resultCount int, allowedClusters []string) {
 	if resp == nil {
 		return
 	}
-	tagWarnings := buildTagWarnings(c.Request().Context(), orgID, requestedTagKeysFromContext(c), resultCount)
+	tagWarnings := buildTagWarnings(c.Request().Context(), orgID, requestedTagKeysFromContext(c), resultCount, allowedClusters)
 	if len(tagWarnings) == 0 {
 		return
 	}

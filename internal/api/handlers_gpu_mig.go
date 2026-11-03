@@ -191,7 +191,7 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		},
 		Data: entries,
 	}
-	attachTagWarningsToGPUMIG(&gpuResp, c, orgIDStr, len(entries))
+	attachTagWarningsToGPUMIG(&gpuResp, c, orgIDStr, len(entries), nil)
 	gpuResp.Warnings = gpuResp.Meta.Warnings
 	if opts.Format == listoptions.ResponseFormatCSV {
 		return streamCSV(c, csvFilename("gpu-mig-recommendations"), func(ctx context.Context, w io.Writer) error {
@@ -212,7 +212,7 @@ func emptyGPUMIGResponse(c echo.Context, orgID string, opts listoptions.ListOpti
 		},
 		Data: []model.GPUMIGRecommendationEntry{},
 	}
-	attachTagWarningsToGPUMIG(&gpuResp, c, orgID, 0)
+	attachTagWarningsToGPUMIG(&gpuResp, c, orgID, 0, nil)
 	gpuResp.Warnings = gpuResp.Meta.Warnings
 	if opts.Format == listoptions.ResponseFormatCSV {
 		return streamCSV(c, csvFilename("gpu-mig-recommendations"), func(ctx context.Context, w io.Writer) error {

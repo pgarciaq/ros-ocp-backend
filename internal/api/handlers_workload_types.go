@@ -21,13 +21,24 @@ func GetWorkloadTypes(c echo.Context) error {
 	ctx := c.Request().Context()
 	pool := db.GetPool()
 
-	rows, err := pool.Query(ctx,
-		`SELECT DISTINCT workload_type
+	// #752: server-owned cluster scope (review-found org-only reader).
+	wtQuery := `SELECT DISTINCT workload_type
 		 FROM org_container_keys
-		 WHERE org_id = $1 AND workload_type != ''
-		 ORDER BY workload_type`,
-		orgID,
-	)
+		 WHERE org_id = $1 AND workload_type != ''`
+	wtArgs := []any{orgID}
+	if allowedClusters, scoped, scopeErr := dataClusterScope(ctx, orgID, get_user_permissions(c)); scopeErr != nil {
+		hlog.Errorf("failed to resolve cluster scope: %v", scopeErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "failed to resolve cluster scope",
+		})
+	} else if scoped {
+		wtQuery += ` AND cluster_uuid::text = ANY($2)`
+		wtArgs = append(wtArgs, allowedClusters)
+	}
+	wtQuery += ` ORDER BY workload_type`
+
+	rows, err := pool.Query(ctx, wtQuery, wtArgs...)
 	if err != nil {
 		hlog.Errorf("failed to query workload types: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
