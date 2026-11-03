@@ -14,6 +14,7 @@ import (
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/rbac"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
 
@@ -56,6 +57,13 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
 	clusterUUIDs, clusterFilterMiss := restrictClustersToQueryFilter(clusterUUIDs, clusterFilter)
 	if clusterFilterMiss {
+		return emptyGPUMIGResponse(c, orgIDStr, opts)
+	}
+	// #753: an empty allowed-cluster set (absent-grant identities, or an org
+	// with no clusters) must return empty — the engine's filter builder
+	// treats a zero-length cluster slice as NO filter, which would serve the
+	// whole org's groups and totals.
+	if len(clusterUUIDs) == 0 {
 		return emptyGPUMIGResponse(c, orgIDStr, opts)
 	}
 
@@ -286,6 +294,10 @@ func gpuMIGEntryRBACVisible(nodeName string, userPerms map[string][]string) bool
 	}
 	if _, ok := userPerms["*"]; ok {
 		return true
+	}
+	// #753: absent-grant identities hold no data-read eligibility.
+	if !rbac.OpenShiftDataAccessEligible(userPerms) {
+		return false
 	}
 	nodePerms, hasNode := userPerms["openshift.node"]
 	if !hasNode {

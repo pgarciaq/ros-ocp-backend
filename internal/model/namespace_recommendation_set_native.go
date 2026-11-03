@@ -10,6 +10,7 @@ import (
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
+	"github.com/redhatinsights/ros-ocp-backend/internal/rbac"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 	"gorm.io/gorm"
 )
@@ -562,6 +563,11 @@ func applyNativeNamespaceRBAC(query *gorm.DB, userPerms map[string][]string) *go
 	}
 	if _, ok := userPerms["*"]; ok {
 		return query
+	}
+
+	// #753: absent OpenShift grants are not unrestricted access.
+	if !rbac.OpenShiftDataAccessEligible(userPerms) {
+		return query.Where("1 = 0")
 	}
 
 	clusterPerms, hasCluster := userPerms["openshift.cluster"]

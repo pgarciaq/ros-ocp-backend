@@ -25,6 +25,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
+	"github.com/redhatinsights/ros-ocp-backend/internal/rbac"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
 
@@ -852,6 +853,11 @@ func filterClustersByRBAC(clusterUUIDs []string, userPerms map[string][]string) 
 	}
 	if _, ok := userPerms["*"]; ok {
 		return clusterUUIDs
+	}
+	// #753: Koku's lattice starts empty — no OpenShift grant at all is not
+	// unrestricted access. Settings-only identities get no clusters.
+	if !rbac.OpenShiftDataAccessEligible(userPerms) {
+		return nil
 	}
 	clusterPerms, hasCluster := userPerms["openshift.cluster"]
 	if !hasCluster {

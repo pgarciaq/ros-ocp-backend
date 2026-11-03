@@ -10,6 +10,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
+	"github.com/redhatinsights/ros-ocp-backend/internal/rbac"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
 
@@ -31,6 +32,12 @@ func fleetSummaryNeedsClusterFilter(userPerms map[string][]string) bool {
 	}
 	if _, ok := userPerms["*"]; ok {
 		return false
+	}
+	// #753: absent-grant identities route through cluster resolution, which
+	// filters to an empty set (and keys them to their own org:rbac:<hash>
+	// cache entry instead of sharing org:all).
+	if !rbac.OpenShiftDataAccessEligible(userPerms) {
+		return true
 	}
 	clusterPerms, ok := userPerms["openshift.cluster"]
 	if !ok || utils.StringInSlice("*", clusterPerms) {

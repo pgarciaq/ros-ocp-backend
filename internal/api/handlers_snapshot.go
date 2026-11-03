@@ -15,6 +15,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
+	"github.com/redhatinsights/ros-ocp-backend/internal/rbac"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
 
@@ -299,6 +300,11 @@ func snapshotRBACClusterFilter(userPerms map[string][]string, argIdx int) (sql s
 	}
 	if _, ok := userPerms["*"]; ok {
 		return "", nil, nextIdx, false
+	}
+	// #753: absent-grant identities hold no data-read eligibility — deny
+	// (same shape as the explicit-empty branch below).
+	if !rbac.OpenShiftDataAccessEligible(userPerms) {
+		return "", nil, nextIdx, true
 	}
 	clusterPerms, hasCluster := userPerms["openshift.cluster"]
 	if !hasCluster {

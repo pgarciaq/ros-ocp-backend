@@ -187,14 +187,38 @@ func GetFleetSavingsSummary(c echo.Context) error {
 		if len(clusterUUIDs) == 0 {
 			emptyCurrency := resolveListCurrencyFromRequest(c, orgID)
 			zero := money.FormatCentsToAmount(0, emptyCurrency)
-			return c.JSON(http.StatusOK, FleetSavingsSummaryResponse{
+			setRecommendationNoStore(c)
+			// #753 review: preserve the requested response shape on the
+			// empty path — grouped and CSV consumers must not receive the
+			// default JSON shape. (The early return must also stay: the
+			// grouped query builders treat an empty cluster slice as NO
+			// filter, which would serve org-wide grouped data.)
+			if queryparams.GroupByIdleState(c) {
+				return c.JSON(http.StatusOK, FleetSavingsByIdleStateResponse{
+					Data: []FleetIdleStateSavingsRow{},
+					Meta: FleetSavingsByIdleMeta{Count: 0},
+				})
+			}
+			if queryparams.GroupByTagKey(c) != "" && config.TagsFeatureEnabled() {
+				return c.JSON(http.StatusOK, FleetSavingsByTagResponse{
+					Data: []FleetTagSavingsRow{},
+					Meta: FleetSavingsByTagMeta{Count: 0},
+				})
+			}
+			resp := FleetSavingsSummaryResponse{
 				Currency:                emptyCurrency,
 				EstimatedMonthlySavings: zero,
 				ByCluster:               []FleetClusterSavings{},
 				ByPlugin:                fleetSavingsByPluginZeros(emptyCurrency),
 				ByPluginBreakdown:       fleetSavingsBreakdownZeros(emptyCurrency),
 				GPUSavingsNote:          gpuSavingsFleetSummaryNote,
-			})
+			}
+			if responseFormat == listoptions.ResponseFormatCSV {
+				return streamCSV(c, csvFilename("savings-summary"), func(ctx context.Context, w io.Writer) error {
+					return generateFleetSavingsSummaryCSV(ctx, w, resp)
+				})
+			}
+			return c.JSON(http.StatusOK, resp)
 		}
 	}
 

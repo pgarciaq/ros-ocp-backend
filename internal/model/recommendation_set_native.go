@@ -19,6 +19,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 	kruizeplugin "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
+	"github.com/redhatinsights/ros-ocp-backend/internal/rbac"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 	"gorm.io/gorm"
 )
@@ -685,6 +686,12 @@ func ApplyNativeRBAC(query *gorm.DB, userPerms map[string][]string, nsColumn ...
 	col := "rs.namespace"
 	if len(nsColumn) > 0 && nsColumn[0] != "" {
 		col = nsColumn[0]
+	}
+
+	// #753: Koku's lattice starts empty — absent OpenShift grants are not
+	// unrestricted access. Settings-only identities get a deny-all clause.
+	if !rbac.OpenShiftDataAccessEligible(userPerms) {
+		return query.Where("1 = 0")
 	}
 
 	clusterPerms, hasCluster := userPerms["openshift.cluster"]
