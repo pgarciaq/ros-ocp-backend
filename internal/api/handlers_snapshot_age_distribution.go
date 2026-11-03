@@ -55,7 +55,7 @@ func GetSnapshotAgeDistribution(c echo.Context) error {
 
 	// #753 review: this route previously bypassed every RBAC data helper —
 	// scope it to the caller's allowed clusters.
-	allowedClusters, scoped, scopeErr := snapshotDataClusterScope(ctx, orgID, get_user_permissions(c))
+	allowedClusters, scoped, scopeErr := dataClusterScope(ctx, orgID, get_user_permissions(c))
 	if scopeErr != nil {
 		hlog.Errorf("snapshot age distribution: cluster scope failed: %v", scopeErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{

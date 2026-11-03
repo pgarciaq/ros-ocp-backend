@@ -21,22 +21,6 @@ type SnapshotCostByTypeResponse struct {
 	Data []SnapshotCostByTypeItem `json:"data"`
 }
 
-// snapshotDataClusterScope resolves the caller's allowed clusters for the
-// snapshot and VM data routes (#753 review: these routes previously bypassed
-// every RBAC data helper). scoped is false when no filtering applies (RBAC
-// disabled or wildcard); scoped with an empty list means deny — settings-only
-// identities get no data.
-func snapshotDataClusterScope(ctx context.Context, orgID string, userPerms map[string][]string) ([]string, bool, error) {
-	if !fleetSummaryNeedsClusterFilter(userPerms) {
-		return nil, false, nil
-	}
-	all, err := getClustersForOrg(ctx, orgID)
-	if err != nil {
-		return nil, true, err
-	}
-	return filterClustersByRBAC(all, userPerms), true, nil
-}
-
 // GetSnapshotCostByType handles GET /recommendations/openshift/snapshots/cost-by-type.
 // Returns snapshot costs grouped by recommendation_type.
 func GetSnapshotCostByType(c echo.Context) error {
@@ -59,7 +43,7 @@ func GetSnapshotCostByType(c echo.Context) error {
 
 	// #753 review: this route previously bypassed every RBAC data helper —
 	// scope it to the caller's allowed clusters.
-	allowedClusters, scoped, scopeErr := snapshotDataClusterScope(ctx, orgID, get_user_permissions(c))
+	allowedClusters, scoped, scopeErr := dataClusterScope(ctx, orgID, get_user_permissions(c))
 	if scopeErr != nil {
 		hlog.Errorf("snapshot cost-by-type: cluster scope failed: %v", scopeErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
