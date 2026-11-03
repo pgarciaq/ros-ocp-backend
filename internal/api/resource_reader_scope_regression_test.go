@@ -82,13 +82,18 @@ func seedReaderScopeOrg(t *testing.T, ctx context.Context) (bContainerID string)
 		require.NoError(t, err)
 	}
 
-	// Unexpired B management advisory.
+	// Unexpired B management advisory + an HC-only advisory for the hosted
+	// cluster that the management cluster hosts (hc_cluster_id = the HC's
+	// OpenShift cluster ID, per KMO topology.go — grantable identifier).
+	const readerHostedClusterID = "88888888-8888-8888-8888-888888888888"
 	_, err = pool.Exec(ctx, `INSERT INTO hcp_correlation_advisories
 		(org_id, hc_cluster_id, management_cluster_uuid, window_start, window_end, verdict, confidence,
 		 h_p99_s, h_threshold_s, c_ratio, n_signals, expires_at)
 		VALUES ($1, 'hc-rs-b', $2, now() - interval '2 hours', now() - interval '1 hour',
-			'add_workers', 'high', 12.5, 10.0, 0.8, '{"webhook_a"}', now() + interval '1 day')`,
-		testutil.TestOrgID, readerClusterB)
+			'add_workers', 'high', 12.5, 10.0, 0.8, '{"webhook_a"}', now() + interval '1 day'),
+		       ($1, $3, $2, now() - interval '2 hours', now() - interval '1 hour',
+			'add_workers', 'high', 11.5, 10.0, 0.7, '{"webhook_b"}', now() + interval '1 day')`,
+		testutil.TestOrgID, readerClusterB, readerHostedClusterID)
 	require.NoError(t, err)
 
 	// B container with a resolvable recommendation_sets id and 7 OOM days.
@@ -239,19 +244,54 @@ func TestReaderScope_QuotaAndClusterQuota(t *testing.T) {
 }
 
 // TestReaderScope_HCPAdvisories: B's management advisory must not reach an
-// A-only role (the issue's excluded management-cluster advisory).
+// A-only role (the issue's excluded management-cluster advisory). #791: an
+// HC grant sees that HC's advisories; a management grant sees its own and
+// all its HCs'; an unrelated grant sees neither.
 func TestReaderScope_HCPAdvisories(t *testing.T) {
 	setupEligibilityTest(t)
 	ctx := context.Background()
 	seedReaderScopeOrg(t, ctx)
 
+	const hostedClusterUUID = "88888888-8888-8888-8888-888888888888"
+	// The hosted cluster registers as its own cluster row (it is a source),
+	// so an openshift.cluster grant for it resolves to a non-empty scope.
+	_, err := database.GetPool().Exec(ctx, `INSERT INTO clusters (tenant_id, org_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $2, $1, 'reader-scope-hc', 'src-rs-hc', now()) ON CONFLICT DO NOTHING`, hostedClusterUUID, testutil.TestOrgID)
+	require.NoError(t, err)
+
+	// A-only (management A): no B advisories, no B-hosted advisories.
 	resp := readerScopeJSON(t, readerClusterAPerms(), "/api/cost-management/v1/recommendations/openshift/hcp/advisories")
 	data, _ := resp["data"].([]interface{})
 	assert.Empty(t, data, "A-only must not receive cluster B's management advisory (pre-fix: served)")
 
+	// HC grant only (the hosted cluster, NOT its management cluster): sees
+	// that HC's advisory (#791 — pre-fix: nothing).
+	status, body := readerScopeGET(t, map[string][]string{"openshift.cluster": {hostedClusterUUID}},
+		"/api/cost-management/v1/recommendations/openshift/hcp/advisories")
+	require.Equal(t, http.StatusOK, status, "body: %s", body)
+	resp = readerScopeJSON(t, map[string][]string{"openshift.cluster": {hostedClusterUUID}},
+		"/api/cost-management/v1/recommendations/openshift/hcp/advisories")
+	data, _ = resp["data"].([]interface{})
+	assert.Len(t, data, 1,
+		"an HC grant alone must see that HC's advisory (#791 owner policy; pre-fix: none)")
+
+	// Management grant: sees its own AND all its HCs' advisories.
+	resp = readerScopeJSON(t, map[string][]string{"openshift.cluster": {readerClusterB}},
+		"/api/cost-management/v1/recommendations/openshift/hcp/advisories")
+	data, _ = resp["data"].([]interface{})
+	assert.Len(t, data, 2,
+		"a management grant sees the management advisory and all its HCs' advisories")
+
+	// Unrelated grant: neither.
+	resp = readerScopeJSON(t, map[string][]string{"openshift.cluster": {"77777777-7777-7777-7777-777777777777"}},
+		"/api/cost-management/v1/recommendations/openshift/hcp/advisories")
+	data, _ = resp["data"].([]interface{})
+	assert.Empty(t, data, "an unrelated grant sees no advisories")
+
+	// Wildcard: all.
 	resp = readerScopeJSON(t, map[string][]string{"*": {}}, "/api/cost-management/v1/recommendations/openshift/hcp/advisories")
 	data, _ = resp["data"].([]interface{})
-	assert.Len(t, data, 1, "wildcard sees the advisory")
+	assert.Len(t, data, 2, "wildcard sees the advisory")
 }
 
 // TestReaderScope_OOMTimelineAndDetails: out-of-scope resolved IDs return

@@ -179,7 +179,13 @@ func GetHCPAdvisories(c echo.Context) error {
 			"message": "unable to resolve clusters for organization",
 		})
 	} else if scoped {
-		advQuery += ` AND management_cluster_uuid::text = ANY($2)`
+		// #791 owner policy: HC grant sees that HC's advisories;
+		// management grant sees its own and all its HCs'. hc_cluster_id is
+		// the HostedControlPlane's spec.clusterID — the same identifier the
+		// hosted cluster registers under in the clusters table (identity
+		// mapping). Shared-plane advisories (empty hc_cluster_id) match
+		// nothing in ANY and stay management-gated.
+		advQuery += ` AND (management_cluster_uuid::text = ANY($2) OR hc_cluster_id::text = ANY($2))`
 		advArgs = append(advArgs, allowedClusters)
 	}
 	advQuery += `
