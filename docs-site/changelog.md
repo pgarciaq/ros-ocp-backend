@@ -140,6 +140,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and counts are applied per request, cold and warm. The pool ordering
   also gained a `cluster_uuid` tie-breaker so cap truncation is
   deterministic across clusters sharing machineset and node names.
+- **Security: resource readers ignore explicit cluster RBAC restrictions ([#752](https://github.com/pgarciaq/ros-ocp-backend/issues/752)):**
+  the PVC, quota, cluster-quota, HCP advisories and workload-types readers
+  used org scoping only, so a cluster-A-only role could enumerate cluster
+  B's storage and quota groups, advisories and workload types, read a
+  known B container's OOM timeline, and a client cluster filter
+  substituted for authorization. Every reader now resolves its
+  server-owned allowed clusters and appends an `ANY()` scope clause to
+  count/list/group/CSV queries (an empty set — settings-only or
+  explicitly-empty grants — denies). Resolved-ID detail and trend paths
+  (OOM timeline, PVC/quota/CRQ detail, quota trend) return 404
+  indistinguishable from unknown IDs (Koku's RBAC-filtered-queryset
+  convention), and quota-ID resolution itself is cluster-scoped, closing
+  a timing oracle. The data-derived tag-key catalog is cluster-scoped
+  too: a scoped empty response can no longer reveal tag keys that exist
+  elsewhere in the org.
+- **HCP advisory visibility: HC grant OR management grant ([#791](https://github.com/pgarciaq/ros-ocp-backend/issues/791)):**
+  a user granted a hosted cluster now sees that HC's advisories; a user
+  granted the management cluster sees the management cluster's advisories
+  and all its HCs'. Shared-plane advisories (no HC association) remain
+  management-gated.
 - **VM multi-file payload digest merging ([#707](https://github.com/pgarciaq/ros-ocp-backend/issues/707)):**
   VM CSV files within one payload are now digested in a single pass — a day
   split across files (row-limit splits, multi-part payloads) merges instead
