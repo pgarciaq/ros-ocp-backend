@@ -53,7 +53,34 @@ func GetSnapshotAgeDistribution(c echo.Context) error {
 
 	ctx := c.Request().Context()
 
-	query, args := buildSnapshotAgeDistributionQuery(orgID, boundaries)
+	// #753 review: this route previously bypassed every RBAC data helper —
+	// scope it to the caller's allowed clusters.
+	allowedClusters, scoped, scopeErr := snapshotDataClusterScope(ctx, orgID, get_user_permissions(c))
+	if scopeErr != nil {
+		hlog.Errorf("snapshot age distribution: cluster scope failed: %v", scopeErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to resolve clusters for organization",
+		})
+	}
+	if scoped && len(allowedClusters) == 0 {
+		numBuckets := len(boundaries) + 1
+		buckets := make([]SnapshotAgeBucket, numBuckets)
+		for i := range numBuckets {
+			buckets[i] = buildAgeBucket(i, boundaries)
+		}
+		setRecommendationNoStore(c)
+		return c.JSON(http.StatusOK, SnapshotAgeDistributionResponse{
+			Buckets: buckets,
+			Total:   0,
+		})
+	}
+
+	var clusterFilter []string
+	if scoped {
+		clusterFilter = allowedClusters
+	}
+	query, args := buildSnapshotAgeDistributionQuery(orgID, boundaries, clusterFilter)
 	rows, err := pool.Query(ctx, query, args...)
 	if err != nil {
 		hlog.Errorf("snapshot age distribution query failed: %v", err)
@@ -136,13 +163,22 @@ func parseSnapshotAgeBoundaries(raw string) ([]int, error) {
 }
 
 // buildSnapshotAgeDistributionQuery builds the SQL query for bucketing snapshot ages.
-func buildSnapshotAgeDistributionQuery(orgID string, boundaries []int) (string, []interface{}) {
+// allowedClusters is nil for unscoped queries; non-nil scopes the histogram
+// to those clusters (#753).
+func buildSnapshotAgeDistributionQuery(orgID string, boundaries []int, allowedClusters []string) (string, []interface{}) {
 	args := []interface{}{orgID}
+	clusterPred := ""
+	paramBase := 2
+	if allowedClusters != nil {
+		args = append(args, allowedClusters)
+		clusterPred = ` AND cluster_uuid::text = ANY($2)`
+		paramBase = 3
+	}
 
 	caseParts := make([]string, 0, len(boundaries)+1)
 	for i, b := range boundaries {
 		args = append(args, b)
-		caseParts = append(caseParts, fmt.Sprintf("WHEN age_days < $%d THEN %d", i+2, i))
+		caseParts = append(caseParts, fmt.Sprintf("WHEN age_days < $%d THEN %d", paramBase+i, i))
 	}
 	caseParts = append(caseParts, fmt.Sprintf("ELSE %d", len(boundaries)))
 
@@ -151,7 +187,7 @@ func buildSnapshotAgeDistributionQuery(orgID string, boundaries []int) (string, 
 		FROM (
 			SELECT CASE ` + strings.Join(caseParts, " ") + ` END AS bucket_idx
 			FROM snapshot_recommendation_sets
-			WHERE org_id = $1
+			WHERE org_id = $1` + clusterPred + `
 		) bucketed
 		GROUP BY bucket_idx
 		ORDER BY bucket_idx`

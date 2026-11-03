@@ -54,6 +54,18 @@ func GetClusterInstanceTypes(c echo.Context) error {
 		})
 	}
 
+	// #753 review: this route previously bypassed every RBAC data helper —
+	// the requested cluster must be within the caller's scope.
+	if fleetSummaryNeedsClusterFilter(get_user_permissions(c)) {
+		if allowed := filterClustersByRBAC([]string{clusterUUID.String()}, get_user_permissions(c)); len(allowed) == 0 {
+			return c.JSON(http.StatusOK, clusterInstanceTypesResponse{
+				ClusterUUID:   clusterUUID.String(),
+				InstanceTypes: []clusterInstanceTypeItem{},
+				Preferences:   clusterPreferencesSummary{},
+			})
+		}
+	}
+
 	rows, collectedAt, err := vm.ListClusterInstanceTypes(c.Request().Context(), db.GetPool(), orgID, clusterUUID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{
