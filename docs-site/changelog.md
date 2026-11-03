@@ -118,6 +118,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Security: settings-only roles no longer inherit unrestricted OpenShift data access ([#753](https://github.com/pgarciaq/ros-ocp-backend/issues/753)):**
+  data-side RBAC helpers treated an absent OpenShift grant as
+  unrestricted, so a role holding only `cost-management:settings:read`
+  or `:write` could read all infrastructure telemetry and
+  recommendations. Authorization now mirrors Koku's permission lattice
+  (resources start empty; inheritance only from an affirmative parent):
+  eligibility requires an affirmative non-empty `openshift.*` grant or a
+  wildcard — absent AND explicitly-empty grants deny with 200+empty.
+  Applied across all data helpers plus three routes that had bypassed
+  them entirely (snapshot cost-by-type, snapshot age-distribution,
+  cluster instance-types). Settings routes remain fully usable by
+  settings-only roles; no-access responses are unchanged (200 + empty).
+- **Security: fleet heatmap cache no longer serves nodes outside the caller RBAC scope ([#754](https://github.com/pgarciaq/ros-ocp-backend/issues/754)):**
+  the cache key carried only the cluster dimension, so a
+  wildcard-cluster role with a narrow `openshift.node` grant shared the
+  `org:all` entry with an unrestricted role — cache hits bypassed the
+  node filter (secret nodes served to restricted users; restricted
+  users could poison the entry with a partial view). The cache now
+  holds the org-level node pool; node RBAC scope, maxNodes truncation
+  and counts are applied per request, cold and warm. The pool ordering
+  also gained a `cluster_uuid` tie-breaker so cap truncation is
+  deterministic across clusters sharing machineset and node names.
 - **VM multi-file payload digest merging ([#707](https://github.com/pgarciaq/ros-ocp-backend/issues/707)):**
   VM CSV files within one payload are now digested in a single pass — a day
   split across files (row-limit splits, multi-part payloads) merges instead
