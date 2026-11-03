@@ -45,17 +45,27 @@ type QuotaIdentity struct {
 // ResolveQuotaKeyByID resolves the composite key (cluster_uuid, namespace, quota_name)
 // for a quota recommendation set using its deterministic UUID v5 ID.
 // Returns nil if not found or the org doesn't match.
-//
 // Primary path: O(1) indexed lookup on the persisted quota_id column.
 // Fallback path: scans rows where quota_id IS NULL (pre-backfill), which
 // self-heals after one reconcile cycle populates the column via UPSERT.
-func ResolveQuotaKeyByID(ctx context.Context, pool *pgxpool.Pool, orgID, quotaID string) (*QuotaIdentity, error) {
+// #752: both paths are cluster-scoped when allowedClusters is non-nil.
+func ResolveQuotaKeyByID(ctx context.Context, pool *pgxpool.Pool, orgID, quotaID string, allowedClusters []string) (*QuotaIdentity, error) {
 	var cu, ns, qn string
+	// #752: resolution itself is cluster-scoped (allowedClusters nil =
+	// unscoped) — indexed and fallback paths deny identically, so an
+	// out-of-scope ID and an unknown ID are indistinguishable (no timing
+	// oracle through the org-wide fallback scan).
+	scopePred := ""
+	resolveArgs := []any{orgID, quotaID}
+	if allowedClusters != nil {
+		scopePred = ` AND cluster_uuid::text = ANY($3)`
+		resolveArgs = append(resolveArgs, allowedClusters)
+	}
 	err := pool.QueryRow(ctx, `
 		SELECT cluster_uuid::text, namespace, quota_name
 		FROM quota_recommendation_sets
-		WHERE org_id = $1 AND quota_id = $2
-		LIMIT 1`, orgID, quotaID).Scan(&cu, &ns, &qn)
+		WHERE org_id = $1 AND quota_id = $2`+scopePred+`
+		LIMIT 1`, resolveArgs...).Scan(&cu, &ns, &qn)
 	if err == nil {
 		return &QuotaIdentity{ClusterUUID: cu, Namespace: ns, QuotaName: qn}, nil
 	}
@@ -65,11 +75,17 @@ func ResolveQuotaKeyByID(ctx context.Context, pool *pgxpool.Pool, orgID, quotaID
 
 	// Fallback: scan rows with NULL quota_id (pre-backfill).
 	var matched *QuotaIdentity
+	fallbackScope := ""
+	fallbackArgs := []any{orgID}
+	if allowedClusters != nil {
+		fallbackScope = ` AND cluster_uuid::text = ANY($2)`
+		fallbackArgs = append(fallbackArgs, allowedClusters)
+	}
 	fErr := database.WithHeavyStatementTimeout(ctx, pool, func(ctx context.Context, q database.QueryRower) error {
 		rows, qErr := q.Query(ctx, `
 			SELECT cluster_uuid::text, namespace, quota_name
 			FROM quota_recommendation_sets
-			WHERE org_id = $1 AND quota_id IS NULL`, orgID)
+			WHERE org_id = $1 AND quota_id IS NULL`+fallbackScope, fallbackArgs...)
 		if qErr != nil {
 			return fmt.Errorf("ResolveQuotaKeyByID fallback query: %w", qErr)
 		}

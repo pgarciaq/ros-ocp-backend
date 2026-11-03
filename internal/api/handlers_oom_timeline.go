@@ -57,6 +57,15 @@ func GetOOMTimeline(c echo.Context) error {
 		})
 	}
 
+	// #752: out-of-scope resolves are indistinguishable from not-found
+	// (Koku's queryset convention).
+	if !readerClusterAllowed(c, key.ClusterUUID) {
+		return c.JSON(http.StatusNotFound, echo.Map{
+			"status":  "not_found",
+			"message": "container not found",
+		})
+	}
+
 	startDate, endDate, err := parseOOMTimelineDateRange(c)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{

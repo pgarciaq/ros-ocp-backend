@@ -122,6 +122,15 @@ func GetQuotaRecommendationDetail(c echo.Context) error {
 		})
 	}
 
+	// #752: out-of-scope resolves are indistinguishable from not-found
+	// (after parameter validation — 400s keep precedence).
+	if !readerClusterAllowed(c, id.clusterUUID) {
+		return c.JSON(http.StatusNotFound, echo.Map{
+			"status":  "error",
+			"message": "quota recommendation not found",
+		})
+	}
+
 	pool := db.GetPool()
 	if pool == nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -275,6 +284,15 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{
 			"status":  "error",
 			"message": "cluster_uuid and cluster_quota_name are required",
+		})
+	}
+
+	// #752: out-of-scope resolves are indistinguishable from not-found
+	// (after parameter validation — 400s keep precedence).
+	if !readerClusterAllowed(c, id.clusterUUID) {
+		return c.JSON(http.StatusNotFound, echo.Map{
+			"status":  "error",
+			"message": "cluster-quota recommendation not found",
 		})
 	}
 

@@ -14,6 +14,21 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
+// quotaTrendScope resolves the caller's allowed clusters for scoped
+// quota-ID resolution (#752): an out-of-scope ID and an unknown ID must be
+// indistinguishable through the resolver itself, not just the handler guard.
+func quotaTrendScope(c echo.Context, orgID string) []string {
+	userPerms := get_user_permissions(c)
+	if !fleetSummaryNeedsClusterFilter(userPerms) {
+		return nil
+	}
+	all, err := getClustersForOrg(c.Request().Context(), orgID)
+	if err != nil {
+		return nil // resolution error surfaces as 503 via the handler's error path
+	}
+	return filterClustersByRBAC(all, userPerms)
+}
+
 // GetQuotaTrend handles GET /recommendations/openshift/quota/:quota-id/trend.
 // Returns per-day quota hard vs used values for CPU request and memory request.
 func GetQuotaTrend(c echo.Context) error {
@@ -42,7 +57,7 @@ func GetQuotaTrend(c echo.Context) error {
 
 	ctx := c.Request().Context()
 
-	key, err := model.ResolveQuotaKeyByID(ctx, pool, orgID, idStr)
+	key, err := model.ResolveQuotaKeyByID(ctx, pool, orgID, idStr, quotaTrendScope(c, orgID))
 	if err != nil {
 		hlog.Errorf("GetQuotaTrend: resolve quota key: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -51,6 +66,14 @@ func GetQuotaTrend(c echo.Context) error {
 		})
 	}
 	if key == nil {
+		return c.JSON(http.StatusNotFound, echo.Map{
+			"status":  "not_found",
+			"message": "quota recommendation not found",
+		})
+	}
+
+	// #752: out-of-scope resolves are indistinguishable from not-found.
+	if !readerClusterAllowed(c, key.ClusterUUID) {
 		return c.JSON(http.StatusNotFound, echo.Map{
 			"status":  "not_found",
 			"message": "quota recommendation not found",

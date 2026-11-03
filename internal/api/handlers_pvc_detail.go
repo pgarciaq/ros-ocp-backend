@@ -74,6 +74,15 @@ func GetPVCRecommendationDetail(c echo.Context) error {
 		})
 	}
 
+	// #752: out-of-scope resolves are indistinguishable from not-found
+	// (after parameter validation — 400s keep precedence).
+	if !readerClusterAllowed(c, id.clusterUUID) {
+		return c.JSON(http.StatusNotFound, echo.Map{
+			"status":  "not_found",
+			"message": "PVC recommendation not found",
+		})
+	}
+
 	pool := db.GetPool()
 	if pool == nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{

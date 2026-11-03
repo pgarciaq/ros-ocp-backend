@@ -34,7 +34,7 @@ func TestResolveQuotaKeyByID_IndexedPath(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	key, err := ResolveQuotaKeyByID(ctx, pool, resolveTestOrg, quotaID)
+	key, err := ResolveQuotaKeyByID(ctx, pool, resolveTestOrg, quotaID, nil)
 	require.NoError(t, err)
 	require.NotNil(t, key, "indexed path should find the row")
 	assert.Equal(t, resolveTestCluster, key.ClusterUUID)
@@ -61,7 +61,7 @@ func TestResolveQuotaKeyByID_FallbackPath(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	key, err := ResolveQuotaKeyByID(ctx, pool, resolveTestOrg, quotaID)
+	key, err := ResolveQuotaKeyByID(ctx, pool, resolveTestOrg, quotaID, nil)
 	require.NoError(t, err)
 	require.NotNil(t, key, "fallback path should find the row with NULL quota_id")
 	assert.Equal(t, resolveTestCluster, key.ClusterUUID)
@@ -75,7 +75,7 @@ func TestResolveQuotaKeyByID_NotFound(t *testing.T) {
 
 	fakeID := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
-	key, err := ResolveQuotaKeyByID(ctx, pool, resolveTestOrg, fakeID)
+	key, err := ResolveQuotaKeyByID(ctx, pool, resolveTestOrg, fakeID, nil)
 	require.NoError(t, err)
 	assert.Nil(t, key, "non-existent quota ID should return nil")
 }
@@ -97,7 +97,7 @@ func TestResolveQuotaKeyByID_WrongOrg(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	key, err := ResolveQuotaKeyByID(ctx, pool, "wrong-org", quotaID)
+	key, err := ResolveQuotaKeyByID(ctx, pool, "wrong-org", quotaID, nil)
 	require.NoError(t, err)
 	assert.Nil(t, key, "different org should not resolve the quota")
 }
