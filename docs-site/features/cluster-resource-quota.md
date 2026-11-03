@@ -179,7 +179,7 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/detail
 
 | Parameter | Example | Description |
 |-----------|---------|-------------|
-| `filter[cluster]` | UUID | Limit to one cluster |
+| `filter[cluster]` | UUID (exact) or alias (partial) | Limit to one cluster |
 | `filter[cluster_quota_name]` | `team-payments-quota` | CRQ object name (exact match) |
 | `filter[cluster_resource_quota]` | `team-payments-quota` | Alias for `filter[cluster_quota_name]` |
 | `filter[crq]` | `team-payments-quota` | Alias for `filter[cluster_quota_name]` |

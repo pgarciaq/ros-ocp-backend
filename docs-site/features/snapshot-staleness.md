@@ -69,7 +69,7 @@ Returns one row per classified VolumeSnapshot.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `filter[cluster]` | UUID | Filter by cluster (`cluster`, `cluster_uuid`) |
+| `filter[cluster]` | UUID (exact) or alias (partial) | Filter by cluster (`cluster`, `cluster_uuid`) |
 | `filter[project]` | string | Filter by namespace (`namespace`, `project`) |
 | `filter[recommendation_type]` | enum | `orphaned`, `never_restored`, `redundant`, `stale`, `managed`, `active` |
 | `limit` | int | Results per page (1–100, default 20) |
@@ -97,7 +97,7 @@ redundant snapshots (excludes **active** and **managed** from reclaimable totals
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `group_by` | enum | `project` or `namespace` (default per-namespace rollup) or `cluster` |
-| `filter[cluster]` | UUID | Filter by cluster |
+| `filter[cluster]` | UUID (exact) or alias (partial) | Filter by cluster |
 | `filter[project]` | string | Filter by namespace |
 | `filter[recommendation_type]` | enum | Same values as list |
 | `order_by` | string | `reclaimable_monthly_holding_cost_usd`, `reclaimable_restore_size_gib`, `actionable_snapshot_count`, `snapshot_count` |

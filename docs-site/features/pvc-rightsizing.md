@@ -226,7 +226,7 @@ Bracket syntax is preferred; flat ROS aliases are also accepted. See
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `filter[cluster]` | UUID | Filter by cluster (`cluster`, `cluster_uuid`) |
+| `filter[cluster]` | UUID (exact) or alias (partial) | Filter by cluster (`cluster`, `cluster_uuid`) |
 | `filter[project]` | string | Filter by namespace (`namespace`, `project`) |
 | `filter[recommendation_type]` | enum | `oversized`, `near_full`, `orphaned`, `healthy` |
 | `filter[term]` | enum | `short`, `medium`, `long` (default `medium`); aliases `short_term`, `medium_term`, `long_term` also accepted |

@@ -274,7 +274,7 @@ without access to a cluster or node see an empty list rather than partial rows.
 
 | Parameter | Description |
 |-----------|-------------|
-| `filter[cluster]` | Cluster UUID |
+| `filter[cluster]` | Cluster UUID (exact) or alias (partial, case-insensitive) |
 | `filter[node]` | Node name (exact) |
 | `filter[term]` | `short`, `medium`, `long` |
 | `filter[engine]` | `cost`, `performance` |
