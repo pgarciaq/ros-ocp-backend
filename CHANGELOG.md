@@ -73,6 +73,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Kafka parallel consumption preserves per-partition offset order ([#756](https://github.com/pgarciaq/ros-ocp-backend/issues/756)):**
+  the parallel consumer's shared job channel let a worker dequeue a higher
+  offset and win the per-partition lock before a lower offset — reordering
+  handler execution and letting a commit acknowledge messages that had not
+  processed. Each partition now has an ordered queue served by a dedicated
+  goroutine (execution and commits serial per partition by construction),
+  with cross-partition parallelism bounded by `ROS_KAFKA_WORKERS` (now a cap
+  on concurrent partition handlers, honoring the DB-connection budget). The
+  global commit mutex is removed: per-partition commits are serial by
+  construction and librdkafka commits are thread-safe.
 - **Maintained internal docs links and anchors resolve again, with a gate ([#778](https://github.com/pgarciaq/ros-ocp-backend/issues/778)):**
   the docs de-duplication pass (#748) left 130 broken links in 32 maintained
   documentation files: 21 cross-tree pointers into `docs-site/` with the wrong

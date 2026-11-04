@@ -131,59 +131,41 @@ func consumeMessagesSequentialUntilCancelled(ctx context.Context, reader kafkaRe
 	}
 }
 
-// consumeMessagesParallelUntilCancelled runs a worker pool with per-partition mutexes
-// for handler ordering. ADR-0154: Partition-scoped parallelism; offset commits must use
-// kafka.CommitMessage (serialized mutex) because librdkafka consumers are not thread-safe
-// for concurrent CommitMessage calls.
+// consumeMessagesParallelUntilCancelled routes each partition's messages to an
+// ordered queue served by a dedicated goroutine (#756, ADR-0154): handler
+// execution and commits within a partition follow offset order by
+// construction — the old shared-jobs-channel design only guaranteed mutual
+// exclusion per partition, and mutex barging let a higher offset run and
+// commit before a lower one. Cross-partition parallelism is bounded by
+// maxConcurrent (the DB-connection budget: one handler holds one connection,
+// matching the ManifestDownloadWorkers × KafkaWorkers ≤ DBMaxConns − 2
+// constraint in internal/config).
 func consumeMessagesParallelUntilCancelled(
 	ctx context.Context,
 	reader kafkaReader,
 	consumer *kafka.Consumer,
 	handler func(msg *kafka.Message, consumer_object *kafka.Consumer),
 	log *logrus.Entry,
-	workers int,
+	maxConcurrent int,
 ) {
-	jobs := make(chan *kafka.Message, workers*2)
-	var wg sync.WaitGroup
-	var partitionLocks sync.Map
+	if maxConcurrent < 1 {
+		maxConcurrent = 1
+	}
+
+	var wg sync.WaitGroup // partition goroutines
+	sem := make(chan struct{}, maxConcurrent)
+	var partitions sync.Map // partitionLockKey -> chan *kafka.Message
 	var msgCount uint64
 	batchStart := time.Now()
 
-	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for msg := range jobs {
-				lockKey := partitionLockKey(msg.TopicPartition)
-				muIface, _ := partitionLocks.LoadOrStore(lockKey, &sync.Mutex{})
-				mu := muIface.(*sync.Mutex)
-				mu.Lock()
-				func() {
-					defer mu.Unlock()
-					defer func() {
-						if r := recover(); r != nil {
-							handlerPanics.Inc()
-							log.Errorf("panic in Kafka parallel worker (partition=%s): %v\n%s",
-								msg.TopicPartition, r, debug.Stack())
-							// Commit (skip) — see rationale in wrapHandlerWithInFlight.
-							if consumer != nil {
-								if err := CommitMessage(consumer, msg); err != nil {
-									log.Errorf("unable to commit after panic recovery: %v", err)
-								}
-							}
-						}
-					}()
-					logKafkaMessageReceived(log, &msgCount, &batchStart, msg)
-					handler(msg, consumer)
-				}()
-			}
-		}()
-	}
-
-	readDone := make(chan struct{})
+	// The dispatcher reads messages and routes each to its partition's queue,
+	// spawning that partition's goroutine on first sight. On exit (ctx
+	// cancelled) it stops; the queues are closed below so the partition
+	// goroutines drain what is buffered before returning — the same
+	// drain-on-shutdown contract the shared jobs channel had.
+	dispatchDone := make(chan struct{})
 	go func() {
-		defer close(readDone)
-		defer close(jobs)
+		defer close(dispatchDone)
 		for {
 			select {
 			case <-ctx.Done():
@@ -194,23 +176,81 @@ func consumeMessagesParallelUntilCancelled(
 
 			msg, err := reader.ReadMessage(time.Second)
 			if err == nil {
+				lockKey := partitionLockKey(msg.TopicPartition)
+				qIface, loaded := partitions.LoadOrStore(lockKey, make(chan *kafka.Message, partitionQueueSize))
+				q := qIface.(chan *kafka.Message)
+				if !loaded {
+					wg.Add(1)
+					go servePartitionQueue(q, consumer, handler, log, sem, &msgCount, &batchStart, &wg)
+				}
 				select {
-				case jobs <- msg:
+				case q <- msg:
 				case <-ctx.Done():
 					return
 				}
 				continue
 			}
 			if kerr, ok := err.(kafka.Error); ok && !kerr.IsTimeout() {
-				log.Errorf("Consumer error: %v (%v)", err, msg)
+				log.Errorf("Consumer error: %v", err)
 			} else if !ok {
 				log.Errorf("Consumer unexpected error type: %T: %v", err, err)
 			}
 		}
 	}()
 
-	<-readDone
+	<-dispatchDone
+	partitions.Range(func(_, qIface any) bool {
+		close(qIface.(chan *kafka.Message))
+		return true
+	})
 	wg.Wait()
+}
+
+// partitionQueueSize bounds one partition's buffered messages. A hot partition
+// fills its queue and blocks the dispatcher's send to it (backpressure), so
+// memory stays bounded — the same head-of-line property the old shared jobs
+// channel had. Other partitions' QUEUED messages keep processing while the
+// dispatcher waits; they just stop receiving new ones until the hot partition
+// drains.
+const partitionQueueSize = 16
+
+// servePartitionQueue drains one partition's queue in offset order: execution
+// within the partition is serial by construction (#756), with the semaphore
+// bounding how many partitions run handlers at once (the DB-connection
+// budget). A panicked message is "done" for ordering purposes: recover,
+// commit (skip), and continue with the next offset — the same policy as
+// wrapHandlerWithInFlight (see the rationale there).
+func servePartitionQueue(
+	q chan *kafka.Message,
+	consumer *kafka.Consumer,
+	handler func(msg *kafka.Message, consumer_object *kafka.Consumer),
+	log *logrus.Entry,
+	sem chan struct{},
+	msgCount *uint64,
+	batchStart *time.Time,
+	wg *sync.WaitGroup,
+) {
+	defer wg.Done()
+	for msg := range q {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					handlerPanics.Inc()
+					log.Errorf("panic in Kafka partition worker (partition=%s): %v\n%s",
+						msg.TopicPartition, r, debug.Stack())
+					if consumer != nil {
+						if err := CommitMessage(consumer, msg); err != nil {
+							log.Errorf("unable to commit after panic recovery: %v", err)
+						}
+					}
+				}
+			}()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			logKafkaMessageReceived(log, msgCount, batchStart, msg)
+			handler(msg, consumer)
+		}()
+	}
 }
 
 // StartConsumer polls kafka_topic until ctx is cancelled, drains in-flight handlers, then closes the consumer.

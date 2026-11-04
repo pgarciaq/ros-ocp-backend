@@ -110,9 +110,13 @@ type Config struct {
 	// Should be no more than 1/3 of KafkaSessionTimeoutMS per Kafka documentation.
 	KafkaHeartbeatIntervalMS int `mapstructure:"ROS_KAFKA_HEARTBEAT_INTERVAL_MS"`
 
-	// KafkaWorkers is the worker pool size when ROS_KAFKA_PARALLEL is enabled (default 3).
+	// KafkaWorkers caps how many partitions run message handlers concurrently when
+	// ROS_KAFKA_PARALLEL is enabled (default 3). #756/ADR-0154: each partition's
+	// handlers run serially in offset order; this bounds parallelism ACROSS
+	// partitions. Each in-flight handler holds one DB connection.
 	KafkaWorkers int `mapstructure:"ROS_KAFKA_WORKERS"`
 	// KafkaParallel enables parallel Kafka message processing (default true).
+	// When disabled (or KafkaWorkers <= 1), messages are processed sequentially.
 	KafkaParallel bool `mapstructure:"ROS_KAFKA_PARALLEL"`
 
 	// ManifestDownloadWorkers bounds concurrent CSV file downloads within a single manifest (default 2).
