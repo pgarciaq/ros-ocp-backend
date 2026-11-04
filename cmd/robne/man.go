@@ -140,7 +140,7 @@ func pinMarkdownDates(dir string) error {
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Clean(path), updated, info.Mode().Perm()); err != nil {
+		if err := os.WriteFile(filepath.Clean(path), updated, info.Mode().Perm()); err != nil { //nolint:gosec // G703: path is a .md entry from the generator-owned output dir
 			return err
 		}
 	}
