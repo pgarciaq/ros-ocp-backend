@@ -24,7 +24,7 @@ differential test asserts. See
 
 For how decay fits into the full sizing pipeline, see
 [Recommendation Math](recommendation-math.md). For term defaults and env overrides,
-see [Configurability Reference](configurability.md#term-windows-all-plugins).
+see [Configurability Reference](../../docs-site/architecture/configurability.md#term-windows-all-plugins).
 
 ---
 
@@ -212,7 +212,7 @@ Examples:
 | `ROS_TERMS_PVC_MEDIUM_DECAY_HALFLIFE_HOURS` | 0 | PVC medium (no decay) |
 
 When an admin env var is set, tenant PUTs for that field return `422` with
-`locked_terms`. See [Configurability Reference](configurability.md#term-windows-all-plugins).
+`locked_terms`. See [Configurability Reference](../../docs-site/architecture/configurability.md#term-windows-all-plugins).
 
 ### Auto-derive behavior
 
@@ -257,7 +257,7 @@ See also: [Native engine performance audit](../performance/native-engine-audit-2
 |----------|-------|
 | [Recommendation Math](recommendation-math.md#decay-weighting) | Decay in the CPU/memory sizing pipeline |
 | [Recommendation Engines](recommendation-engines.md) | Per-plugin term defaults and thresholds |
-| [Configurability Reference](configurability.md#term-windows-all-plugins) | All term env vars and API routes |
+| [Configurability Reference](../../docs-site/architecture/configurability.md#term-windows-all-plugins) | All term env vars and API routes |
 | [ADR-0005](../adr/0005-decay-weighted-average-half-life.md) | Original decay design decision |
 | [ADR-0204](../adr/0204-continuous-hour-decay-vs-calendar-day-windows.md) | Hour-based vs calendar-day age |
 | [ADR-0288](../adr/0288-decay-weight-lookup-tables.md) | Precomputed lookup table optimization |

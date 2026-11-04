@@ -290,7 +290,7 @@ Existing schedules are preserved in the database (not deleted) so re-enabling is
 
 ### New table: `business_hours_schedules`
 
-Stores hierarchy parallel to [`snapshot_settings`](../migrations/000049_create_snapshot_tables.up.sql) (per-org configuration pattern in [`internal/engine/snapshot_settings.go`](../internal/engine/snapshot_settings.go)).
+Stores hierarchy parallel to [`snapshot_settings`](../migrations/000049_create_snapshot_tables.up.sql) (per-org configuration pattern in [`internal/engine/snapshot/snapshot_settings.go`](../internal/engine/snapshot/snapshot_settings.go)).
 
 ```sql
 CREATE TABLE business_hours_schedules (
@@ -802,7 +802,7 @@ In steady state (99.9% of API calls), recommendations are served from the precom
 6. Deploy ros-ocp-backend with feature flag optional (`ROS_BUSINESS_HOURS_ENABLED`)
 7. Update cost-onprem-chart Helm values to enable BH env vars
 8. No automatic backfill — operators/customers trigger re-ship after configuring schedules
-9. Document in upgrade runbook ([`docs-site/operations/upgrade-runbook.md`](docs-site/operations/upgrade-runbook.md))
+9. Document in upgrade runbook ([`../docs-site/operations/upgrade-runbook.md`](../docs-site/operations/upgrade-runbook.md))
 
 ### Deploy Order (Three Repos)
 
@@ -933,7 +933,7 @@ Decisions from design review (2026-05-22). Each item references the review quest
 **Rationale:**
 
 - Intra-day digests already use `ComputeDigest` → `percentileFromSorted` with **nearest-lower-rank** selection (`idx = floor(pct × (n-1))`), matching the “not interpolated” contract in [`recommendation-math.md`](architecture/recommendation-math.md).
-- Inter-day combination uses [`WeightedPercentile`](../internal/engine/decay.go), which is a **decay-weighted average of pre-computed daily percentiles** (not a true percentile across raw samples — see audit note #238). Business hours does not change that path.
+- Inter-day combination uses [`WeightedPercentile`](../librobne/types/decay.go), which is a **decay-weighted average of pre-computed daily percentiles** (not a true percentile across raw samples — see audit note #238). Business hours does not change that path.
 - `go.mod` has no dedicated stats package; only indirect `gonum.org/v1/gonum/stat` via `go-gota`. A new dependency is unnecessary for ~96 samples per group.
 
 **Implementation:** Add `ComputeWeightedDigest(values, weights []int64)` (or parallel `[]float64` weights) that:

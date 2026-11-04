@@ -76,7 +76,7 @@ fields from `RecommendCPU` / `RecommendMemory`.
 |-----------|-------------|-------------------|--------|
 | CPU usage percentile | P60 | P98 | [`DefaultCPUConfig()`](../../internal/engine/types.go), [`cpuConfigForProfile()`](../../internal/engine/recommend_all.go) |
 | Memory usage percentile | P95 | Max (P100) | [`DefaultMemoryConfig()`](../../internal/engine/types.go), [`memConfigForProfile()`](../../internal/engine/recommend_all.go) |
-| Adaptive margin | 1.15–1.50 (both) | 1.15–1.50 (both) | [`margin.go`](../../internal/engine/margin.go) |
+| Adaptive margin | 1.15–1.50 (both) | 1.15–1.50 (both) | [`margin.go`](../../librobne/types/margin.go) |
 | Limit multiplier | 1.05× request | 1.05× request | [`types.go`](../../internal/engine/types.go) |
 | CPU floor | 25 millicores | 25 millicores | [`types.go`](../../internal/engine/types.go) |
 | OOM bump | `min(1.60, 1.0 + 0.15 × log₂(1 + OOMCount))` | same | [`recommend_memory.go`](../../internal/engine/recommend_memory.go) |
@@ -447,7 +447,7 @@ kube-apiserver, konnectivity, …) take floors derived from the window-median
 request P50 — floors only ever raise recommendations, never lower or exclude
 rows — and replica optimization is suppressed (operators own control-plane
 topology). Rules and the workload-inventory pin live in
-[`librobne/hcp`](librobne/hcp/inventory.go);
+[`librobne/hcp`](../../librobne/hcp/inventory.go);
 serving carries `hosted_cluster_id` association with fail-closed semantics.
 
 Two HCP-specific mechanisms are **not** sizing engines:
@@ -456,17 +456,17 @@ Two HCP-specific mechanisms are **not** sizing engines:
   hosted API pain with management-plane stress. Advisory-only; it never
   modifies recommendations. Policy via `/settings/hcp-correlation`.
 - **Fleet-capacity advisory (W4)** — the published-sizing model
-  ([`librobne/hcp` capacity](librobne/hcp/capacity.go)):
+  ([`librobne/hcp` capacity](../../librobne/hcp/capacity.go)):
   five scenarios (`request`, `low/average/medium/high_qps`) computed from
   eligible worker allocatable capacity, hosted-cluster occupancy, and QPS
   baselines, with MCE capacity gauges as a separately labeled reference.
   Headroom is withheld (null) when occupancy, placement, or QPS is unknown or
   when node pressure is affirmed. Serve-time derivation (freshness window,
   warnings, scenario status) is shared with the robne CLI in
-  [`librobne/hcp/serve.go`](librobne/hcp/serve.go).
+  [`../../librobne/hcp/serve.go`](../../librobne/hcp/serve.go).
 
-Design: [ADR-0334](docs/adr/0334-fleet-admission-headroom-w4.md) (amended).
-Consumer contract: [Hosted Control Plane Recommendations](features/hosted-control-plane.md).
+Design: [ADR-0334](../adr/0334-fleet-admission-headroom-w4.md) (amended).
+Consumer contract: [Hosted Control Plane Recommendations](../../docs-site/features/hosted-control-plane.md).
 
 ---
 

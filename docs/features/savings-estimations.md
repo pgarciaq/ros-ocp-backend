@@ -22,7 +22,7 @@ ROS computes per-workload monthly savings estimates by comparing current resourc
 
 ## Architecture
 
-See [cost-integration.md](../docs-site/architecture/cost-integration.md) for formulas, rate resolution chain, fleet aggregation, and recalculation design.
+See [cost-integration.md](../../docs-site/architecture/cost-integration.md) for formulas, rate resolution chain, fleet aggregation, and recalculation design.
 
 ## Public Documentation
 

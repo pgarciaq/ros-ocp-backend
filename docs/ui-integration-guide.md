@@ -13,5 +13,5 @@ commit `440efc95`).
 
 **Rule for agents:** UI-contract fact edits go to the docs-site page only; do
 not restore duplicated content here. The pair still appears in
-[docs-site-sync.md](../agents/docs-site-sync.md) so `make docs-sync-check`
+[docs-site-sync.md](agents/docs-site-sync.md) so `make docs-sync-check`
 keeps both files present.

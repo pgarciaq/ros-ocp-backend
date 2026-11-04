@@ -1,13 +1,19 @@
 name: Docs lint
 
-# docs-site relative-link linter (#419). Hard-fail once escape backlog cleared.
+# Two gates:
+#   check-docs-lint.sh       docs-site relative links + Class A stamps (#419)
+#   check-internal-links.sh  docs/** and root guides: relative links and
+#                            GitHub heading anchors (#778)
 on:
   pull_request:
     paths:
       - 'docs-site/**'
-      - 'docs/known-issues.md'
+      - 'docs/**'
+      - 'README.md'
       - 'CONTRIBUTING.md'
+      - 'AGENTS.md'
       - 'scripts/check-docs-lint.sh'
+      - 'scripts/check-internal-links.sh'
       - 'scripts/generate-docs.sh'
       - 'scripts/check-generated-docs.sh'
       - '.github/workflows/docs-lint.yml'
@@ -16,9 +22,12 @@ on:
     branches: [main, 'pgarciaq-rosocp-superpowers-*']
     paths:
       - 'docs-site/**'
-      - 'docs/known-issues.md'
+      - 'docs/**'
+      - 'README.md'
       - 'CONTRIBUTING.md'
+      - 'AGENTS.md'
       - 'scripts/check-docs-lint.sh'
+      - 'scripts/check-internal-links.sh'
       - 'scripts/generate-docs.sh'
       - 'scripts/check-generated-docs.sh'
       - '.github/workflows/docs-lint.yml'
@@ -36,3 +45,6 @@ jobs:
 
       - name: Docs lint (strict)
         run: ./scripts/check-docs-lint.sh
+
+      - name: Internal docs links (strict)
+        run: ./scripts/check-internal-links.sh

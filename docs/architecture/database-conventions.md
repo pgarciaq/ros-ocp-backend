@@ -6,7 +6,7 @@ For the ERD diagram source, see [docs/database/db-schema](../database/db-schema)
 
 Related architecture docs:
 
-- [requirements.md](requirements.md) — REQ-2.4/2.5 JSONB elimination and relational columns
+- [requirements.md](../../docs-site/architecture/requirements.md) — REQ-2.4/2.5 JSONB elimination and relational columns
 - [operations/query-performance.md](../operations/query-performance.md) — indexing and list-query patterns
 - [migrations/README.md](../../migrations/README.md) — migration best practices
 

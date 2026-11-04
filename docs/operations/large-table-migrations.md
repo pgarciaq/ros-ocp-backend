@@ -40,4 +40,4 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ros_nr_org_cluster_node_term
 - [ ] Run `./rosocp db migrate up`
 - [ ] Confirm migration logs show skip/no-op for pre-created indexes
 
-See also [`migrations/README.md`](../migrations/README.md) for historical per-migration notes (000045, 000061, 000079, 000080).
+See also [`migrations/README.md`](../../migrations/README.md) for historical per-migration notes (000045, 000061, 000079, 000080).

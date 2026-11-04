@@ -118,7 +118,7 @@ These appear on namespace and ClusterResourceQuota digests as `object_count_hard
 Object-count quotas are **visibility and alerting only** in ROS: they help operators see
 admission pressure on object totals, not FinOps dollar impact from quota tightening.
 
-Implementation: [`quota_notifications.go`](../../internal/engine/quota_notifications.go),
+Implementation: [`quota_notifications.go`](../../librobne/quota/notifications.go),
 [`recommend_quota.go`](../../librobne/quota/recommend.go) (`ObjectCountBP` only).
 
 ### Pod capacity freed
@@ -177,7 +177,7 @@ Thresholds resolve in three tiers (same pattern as idle detection settings):
 | `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `90` | `raise` recommendation and `high` risk when max utilization ≥ 90% of hard |
 | `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `70` | `medium` risk when utilization ≥ 70% and below high threshold |
 
-See [configurability.md](../architecture/configurability.md#resourcequota) and
+See [configurability.md](../../docs-site/architecture/configurability.md#resourcequota) and
 [operations/configuration.md](../operations/configuration.md).
 
 Enable the plugin via `ROS_ENABLED_PLUGINS` (included in native defaults; omit `quota`
@@ -260,7 +260,7 @@ settings, notification codes **70–73**, detail `history[]`). Dedicated **koku-
 deferred (large effort; ResourceQuota status report item 9). Planned scope: quota list with
 utilization/risk/savings, detail breakdown, ClusterResourceQuota aggregate view, notification
 integration, and historical trend charts. See [docs-site UI guide](../../docs-site/ui-integration-guide.md#4b-resourcequota-and-clusterresourcequota-recommendations)
-and [known issues](../archive/feature-status-archive.md#deferred-quota-ui).
+and [known issues](../archive/feature-status-archive.md#deferred-quota-detail-ui-historical).
 
 ### Operator / engine gaps (namespace quota)
 
@@ -320,4 +320,4 @@ pod_quota_savings = pods_freed × cost_per_pod_slot
 - [Plugin Execution Phases](../architecture/plugin-phases.md) — phase and priority table
 - [REQ-8.4](../archive/requirements.md) — requirements traceability
 - [ClusterResourceQuota recommendations](cluster-resource-quota.md) — `cluster-quota` plugin
-- [Known issues](../docs-site/known-issues.md) — ClusterResourceQuota and remaining gaps
+- [Known issues](../../docs-site/known-issues.md) — ClusterResourceQuota and remaining gaps

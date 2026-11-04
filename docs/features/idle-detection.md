@@ -58,7 +58,7 @@ rows already in memory (no second DB pass).
   zombie counts as idle); otherwise **active**. Plugin **priority** guarantees
   `container` (10) and `gpu` (20) run before `namespace` (90).
 
-Legacy [`DetectIdle()`](../../internal/engine/detect_idle.go) remains for the inline
+Legacy [`DetectIdle()`](../../librobne/types/detect_idle.go) remains for the inline
 decay-window idle check. [`ClassifyIdleState()`](../../internal/engine/idle_classification.go)
 is the single source of truth for idle/zombie classification. The early zombie path detects
 all-zero-usage containers immediately (regardless of observation days), while the full
@@ -132,7 +132,7 @@ classification only runs after sufficient calendar coverage (two full weekends).
 - `cpu_utilization_p95` = P95 daily CPU usage (millicores) ÷ current CPU request (millicores)
 - `mem_utilization_p95` = P95 daily memory usage (bytes) ÷ current memory request (bytes)
 - P95 and peak are computed from digest rows in the observation window (same data as
-  [`MultiWeightedPercentileWithExtras()`](../../internal/engine/decay.go); idle logic
+  [`MultiWeightedPercentileWithExtras()`](../../librobne/types/decay.go); idle logic
   may use unweighted P95 for classification stability — implementer choice, document in code)
 
 **Mapping from today:**
@@ -158,13 +158,13 @@ Uses existing GPU basis-point metrics from operator reports (see
 | **active** | Otherwise | — |
 
 Savings for idle GPUs follow existing API pattern: full `gpu_cost_per_month` per
-[Cost Integration — GPU savings](../docs-site/architecture/cost-integration.md#gpu-savings).
+[Cost Integration — GPU savings](../../docs-site/architecture/cost-integration.md#gpu-savings).
 
-**Implementation (Phase 4):** [`ClassifyGPUIdleFromDigests()`](../../internal/engine/gpu_idle_classification.go)
+**Implementation (Phase 4):** [`ClassifyGPUIdleFromDigests()`](../../internal/engine/gpu/idle_classification.go)
 runs inside [`RecommendGPUWithSettings()`](../../librobne/gpu/recommend.go) when
 GPU recommendations are computed from `gpu_container_digests`. Results persist on
 `recommendation_sets` (`gpu_idle_state`, `gpu_idle_since`, `gpu_idle_duration_days`,
-`estimated_monthly_gpu_waste`) via [`StoreGPUClassifications()`](../../internal/engine/gpu_query.go)
+`estimated_monthly_gpu_waste`) via [`StoreGPUClassifications()`](../../internal/engine/gpu/query.go)
 after container recommendations are written (GPU plugin `HookAfterCSVTypes` + report processor).
 
 ### PVCs
@@ -813,9 +813,9 @@ until Phase 2 validation completes.
 
 - [Savings estimations](../../docs-site/features/savings-estimations.md)
 - [Configurable thresholds](../../docs-site/features/configurable-thresholds.md)
-- [Cost integration](../docs-site/architecture/cost-integration.md)
+- [Cost integration](../../docs-site/architecture/cost-integration.md)
 - [Container recommendations](../../docs-site/features/container-recommendations.md)
 - [Public feature page](../../docs-site/features/idle-detection.md)
 - Inline classifier: [`idle_classification.go`](../../internal/engine/idle_classification.go)
-- Legacy notification helpers: [`detect_idle.go`](../../internal/engine/detect_idle.go),
+- Legacy notification helpers: [`detect_idle.go`](../../librobne/types/detect_idle.go),
   [`notifications.go`](../../internal/engine/notifications.go)

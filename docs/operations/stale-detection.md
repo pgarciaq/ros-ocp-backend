@@ -62,7 +62,7 @@ active composite keys are always refreshed. The 5-minute grace window prevents
 false positives from clock skew and transaction delays.
 
 This runs in both the Kafka ingestion path
-([`report_processor.go`](../../internal/processor/report_processor.go)) and the
+([`report_processor.go`](../../internal/services/report_processor.go)) and the
 threshold-recalculation path
 ([`threshold_recalculate.go`](../../internal/engine/threshold_recalculate.go)).
 

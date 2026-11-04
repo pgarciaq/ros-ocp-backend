@@ -105,7 +105,7 @@ Near-full and healthy rows do not receive positive savings. Requires migration *
 When Masu is unavailable or savings are disabled, savings are omitted/zero and notification
 code **25** (`NotifNoCostData`) is appended.
 
-Full plugin matrix and troubleshooting: [architecture/cost-integration.md](docs-site/architecture/cost-integration.md).
+Full plugin matrix and troubleshooting: [architecture/cost-integration.md](../docs-site/architecture/cost-integration.md).
 
 ## Fleet savings rollup
 
@@ -133,7 +133,7 @@ and the recommended size — but realizing that savings requires a manual migrat
 
 The API `resize_note` on oversized PVCs repeats this guidance. Near-full and
 orphaned PVC recommendations follow different actions (expand or delete). See
-[Negative savings](docs-site/architecture/cost-integration.md#negative-savings) when a
+[Negative savings](../docs-site/architecture/cost-integration.md#negative-savings) when a
 near-full recommendation implies expansion (negative savings = additional monthly cost).
 
 ## Notification Codes

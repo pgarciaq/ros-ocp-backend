@@ -3,8 +3,8 @@
 Internal analysis of how ros-ocp-backend deployment topology affects whether
 HPA and VPA recommendations can be **used** (advisory) or **applied**
 (automated actuation). HPA/VPA plugins are **deferred** — see
-[REQ-8.1](requirements.md#req-81-hpa-optimization-high--deferred) and
-[Deferred: HPA and VPA autoscaling](requirements.md#deferred-hpa-and-vpa-autoscaling).
+[REQ-8.1](../../docs-site/architecture/requirements.md#req-81-hpa-optimization-high--deferred) and
+[Deferred: HPA and VPA autoscaling](../../docs-site/architecture/requirements.md#deferred-hpa-and-vpa-autoscaling).
 
 ## Automation story at a glance
 
@@ -203,7 +203,7 @@ radius of a bad apply is high (OOM kills, HPA flapping, eviction storms).
 ROS design choices that reinforce advisory-first:
 
 - Node consolidation Tier 1 is explicitly
-  [advisory only](../../docs-site/planned-features/machineset-recommendations.md#tier-1-advisory-consolidation-with-safety-gates-shipped).
+  [advisory only](../../docs-site/planned-features/machineset-recommendations.md#tier-1--advisory-consolidation-with-safety-gates-shipped).
 - Ephemeral storage recs: "never auto-apply" (unreliable cadvisor metrics).
 - Seasonality plugin: "auto-apply advisory only in v1."
 - REQ-8.1 HPA: code **22** `HPA_ACTIVE` **suppresses** replica-count advice when
@@ -428,7 +428,7 @@ and ROS API access.
 
 ## Related docs
 
-- [requirements.md — REQ-8.1, Deferred HPA/VPA](requirements.md#deferred-hpa-and-vpa-autoscaling)
+- [requirements.md — REQ-8.1, Deferred HPA/VPA](../../docs-site/architecture/requirements.md#deferred-hpa-and-vpa-autoscaling)
 - [plugin-phases.md — hpa, vpa plugins](plugin-phases.md)
 - [machineset-recommendations.md — Tier 1–3 actuation tiers](../../docs-site/planned-features/machineset-recommendations.md#tier-overview)
 - [autoscaler-optimization.md — Tier 3 MachineAutoscaler](../../docs-site/planned-features/autoscaler-optimization.md)

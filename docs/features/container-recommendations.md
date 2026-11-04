@@ -125,7 +125,7 @@ response fields (`source_id` remains empty; `cluster_alias` uses the org's
 friendly alias or falls back to the UUID). In native mode its date window also
 uses `updated_at`; Kruize-only mode retains the legacy `monitoring_end_time`
 filter. The detail alias remains unchanged. Prefer the canonical path for new
-clients; see the [public UI integration guide](../../docs-site/ui-integration-guide.md#2-recommendation-list-container-namespace)
+clients; see the [public UI integration guide](../../docs-site/ui-integration-guide.md#2-recommendation-list-container--namespace)
 for the customer-facing contract.
 
 ---
@@ -216,7 +216,7 @@ GET/PUT/DELETE .../settings/terms?recommendation_type=container
 ```
 
 Business hours (optional nested `business_hours` on engine blocks when a schedule
-applies): see [business-hours.md](business-hours.md) and
+applies): see [business-hours.md](../features-business-hours.md) and
 `GET/PUT/DELETE .../settings/business-hours`. Container and namespace utilization
 use a second Peak hours chart (`business_hours_plots` + BH request/limit).
 All-hours charts stay 24×7 usage + 24×7 rec ([#496](https://github.com/pgarciaq/ros-ocp-backend/issues/496)).
@@ -235,7 +235,7 @@ GET /api/cost-management/v1/recommendations/openshift/savings-summary?engine=cos
 
 Query `engine` (`cost` or `performance`; default `cost`) and `term` (`short`, `medium`, `long`;
 default `medium`) select which persisted engine rows are aggregated. See
-[cost-integration.md](../docs-site/architecture/cost-integration.md#fleet-savings-summary-api).
+[cost-integration.md](../../docs-site/architecture/cost-integration.md#fleet-savings-summary-api).
 
 ---
 

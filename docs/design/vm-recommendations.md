@@ -27,7 +27,7 @@ KubeVirt virtual machines on OpenShift Virtualization need right-sizing like con
 
 ### Recommendation engine (native only)
 
-VM recommendations are **always** produced by the built-in Go engine ([`recommendVM()`](../../internal/engine/vm_recommender.go)). **Kruize does not support VMs** and never will—there is no legacy Kruize VM path to gate or migrate.
+VM recommendations are **always** produced by the built-in Go engine ([`recommendVM()`](../../librobne/vm/vm_recommender.go)). **Kruize does not support VMs** and never will—there is no legacy Kruize VM path to gate or migrate.
 
 | Term | Meaning for VMs |
 |------|-----------------|
@@ -45,28 +45,28 @@ nest both under each term. Cross-cutting query syntax: [api-query-parameters.md]
 | Component | Status | Code |
 |-----------|--------|------|
 | VM CSV ingestion → `daily_vm_digests` | ✅ | [`internal/ingestion/vm_csv.go`](../../internal/ingestion/vm_csv.go), [`internal/plugins/vm/plugin.go`](../../internal/plugins/vm/plugin.go) |
-| `recommendVM()` engine | ✅ | [`internal/engine/vm_recommender.go`](../../internal/engine/vm_recommender.go) |
-| Instance type catalog + smallest-fit | ✅ | [`internal/engine/vm_instance_catalog.go`](../../internal/engine/vm_instance_catalog.go) |
-| Hypervisor disk trending (Strategy B) | ✅ | `vmDiskProjectionHypervisor()` in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
-| Guest-agent disk projection (Strategy A) | ✅ | `vmDiskProjectionGuestAgent()` in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
-| Notifications 18, 19, 37–63 | ✅ | [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go), [`vm_gpu.go`](../../internal/engine/vm_gpu.go), [`vm_placement.go`](../../internal/engine/vm_placement.go) |
-| Placement / shared storage / NUMA flags (60–63) | ✅ | [`vm_placement.go`](../../internal/engine/vm_placement.go), [`vm_pvc_correlation.go`](../../internal/engine/vm_pvc_correlation.go), [`vm_numa_check.go`](../../internal/engine/vm_numa_check.go) |
-| GPU classification + `gn1` matching + notifications 50–53 | ✅ | [`internal/engine/vm_gpu.go`](../../internal/engine/vm_gpu.go), API filters `has_gpu` / `gpu_classification` |
-| Abandoned detection (zero usage) | ✅ | [`internal/engine/vm_detect_abandoned.go`](../../internal/engine/vm_detect_abandoned.go) |
+| `recommendVM()` engine | ✅ | [`librobne/vm/vm_recommender.go`](../../librobne/vm/vm_recommender.go) |
+| Instance type catalog + smallest-fit | ✅ | [`librobne/vm/vm_instance_catalog.go`](../../librobne/vm/vm_instance_catalog.go) |
+| Hypervisor disk trending (Strategy B) | ✅ | `vmDiskProjectionHypervisor()` in [`vm_recommender.go`](../../librobne/vm/vm_recommender.go) |
+| Guest-agent disk projection (Strategy A) | ✅ | `vmDiskProjectionGuestAgent()` in [`vm_recommender.go`](../../librobne/vm/vm_recommender.go) |
+| Notifications 18, 19, 37–63 | ✅ | [`librobne/vm/vm_notifications.go`](../../librobne/vm/vm_notifications.go), [`vm_gpu.go`](../../librobne/vm/vm_gpu.go), [`vm_placement.go`](../../librobne/vm/vm_placement.go) |
+| Placement / shared storage / NUMA flags (60–63) | ✅ | [`vm_placement.go`](../../librobne/vm/vm_placement.go), [`vm_pvc_correlation.go`](../../librobne/vm/vm_pvc_correlation.go), [`vm_numa_check.go`](../../librobne/vm/vm_numa_check.go) |
+| GPU classification + `gn1` matching + notifications 50–53 | ✅ | [`librobne/vm/vm_gpu.go`](../../librobne/vm/vm_gpu.go), API filters `has_gpu` / `gpu_classification` |
+| Abandoned detection (zero usage) | ✅ | [`librobne/vm/vm_detect_abandoned.go`](../../librobne/vm/vm_detect_abandoned.go) |
 | List/detail API | ✅ | [`internal/api/handlers_vm_recs.go`](../../internal/api/handlers_vm_recs.go) |
-| Settings + terms API | ✅ | [`internal/api/handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go), [`internal/engine/vm_settings.go`](../../internal/engine/vm_settings.go) |
+| Settings + terms API | ✅ | [`internal/api/handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go), [`internal/engine/vm/vm_settings.go`](../../internal/engine/vm/vm_settings.go) |
 | Operator Strategy 3 dual-CSV | ✅ | koku-metrics-operator (`ros-openshift-vm-usage`, `cm-openshift-vm-usage`, `ros-openshift-vm-gpu-device`) |
 | OpenAPI spec (VM list/detail/history/settings) | ✅ | [`openapi.json`](../../openapi.json) |
-| Savings ($) in API | ✅ | [`vm_savings.go`](../../internal/engine/vm_savings.go), `estimated_monthly_savings` on list/detail |
-| `current_instance_type` catalog match | ✅ | [`RecognizeInstanceTypeExact()`](../../internal/engine/vm_instance_catalog.go) in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
-| CPU adaptive margin (CV-based) | ✅ | [`ComputeAdaptiveMarginFromCV()`](../../internal/engine/vm_adaptive_margin.go), `ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED` |
-| vGPU MIG / time-slicing recommendations | ✅ | [`vm_gpu.go`](../../internal/engine/vm_gpu.go), [`RecommendVMTimeSlicing()`](../../internal/engine/vm_gpu_timeslicing.go), [`OptimalMIGProfile()`](../../internal/engine/vm_mig_optimal.go) |
-| Multi-GPU per-device analysis (notification **54**) | ✅ | `gpu_devices` JSONB on digests, [`analyzeVMGPU()`](../../internal/engine/vm_gpu.go) |
+| Savings ($) in API | ✅ | [`vm_savings.go`](../../internal/engine/vm/vm_savings.go), `estimated_monthly_savings` on list/detail |
+| `current_instance_type` catalog match | ✅ | [`RecognizeInstanceTypeExact()`](../../librobne/vm/vm_instance_catalog.go) in [`vm_recommender.go`](../../librobne/vm/vm_recommender.go) |
+| CPU adaptive margin (CV-based) | ✅ | [`ComputeAdaptiveMarginFromCV()`](../../librobne/vm/vm_adaptive_margin.go), `ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED` |
+| vGPU MIG / time-slicing recommendations | ✅ | [`vm_gpu.go`](../../librobne/vm/vm_gpu.go), [`RecommendVMTimeSlicing()`](../../librobne/vm/vm_gpu_timeslicing.go), [`OptimalMIGProfile()`](../../librobne/vm/vm_mig_optimal.go) |
+| Multi-GPU per-device analysis (notification **54**) | ✅ | `gpu_devices` JSONB on digests, [`analyzeVMGPU()`](../../librobne/vm/vm_gpu.go) |
 | Disk projection window from settings | ✅ | `vmComputeDiskExpandGiB()` uses `DiskProjectionWindowDays` |
 | VM recommendation history API | ✅ | `vm_recommendation_history` table, `GET .../vms/{vm_name}/history` |
 | koku-ui VM page | ⬜ | koku-ui |
 | Per-mountpoint disk recs | ⬜ | — |
-| VirtualMachinePreference CRD | ✅ | Operator `cluster_instance_types.json`; series override in [`vm_cluster_preferences.go`](../../internal/engine/vm_cluster_preferences.go) |
+| VirtualMachinePreference CRD | ✅ | Operator `cluster_instance_types.json`; series override in [`vm_cluster_preferences.go`](../../internal/engine/vm/vm_cluster_preferences.go) |
 | Recommendation history | ✅ | Append-only `vm_recommendation_history`; `ROS_VM_REC_HISTORY_RETENTION_DAYS` (default 90) |
 | Business-hours detail nest (#486) | ✅ | Dual-write `daily_vm_digests.schedule_type`; thin nest on `GET .../vm/detail` only ([`vm_business_hours.go`](../../internal/engine/vm/vm_business_hours.go)); code **82** |
 
@@ -129,7 +129,7 @@ Confidence reflects **guest-agent stability on the latest day**, not merely whet
 
 API fields: `metadata.guest_agent_detected` (latest day ≥ 80% agent), `metadata.confidence` (`high` | `moderate` | `low` on filters).
 
-Implementation: [`DetermineVMConfidence()`](../../internal/engine/vm_recommender.go), digest field `agent_sample_count` in [`vm_digest_builder.go`](../../internal/ingestion/vm_digest_builder.go).
+Implementation: [`DetermineVMConfidence()`](../../librobne/vm/vm_recommender.go), digest field `agent_sample_count` in [`vm_digest_builder.go`](../../internal/ingestion/vm_digest_builder.go).
 
 ---
 
@@ -145,7 +145,7 @@ Implementation: [`DetermineVMConfidence()`](../../internal/engine/vm_recommender
 
 ### Instance type matching
 
-Built-in catalog in [`vm_instance_catalog.go`](../../internal/engine/vm_instance_catalog.go) (OpenShift Virtualization defaults). **GPU types (`gn1.*`) are selectable** when VM GPU metrics indicate an attached device.
+Built-in catalog in [`vm_instance_catalog.go`](../../librobne/vm/vm_instance_catalog.go) (OpenShift Virtualization defaults). **GPU types (`gn1.*`) are selectable** when VM GPU metrics indicate an attached device.
 
 | Series | API `series` value | Sizes (examples) |
 |--------|-------------------|------------------|
@@ -162,7 +162,7 @@ The GPU recommendation system uses **different sharing mechanisms and catalogs**
 | Workload | GPU sharing mechanism | Catalog(s) | Code path |
 |----------|----------------------|------------|-----------|
 | **Containers** (bare metal / virtualized pods) | MIG (`nvidia.com/mig-*`) + node time-slicing (`nvidia.com/gpu.replicas`) | [`gpu_catalog.yaml`](../../librobne/gpu/gpu_catalog.yaml) only | [`gpu_recommender.go`](../../librobne/gpu/recommend.go), [`gpu_timeslicing.go`](../../librobne/gpu/timeslicing.go) |
-| **OpenShift Virtualization VMs** | MIG + vGPU profiles (`grid_*` device names) + guest time-slicing | `gpu_catalog.yaml` + [`vgpu_profiles.yaml`](../../librobne/gpu/vgpu_profiles.yaml) | [`vm_gpu.go`](../../internal/engine/vm_gpu.go), [`vm_gpu_timeslicing.go`](../../internal/engine/vm_gpu_timeslicing.go), [`vm_mig_optimal.go`](../../internal/engine/vm_mig_optimal.go) |
+| **OpenShift Virtualization VMs** | MIG + vGPU profiles (`grid_*` device names) + guest time-slicing | `gpu_catalog.yaml` + [`vgpu_profiles.yaml`](../../librobne/gpu/vgpu_profiles.yaml) | [`vm_gpu.go`](../../librobne/vm/vm_gpu.go), [`vm_gpu_timeslicing.go`](../../librobne/vm/vm_gpu_timeslicing.go), [`vm_mig_optimal.go`](../../librobne/vm/vm_mig_optimal.go) |
 | **OpenShift AI** (inference / training Pods and Jobs) | Same as containers | `gpu_catalog.yaml` only | Same as containers (`gpu` plugin) |
 
 **Shared vs VM-only catalogs**
@@ -188,7 +188,7 @@ Container time-slicing is documented in [GPU time-slicing (public)](../../docs-s
 
 ### GPU analysis
 
-When `ros-openshift-vm-usage` includes GPU columns (DCGM metrics from virt-launcher pods), ROS aggregates daily GPU utilization and classifies workloads in [`analyzeVMGPU()`](../../internal/engine/vm_gpu.go):
+When `ros-openshift-vm-usage` includes GPU columns (DCGM metrics from virt-launcher pods), ROS aggregates daily GPU utilization and classifies workloads in [`analyzeVMGPU()`](../../librobne/vm/vm_gpu.go):
 
 | Classification | Typical action | Notification |
 |----------------|----------------|--------------|
@@ -200,7 +200,7 @@ When `ros-openshift-vm-usage` includes GPU columns (DCGM metrics from virt-launc
 
 Thresholds: `ROS_VM_GPU_IDLE_THRESHOLD` (default 0.05), `ROS_VM_GPU_UNDERUTIL_THRESHOLD` (default 0.30), `ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD` (default 0.85). Frame-buffer saturation uses 90% of catalog GPU memory when `GPUFBSaturationMiB` is unset.
 
-**Time-slicing (non-MIG):** [`RecommendVMTimeSlicing()`](../../internal/engine/vm_gpu_timeslicing.go) mirrors container [`computeReplicas()`](../../librobne/gpu/timeslicing.go): peak of SM, DRAM, and frame-buffer fractions drives `recommended_time_slice_count`, with FB safety (default 80% → no time-slice), DRAM penalty (halves max replicas above 50% DRAM), MIG-capable GPUs prefer MIG over time-slice, and confidence from observation days (`high` ≥ 7 days). Optional vGPU profiles come from [`vgpu_profiles.yaml`](../../librobne/gpu/vgpu_profiles.yaml) (`recommended_vgpu_profile`). Persisted fields: `gpu_timeslice_confidence`, `gpu_timeslice_rationale`, `recommended_vgpu_profile`. Tunables via `GET/PUT /settings/vm` → `gpu` block or env: `ROS_VM_GPU_TIMESLICE_*`.
+**Time-slicing (non-MIG):** [`RecommendVMTimeSlicing()`](../../librobne/vm/vm_gpu_timeslicing.go) mirrors container [`computeReplicas()`](../../librobne/gpu/timeslicing.go): peak of SM, DRAM, and frame-buffer fractions drives `recommended_time_slice_count`, with FB safety (default 80% → no time-slice), DRAM penalty (halves max replicas above 50% DRAM), MIG-capable GPUs prefer MIG over time-slice, and confidence from observation days (`high` ≥ 7 days). Optional vGPU profiles come from [`vgpu_profiles.yaml`](../../librobne/gpu/vgpu_profiles.yaml) (`recommended_vgpu_profile`). Persisted fields: `gpu_timeslice_confidence`, `gpu_timeslice_rationale`, `recommended_vgpu_profile`. Tunables via `GET/PUT /settings/vm` → `gpu` block or env: `ROS_VM_GPU_TIMESLICE_*`.
 
 **Algorithm:**
 
@@ -220,7 +220,7 @@ When the operator includes KubeVirt network metrics on `ros-openshift-vm-usage-*
 - `net_pps_p95` — P95 of (rx + tx) packets/sec
 - `net_drop_ratio_max_bp` — max drop ratio (drops / total packets × 10 000) for the day
 
-[`vmClassifySeriesNetwork()`](../../internal/engine/vm_network_classification.go) returns true when **either**:
+[`vmClassifySeriesNetwork()`](../../librobne/vm/vm_network_classification.go) returns true when **either**:
 
 1. **Throughput:** `net_throughput_p95_bps` ≥ threshold (default **62 500 000** B/s ≈ 500 Mbps) on ≥ `network_sustained_days` (default **7**) days in the term window, **or**
 2. **PPS + drops:** `net_pps_p95` ≥ **100 000** and `net_drop_ratio_max_bp` > **10** (0.1%) on ≥ **7** sustained days.
@@ -235,7 +235,7 @@ Cluster `VirtualMachineClusterInstancetype` and `VirtualMachineClusterPreference
 
 Multi-GPU VMs store **one row per physical GPU per daily digest** in `vm_gpu_device_digests` (migration `000100`). Columns mirror the device CSV: `gpu_uuid`, `gpu_model`, utilization and frame-buffer stats (basis points / MiB), and optional MIG metadata (`mig_profile`, `max_slices`). Parent digest rows in `daily_vm_digests` keep aggregate GPU fields; normalized device rows power notification **54** (partial multi-GPU idle) and `gpu_devices` in the detail API.
 
-Ingestion: [`ForEachVMGPU()`](../../librobne/csv/parse_vm_gpu.go) via [`IngestVMGPUDeviceCSV()`](../../internal/ingestion/vm_gpu_device_db.go) (stream → merge accumulators → [`UpsertVMGPUDevices()`](../../internal/ingestion/vm_gpu_device_db.go)). API reads attach devices via [`AttachGPUDevicesToDigests()`](../../internal/engine/vm_gpu_device_db.go).
+Ingestion: [`ForEachVMGPU()`](../../librobne/csv/parse_vm_gpu.go) via [`IngestVMGPUDeviceCSV()`](../../internal/ingestion/vm_gpu_device_db.go) (stream → merge accumulators → [`UpsertVMGPUDevices()`](../../internal/ingestion/vm_gpu_device_db.go)). API reads attach devices via [`AttachGPUDevicesToDigests()`](../../internal/engine/vm/vm_gpu_device_db.go).
 
 ### `ros-openshift-vm-gpu-device` CSV (operator → ROS)
 
@@ -267,11 +267,11 @@ The operator extends `cluster_instance_types.json`:
 }
 ```
 
-ROS loads this catalog on ingest ([`UpsertClusterInstanceTypes`](../../internal/engine/vm_cluster_instance_types.go)) and applies overrides in [`RecommendVM()`](../../internal/engine/vm_recommender.go) via [`VMPreferenceContext.SeriesForVM()`](../../internal/engine/vm_cluster_preferences.go).
+ROS loads this catalog on ingest ([`UpsertClusterInstanceTypes`](../../internal/engine/vm/vm_cluster_instance_types.go)) and applies overrides in [`RecommendVM()`](../../librobne/vm/vm_recommender.go) via [`VMPreferenceContext.SeriesForVM()`](../../internal/engine/vm/vm_cluster_preferences.go).
 
 **Precedence:** `VirtualMachinePreference` class → ratio-based `vmClassifySeries()` → general-purpose fallback inside `MatchInstanceType()`.
 
-**Class → series mapping** ([`NormalizePreferenceClass()`](../../internal/engine/vm_cluster_preferences.go)):
+**Class → series mapping** ([`NormalizePreferenceClass()`](../../internal/engine/vm/vm_cluster_preferences.go)):
 
 | KubeVirt class label | ROS `series` value |
 |----------------------|-------------------|
@@ -312,7 +312,7 @@ Stricter than idle: **every** daily digest in the term window must have `cpu_usa
 
 **Precedence:** abandoned supersedes idle — a VM never has both `is_abandoned` and `is_idle`, and notification **18** is omitted when **43** applies.
 
-Algorithm: [`DetectVMAbandoned()`](../../internal/engine/vm_detect_abandoned.go) runs in [`RecommendVM()`](../../internal/engine/vm_recommender.go) before idle classification.
+Algorithm: [`DetectVMAbandoned()`](../../librobne/vm/vm_detect_abandoned.go) runs in [`RecommendVM()`](../../librobne/vm/vm_recommender.go) before idle classification.
 
 Configure via `thresholds.abandoned_min_days` (Settings API) or `ROS_VM_ABANDONED_MIN_DAYS` (env lock).
 
@@ -339,7 +339,7 @@ Strategy A runs only when **≥ 2 days** have filesystem metrics; otherwise Stra
 
 p95 read/write IOPS and throughput from digests. When read+write p95 exceeds `io.high_iops_threshold` (default 3000), sets `io_profile.hint` and notification **39**.
 
-**Sequential vs random classification** ([`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go)): peak combined BPS ÷ peak combined IOPS yields average I/O size. Below `io.min_iops_for_classification` (default 100) → `io_pattern` **`low-io`**. At or above `io.sequential_threshold_bytes` (default 64 KiB) → **`sequential`** (notification **58**). Below `io.random_threshold_bytes` (default 16 KiB) → **`random`** (notification **59**). Between those thresholds → **`mixed`**. Exposed as `io_profile.pattern` in list and detail APIs; stored in `vm_recommendations.io_pattern`.
+**Sequential vs random classification** ([`ClassifyIOPattern`](../../librobne/vm/vm_io_classification.go)): peak combined BPS ÷ peak combined IOPS yields average I/O size. Below `io.min_iops_for_classification` (default 100) → `io_pattern` **`low-io`**. At or above `io.sequential_threshold_bytes` (default 64 KiB) → **`sequential`** (notification **58**). Below `io.random_threshold_bytes` (default 16 KiB) → **`random`** (notification **59**). Between those thresholds → **`mixed`**. Exposed as `io_profile.pattern` in list and detail APIs; stored in `vm_recommendations.io_pattern`.
 
 ---
 
@@ -389,7 +389,7 @@ All notifications are JSON objects in the `notifications` array:
 | **68** | `NotifVMStorageTierIOPS` | `info` | Sustained random high IOPS — IOPS-optimized storage tier |
 | **69** | `NotifVMStorageTierThroughput` | `info` | Sustained sequential high throughput — throughput-optimized tier |
 
-Implementation: [`vm_notifications.go`](../../internal/engine/vm_notifications.go). Codes 18/19 are shared constants in [`notifications.go`](../../internal/engine/notifications.go).
+Implementation: [`vm_notifications.go`](../../librobne/vm/vm_notifications.go). Codes 18/19 are shared constants in [`notifications.go`](../../internal/engine/notifications.go).
 
 **Full catalog (all plugins, codes 1–69):** [`docs/architecture/notification-codes.md`](../architecture/notification-codes.md) (developer; VM codes **55**–**69**),
 [`docs-site/architecture/notification-codes.md`](../../docs-site/architecture/notification-codes.md) (operator).
@@ -447,15 +447,15 @@ Compiled defaults → tenant Settings API → environment variable locks (field 
 
 Term windows can also be read/written via the generic endpoint
 `GET/PUT/DELETE .../settings/terms?recommendation_type=vm` (same lock rules: type-specific `vm` lock,
-then generic `terms` lock — see [configurability.md](../architecture/configurability.md#generic-terms-lock-alignment)).
+then generic `terms` lock — see [configurability.md](../../docs-site/architecture/configurability.md#generic-terms-lock-alignment)).
 
 **Global settings lock:** When `ROS_SETTINGS_LOCKED=true` and `ROS_SETTINGS_LOCKED_VM` is true (default),
 VM settings GET responses include `settings_locked: true` and `locked_fields: ["*"]`; PUT/DELETE return
 `403`. Opt out with `ROS_SETTINGS_LOCKED_VM=false` while keeping other features frozen. Admin `ROS_VM_*`
 env vars still override compiled defaults on read. See
-[Global Settings Lock](../architecture/configurability.md#global-settings-lock).
+[Global Settings Lock](../../docs-site/architecture/configurability.md#global-settings-lock).
 
-**GET settings response shape** ([`VMSettingsResponse`](../../internal/engine/vm_settings.go)):
+**GET settings response shape** ([`VMSettingsResponse`](../../internal/engine/vm/vm_settings.go)):
 
 ```json
 {
@@ -552,7 +552,7 @@ When the platform locks VM settings, `settings_locked` is `true` and `locked_fie
 | `ROS_VM_GPU_TIMESLICE_FB_SAFETY_BP` | `8000` | `gpu.gpu_timeslice_fb_safety_threshold_bp` |
 | `ROS_VM_GPU_TIMESLICE_DRAM_PENALTY_BP` | `5000` | `gpu.gpu_timeslice_dram_penalty_threshold_bp` |
 
-Source: [`internal/config/config.go`](../../internal/config/config.go), [`internal/engine/vm_config.go`](../../internal/engine/vm_config.go). Full table: [configurability.md](../architecture/configurability.md).
+Source: [`internal/config/config.go`](../../internal/config/config.go), [`internal/engine/vm/vm_config.go`](../../internal/engine/vm/vm_config.go). Full table: [configurability.md](../architecture/configurability.md).
 
 ---
 
@@ -723,7 +723,7 @@ Detects VMs that are **mostly idle** on observed days but **not permanently idle
 
 | Signal | Implementation |
 |--------|----------------|
-| Detection | [`DetectPowerOffCandidate`](../../internal/engine/vm_power_schedule.go) — idle-day ratio ≥ `power_schedule.idle_ratio_threshold` (default 0.7) with at least one active day |
+| Detection | [`DetectPowerOffCandidate`](../../librobne/vm/vm_power_schedule.go) — idle-day ratio ≥ `power_schedule.idle_ratio_threshold` (default 0.7) with at least one active day |
 | Per-day idle | CPU/memory **P95** below Linux/Windows idle thresholds (same as notification **18**) |
 | History | ≥ `power_schedule.min_idle_days` digests (default 14) in the term window |
 | Precedence | **Abandoned (43)** supersedes power-off — zero max CPU+memory on all days → `is_abandoned`, not `is_power_off_candidate` |
@@ -744,7 +744,7 @@ Extends **n1** network-bound classification (`is_network_bound`, notification **
 | Eligibility | VM must be **network-bound** (`vmClassifySeriesNetwork` + balanced CPU:GiB ratio) |
 | SR-IOV hint (**65**) | Latest digest: drop ratio ≥ `network_qos.sriov_drop_threshold` (default 1%) **or** throughput ≥ `network_qos.sriov_throughput_bps` (default 5 Gbps) |
 | DPDK hint (**66**) | PPS ≥ `network_qos.dpdk_pps_threshold` (default 500k) **and** average packet size &lt; 256 bytes (`throughput_p95 / pps_p95`) |
-| Engine | [`EvaluateNetworkQoS`](../../internal/engine/vm_network_qos.go) — called from [`RecommendVM`](../../internal/engine/vm_recommender.go) after n1 classification |
+| Engine | [`EvaluateNetworkQoS`](../../librobne/vm/vm_network_qos.go) — called from [`RecommendVM`](../../librobne/vm/vm_recommender.go) after n1 classification |
 
 Settings: `GET/PUT /settings/vm` → `network_qos` (`enabled`, `sriov_drop_threshold`, `sriov_throughput_bps`, `dpdk_pps_threshold`). Env: `ROS_VM_NETWORK_QOS_ENABLED`, `ROS_VM_NETWORK_QOS_SRIOV_DROP_THRESHOLD`, `ROS_VM_NETWORK_QOS_SRIOV_THROUGHPUT_BPS`, `ROS_VM_NETWORK_QOS_DPDK_PPS_THRESHOLD`.
 
@@ -757,11 +757,11 @@ Pattern-based storage tier **hints** from sustained daily disk I/O on `daily_vm_
 | Signal | Implementation |
 |--------|----------------|
 | Eligibility | ≥ `storage_tiering.min_days` digests in the term window (default 7) |
-| Per-day pattern | [`classifyDigestIOPattern`](../../internal/engine/vm_storage_tiering.go) — same rules as [`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go) on one digest |
+| Per-day pattern | [`classifyDigestIOPattern`](../../librobne/vm/vm_storage_tiering.go) — same rules as [`ClassifyIOPattern`](../../librobne/vm/vm_io_classification.go) on one digest |
 | Cold tier (**67**) | ≥ `storage_tiering.cold_min_days` days classified `low-io` (default 14) |
 | IOPS-optimized (**68**) | ≥ `storage_tiering.iops_min_days` days `random` with peak IOPS &gt; `high_iops_threshold` (default 5000) |
 | Throughput-optimized (**69**) | ≥ `storage_tiering.throughput_min_days` days `sequential` with peak BPS &gt; `high_throughput_bps` (default 100 MiB/s) |
-| Engine | [`EvaluateStorageTiering`](../../internal/engine/vm_storage_tiering.go) — called from [`RecommendVM`](../../internal/engine/vm_recommender.go) on the windowed digest slice |
+| Engine | [`EvaluateStorageTiering`](../../librobne/vm/vm_storage_tiering.go) — called from [`RecommendVM`](../../librobne/vm/vm_recommender.go) on the windowed digest slice |
 
 Settings: `GET/PUT /settings/vm` → `storage_tiering` (`enabled`, `min_days`, `cold_min_days`, `iops_min_days`, `throughput_min_days`, `high_iops_threshold`, `high_throughput_bps`). Env: `ROS_VM_STORAGE_TIERING_*`.
 
@@ -899,9 +899,9 @@ Until that exists, FinOps guidance assumes compute/CUDA utilization (DCGM SM, te
 **Relationship to simplified tiering and other features**
 
 - **Simplified tiering (67–69):** multi-day *pattern* counts; no StorageClass or dollar savings.
-- **Disk I/O profiling** ([`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go), notifications **58**–**59**): single-window shape on the recommendation row; complements per-day tier hints.
+- **Disk I/O profiling** ([`ClassifyIOPattern`](../../librobne/vm/vm_io_classification.go), notifications **58**–**59**): single-window shape on the recommendation row; complements per-day tier hints.
 - **PVC plugin:** extension point for `storage_class` and provisioned capacity.
-- **Savings** ([`vm_savings.go`](../../internal/engine/vm_savings.go)): per-class rates from Koku when available.
+- **Savings** ([`vm_savings.go`](../../internal/engine/vm/vm_savings.go)): per-class rates from Koku when available.
 
 **Estimated effort:** Medium (**2–3 weeks** beyond simplified notifications, including operator and tier-map settings).
 
@@ -911,7 +911,7 @@ Until that exists, FinOps guidance assumes compute/CUDA utilization (DCGM SM, te
 
 ## Savings estimates
 
-When `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default) and `KOKU_MASU_URL` is set, [`RunVMRecommendations()`](../../internal/engine/vm_runner.go) fetches Koku [`effective_rates`](../../internal/costdata/provider.go) and [`ApplyVMSavings()`](../../internal/engine/vm_savings.go) persists `estimated_savings_cents` / `savings_currency` on each row.
+When `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default) and `KOKU_MASU_URL` is set, [`RunVMRecommendations()`](../../internal/engine/vm/vm_runner.go) fetches Koku [`effective_rates`](../../internal/costdata/provider.go) and [`ApplyVMSavings()`](../../internal/engine/vm/vm_savings.go) persists `estimated_savings_cents` / `savings_currency` on each row.
 
 **Rate selection:** CPU and memory use the **effective** configured rate — `max(cpu_core_request_per_hour, cpu_core_usage_per_hour)` and the memory GB equivalents (infrastructure + supplementary per metric). GPU uses `gpu_cost_per_month` (monthly, not hourly).
 

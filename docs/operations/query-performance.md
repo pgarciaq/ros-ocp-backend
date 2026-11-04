@@ -179,7 +179,7 @@ has no `org_id` column:
 | File | Change |
 |------|--------|
 | [`handlers_node_utilization.go`](../../internal/api/handlers_node_utilization.go) | Org filter via `node_recommendations.org_id` |
-| [`node_gpu_triples.go`](../../internal/engine/node_gpu_triples.go) | Drop `rh_accounts` join; trust RBAC-scoped cluster list |
+| [`node_gpu_triples.go`](../../internal/engine/gpu/node_gpu_triples.go) | Drop `rh_accounts` join; trust RBAC-scoped cluster list |
 | [`recommend_business_hours.go`](../../internal/engine/recommend_business_hours.go) | BH enrichment uses `QueryContainerDigestsByScheduleTypeForContainers` (page keys via `pgdigest.ForEachScheduleForContainers`) |
 | [`recommendation_set_native.go`](../../internal/model/recommendation_set_native.go) | Container list paginates `org_container_keys`; term/engine filters on detail join |
 | [`recommendation_quality.go`](../../internal/model/recommendation_quality.go) | `GetRecommendationQuality` filters `q.org_id` directly |
@@ -328,7 +328,7 @@ snapshot recommendations). Times below are from `EXPLAIN ANALYZE` after seed +
 
 ### GPU MIG (`QueryGPURecommendations`)
 
-**Path:** [`internal/engine/gpu_query.go`](../../internal/engine/gpu_query.go) →
+**Path:** [`internal/engine/gpu/query.go`](../../internal/engine/gpu/query.go) →
 [`GetGPUMIGRecommendations`](../../internal/api/handlers_gpu_mig.go)
 
 | Query | Time | Scan | Verdict |
@@ -340,7 +340,7 @@ profiles in memory. No `rh_accounts` join on the digest table.
 
 ### GPU time-slicing (`CountNodeGPUTriples` / `ListNodeGPUTriplesPage`)
 
-**Path:** [`internal/engine/node_gpu_triples.go`](../../internal/engine/node_gpu_triples.go) →
+**Path:** [`internal/engine/gpu/node_gpu_triples.go`](../../internal/engine/gpu/node_gpu_triples.go) →
 [`GetNodeRecommendations`](../../internal/api/handlers_node_recs.go)
 
 | Query | Time | Scan | Verdict |
@@ -363,7 +363,7 @@ on ingestion would cut this to a single probe.
 ### Snapshot staleness
 
 **Paths:** [`handlers_snapshot.go`](../../internal/api/handlers_snapshot.go) (list),
-[`snapshot_classify.go`](../../internal/engine/snapshot_classify.go) (classify + reconcile)
+[`snapshot_classify.go`](../../internal/engine/snapshot/snapshot_classify.go) (classify + reconcile)
 
 | Query | Time | Scan | Verdict |
 |-------|------|------|---------|

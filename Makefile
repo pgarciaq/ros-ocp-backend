@@ -278,6 +278,10 @@ docs-lint: ## Docs-site link lint (escaped/broken relative links + Class A stamp
 docs-lint-soft: ## Same as docs-lint but always exit 0 (report-only)
 	DOCS_LINT_SOFT=1 ./scripts/check-docs-lint.sh
 
+.PHONY: docs-links
+docs-links: ## Internal docs link gate: relative links and GitHub anchors in docs/** and the root guides (#778)
+	./scripts/check-internal-links.sh
+
 .PHONY: docs-build
 docs-build: ## Build the static documentation site (→ _site/); includes librobne HTML under _site/pkg/
 	mkdocs build --config-file mkdocs.yml --site-dir _site

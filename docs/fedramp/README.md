@@ -41,6 +41,6 @@ for ros-ocp-backend (Resource Optimization Service for OpenShift).
 ## Related Resources
 
 - [Adversarial Security Reviews](../audit/) — 7 rounds, 162+ findings, 100% resolution
-- [Architecture Decision Records](../architecture/adr/) — 302 ADRs documenting security trade-offs
+- [Architecture Decision Records](../adr) — 302 ADRs documenting security trade-offs
 - [Operations Guide](../operations/) — Runtime configuration and security settings
 - [GitHub Issues (fedramp label)](https://github.com/pgarciaq/ros-ocp-backend/issues?q=label%3Afedramp) — Tracking remaining remediation items

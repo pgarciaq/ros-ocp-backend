@@ -263,11 +263,11 @@ VM messages are built in [`vmBuildNotifications`](../../librobne/vm/vm_notificat
 | 62 | `NotifVMSharedStorage` | [`DetectSharedPVCs`](../../librobne/vm/vm_pvc_correlation.go) — correlated workload group (`has_shared_storage`) |
 | 63 | `NotifVMNUMAOversized` | [`CheckNUMAFit`](../../librobne/vm/vm_numa_check.go) — memory &gt; single NUMA node cap (`numa_oversized`) |
 | 64 | `NotifVMPowerOffSchedule` | [`DetectPowerOffCandidate`](../../internal/engine/vm/vm_power_schedule.go) — periodically idle VM (`is_power_off_candidate`) |
-| 65 | `NotifVMNetworkQoSSRIOV` | [`EvaluateNetworkQoS`](../../internal/engine/vm/vm_network_qos.go) — network-bound VM with high throughput or packet drops |
-| 66 | `NotifVMNetworkQoSDPDK` | [`EvaluateNetworkQoS`](../../internal/engine/vm/vm_network_qos.go) — network-bound VM with high PPS and small average packet size |
-| 67 | `NotifVMStorageTierCold` | [`EvaluateStorageTiering`](../../internal/engine/vm/vm_storage_tiering.go) — sustained minimal daily I/O (cold-storage candidate) |
-| 68 | `NotifVMStorageTierIOPS` | [`EvaluateStorageTiering`](../../internal/engine/vm/vm_storage_tiering.go) — sustained random high IOPS |
-| 69 | `NotifVMStorageTierThroughput` | [`EvaluateStorageTiering`](../../internal/engine/vm/vm_storage_tiering.go) — sustained sequential high throughput |
+| 65 | `NotifVMNetworkQoSSRIOV` | [`EvaluateNetworkQoS`](../../librobne/vm/vm_network_qos.go) — network-bound VM with high throughput or packet drops |
+| 66 | `NotifVMNetworkQoSDPDK` | [`EvaluateNetworkQoS`](../../librobne/vm/vm_network_qos.go) — network-bound VM with high PPS and small average packet size |
+| 67 | `NotifVMStorageTierCold` | [`EvaluateStorageTiering`](../../librobne/vm/vm_storage_tiering.go) — sustained minimal daily I/O (cold-storage candidate) |
+| 68 | `NotifVMStorageTierIOPS` | [`EvaluateStorageTiering`](../../librobne/vm/vm_storage_tiering.go) — sustained random high IOPS |
+| 69 | `NotifVMStorageTierThroughput` | [`EvaluateStorageTiering`](../../librobne/vm/vm_storage_tiering.go) — sustained sequential high throughput |
 | 82 | `NotifVMBHOfficeWindow` | [`EnrichVMDetailWithBusinessHours`](../../internal/engine/vm/vm_business_hours.go) — nested VM-detail `business_hours` when sizing is present (thin nest; not merged into parent array). Optimizations UI ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)): nest `message` on the Peak hours card (vCPU/GiB only) |
 
 Design detail: [`docs/design/vm-recommendations.md`](../design/vm-recommendations.md#notifications) and [placement (60–63)](../design/vm-recommendations.md#placement-correlated-workloads-and-numa-codes-6063).

@@ -45,7 +45,7 @@ perf_limit = round(perf_request × limit_multiplier)
 
 | Parameter | Cost Profile | Performance Profile | Env override |
 |-----------|-------------|---------------------|--------------|
-| Percentile | P60 | P98 | `ROS_CONTAINER_CPU_COST_PERCENTILE` / `ROS_CONTAINER_CPU_PERF_PERCENTILE` (see [Configurability](configurability.md#container)) |
+| Percentile | P60 | P98 | `ROS_CONTAINER_CPU_COST_PERCENTILE` / `ROS_CONTAINER_CPU_PERF_PERCENTILE` (see [Configurability](../../docs-site/architecture/configurability.md#container)) |
 | Min margin | 1.15 (15%) | 1.15 (15%) | `ROS_CONTAINER_MIN_MARGIN` |
 | Max margin | 1.50 (50%) | 1.50 (50%) | `ROS_CONTAINER_MAX_MARGIN` |
 | Limit multiplier | 1.05 | 1.05 | `ROS_CONTAINER_LIMIT_MULTIPLIER` |
@@ -144,7 +144,7 @@ A container is classified as **idle** when **every** digest row in the term wind
 
 Idle containers receive 100% savings estimation (recommend deallocation).
 
-Constants are defined in [`detect_idle.go`](../../librobne/types/detect_idle.go) (compiled defaults; the newer inline idle/zombie system is tenant-configurable via `/settings/idle-detection` — see [Configurability](configurability.md#idle--zombie-detection)).
+Constants are defined in [`detect_idle.go`](../../librobne/types/detect_idle.go) (compiled defaults; the newer inline idle/zombie system is tenant-configurable via `/settings/idle-detection` — see [Configurability](../../docs-site/architecture/configurability.md#idle--zombie-detection)).
 
 ## Abandoned Detection
 
@@ -157,7 +157,7 @@ Namespace recommendations aggregate container recommendations within a namespace
 - CPU/memory recommendations summed across containers
 - P60/P98/P99 percentiles computed from namespace-level digests
 - Trend slope computed from namespace aggregate usage
-- Uses the same sizing parameters as container (see [Recommendation Engine Reference](recommendation-engines.md#container-namespace-recommendations))
+- Uses the same sizing parameters as container (see [Recommendation Engine Reference](recommendation-engines.md#container--namespace-recommendations))
 
 ## Node Recommendations
 

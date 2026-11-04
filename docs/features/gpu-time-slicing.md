@@ -10,7 +10,7 @@ node × GPU model × term when the engine emits a recommendation.
 | API (detail) | `GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing/{node}` |
 | API (history) | `GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing/history` |
 | Handler | [`GetNodeRecommendations`](../../internal/api/handlers_node_recs.go) |
-| Engine | [`ComputeAndPersistNodeGPUTimeSlicingRecs`](../../internal/engine/gpu_timeslicing_persist.go) |
+| Engine | [`ComputeAndPersistNodeGPUTimeSlicingRecs`](../../internal/engine/gpu/timeslicing_persist.go) |
 | Live table | `node_gpu_timeslicing_recommendations` |
 | History table | `node_gpu_timeslicing_recommendation_history` |
 

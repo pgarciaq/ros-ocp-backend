@@ -73,6 +73,6 @@ Gated behind the `ROS_VISUAL_INSIGHTS_ENABLED` Unleash feature toggle.
 
 ## Related docs
 
-- [Recommendation engines — Node](../architecture/recommendation-engines.md#node-recommendations)
+- [Recommendation engines — Node](../architecture/recommendation-engines.md#node-cpu--memory-recommendations)
 - [MachineSet recommendations (Tier 2)](machineset-recommendations.md)
 - [Idle detection](idle-detection.md) — idle/zombie on nodes via shared settings

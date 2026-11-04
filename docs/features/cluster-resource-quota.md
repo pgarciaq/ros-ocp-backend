@@ -30,7 +30,7 @@ CRQ objects are **per cluster** — each recommendation row is `(org_id, cluster
 | **Operator** | koku-metrics-operator | PromQL on `openshift_clusterresourcequota_usage` (`type=hard` / `used`) for CPU/memory request and limit resources; emits `ros-openshift-cluster-quota-YYYYMMDD-YYYYMMDD.csv` when series exist |
 | **Listener** | Koku masu | No changes — `ros-openshift` files route to `resource_optimization_files` via existing packaging |
 | **Ingest** | [`internal/ingestion/cluster_quota.go`](../../internal/ingestion/cluster_quota.go) | `PayloadTypeClusterQuota`; `librobne/csv.ForEachClusterQuota` stream; upserts `daily_cluster_quota_digests` |
-| **Engine** | [`internal/engine/recommend_cluster_quota.go`](../../internal/engine/recommend_cluster_quota.go) | Classification reuse from namespace quota (`tighten` / `raise` / `optimal` / `none`) |
+| **Engine** | [`internal/engine/quota/recommend_cluster_quota.go`](../../internal/engine/quota/recommend_cluster_quota.go) | Classification reuse from namespace quota (`tighten` / `raise` / `optimal` / `none`) |
 | **Persistence** | [`migrations/000087_cluster_quota_recommendations.up.sql`](../../migrations/000087_cluster_quota_recommendations.up.sql) | `cluster_quota_recommendation_sets` |
 | **API** | [`internal/api/handlers_cluster_quota_recs.go`](../../internal/api/handlers_cluster_quota_recs.go) | `GET .../cluster-quota/` |
 | **Settings** | [`internal/engine/cluster_quota_settings.go`](../../internal/engine/cluster_quota_settings.go) | `GET/PUT/DELETE .../settings/cluster-quota` |
@@ -139,7 +139,7 @@ and pagination as the JSON list.
 
 ### Notification codes
 
-CRQ rows may emit codes **70–73** (shared catalog with namespace ResourceQuota except code 73 is CRQ-specific). Derivation: [`ClusterQuotaNotificationCodes`](../../internal/engine/quota_notifications.go).
+CRQ rows may emit codes **70–73** (shared catalog with namespace ResourceQuota except code 73 is CRQ-specific). Derivation: [`ClusterQuotaNotificationCodes`](../../librobne/quota/notifications.go).
 
 | Code | Name | When emitted (CRQ) |
 |------|------|-------------------|
@@ -193,7 +193,7 @@ values, and notification codes are unchanged by savings recalc.
 
 Implementation: [`internal/engine/savings_recalculate.go`](../../internal/engine/savings_recalculate.go)
 (`TestRecalculateClusterQuotaSavings_Unit`). See also
-[cost-integration.md](../docs-site/architecture/cost-integration.md#savings-recalculation-after-cost-model-changes).
+[cost-integration.md](../../docs-site/architecture/cost-integration.md#savings-recalculation-after-cost-model-changes).
 
 ---
 
@@ -267,8 +267,8 @@ ROS does not recommend lowering object-count hard values because:
 is `high`. Treat these as operational admission-pressure indicators, not dollar savings
 opportunities.
 
-Implementation: [`quota_notifications.go`](../../internal/engine/quota_notifications.go),
-[`recommend_cluster_quota.go`](../../internal/engine/recommend_cluster_quota.go) (`ObjectCountBP`
+Implementation: [`quota_notifications.go`](../../librobne/quota/notifications.go),
+[`recommend_cluster_quota.go`](../../internal/engine/quota/recommend_cluster_quota.go) (`ObjectCountBP`
 in risk classification only; no tighten/raise path for object counts).
 
 ### Savings by resource
@@ -307,7 +307,7 @@ Koku exposes a matching cost-model rate. Do not emit tighten/raise or `estimated
 for extended resources without a workload-derived target and a FinOps metric.
 
 Track alongside namespace quota extended-resource work in
-[quota-recommendations.md — Roadmap](quota-recommendations.md#roadmap-future-work).
+[quota-recommendations.md — Roadmap](quota-recommendations.md#roadmap--future-work).
 
 ---
 
@@ -316,4 +316,4 @@ Track alongside namespace quota extended-resource work in
 - [Namespace ResourceQuota recommendations](quota-recommendations.md)
 - [REQ-8.4b](../archive/requirements.md) — requirements traceability
 - [Plugin phases](../architecture/plugin-phases.md) — `cluster-quota` priority 36
-- [Known issues](../docs-site/known-issues.md) — timing and remaining gaps
+- [Known issues](../../docs-site/known-issues.md) — timing and remaining gaps

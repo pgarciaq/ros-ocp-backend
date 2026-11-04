@@ -931,4 +931,4 @@ node_recommendations ─►│ instance-type   │────►│ machineset 
 - [recommend_nodes.go](../../librobne/node/recommend.go) — `applyInstanceTypeConsolidation`
 - [requirements.md § REQ-8c.5](../archive/requirements.md#req-8c5-tier-2--machineset-right-sizing-high--not-implemented)
 - [requirements.md § REQ-8c.6](../archive/requirements.md#req-8c6-instance-type-catalog--cloud-api-integration-medium--not-implemented)
-- [cost-integration.md](../docs-site/architecture/cost-integration.md) — `effective_rates`
+- [cost-integration.md](../../docs-site/architecture/cost-integration.md) — `effective_rates`

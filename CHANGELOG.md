@@ -73,6 +73,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Maintained internal docs links and anchors resolve again, with a gate ([#778](https://github.com/pgarciaq/ros-ocp-backend/issues/778)):**
+  the docs de-duplication pass (#748) left 130 broken links in 32 maintained
+  documentation files: 21 cross-tree pointers into `docs-site/` with the wrong
+  `../` depth, 28 code links to files that moved to `librobne/` or a
+  sub-package, 16 anchors whose heading slug no longer existed, and 9 links to
+  pages that were removed or moved (129 in `docs/`, 1 in `README.md`). All 130
+  now resolve, path and anchor. Every label that spelled out an old path was
+  rewritten with its href so a link never contradicts its own text.
+  `make docs-links` runs the new `scripts/check-internal-links.sh`, which
+  resolves each relative link from its source directory, rejects links that
+  leave the repository, and checks `#fragment` anchors against **GitHub's**
+  heading slugger — the renderer that actually applies to `docs/`, which
+  `mkdocs.yml` never publishes. Point-in-time record trees (`docs/adr/`,
+  `docs/audits/`, `docs/archive/`, `docs/historical/`, `docs/issues/`,
+  `docs/plans/`, `docs/superpowers/`) stay out of scope by design.
+  `docs-lint.yml` runs the gate. No API or recommendation behavior changes.
+
 - **Native-mode container compatibility list date window ([#782](https://github.com/pgarciaq/ros-ocp-backend/issues/782)):**
   the legacy `/recommendations/openshift/container` list alias now uses the
   documented current-month `updated_at` window in native mode, matching the

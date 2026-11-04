@@ -22,10 +22,10 @@
 | [recommendation-math.md](architecture/recommendation-math.md) | Recommendation algorithms — decay weighting, adaptive margin, trend detection |
 | [gpu-classification.md](architecture/gpu-classification.md) | GPU utilization classification thresholds and MIG profile selection |
 | [gpu-catalogs.md](architecture/gpu-catalogs.md) | `gpu_catalog.yaml` / `vgpu_profiles.yaml` data sources and validation |
-| [cost-integration.md](docs-site/architecture/cost-integration.md) | **Koku integration contract** — ingestion, tags, `effective_rates`, `reship_ros`, savings recalc, formulas, plugin matrix |
+| [cost-integration.md](../docs-site/architecture/cost-integration.md) | **Koku integration contract** — ingestion, tags, `effective_rates`, `reship_ros`, savings recalc, formulas, plugin matrix |
 | [kafka-schema.md](architecture/kafka-schema.md) | Kafka message schemas between Koku and ROS |
 | [api-versioning.md](architecture/api-versioning.md) | API versioning strategy and compatibility policy |
-| [native-migration.md](docs-site/architecture/native-migration.md) | Legacy Kruize to native engine migration guide |
+| [native-migration.md](../docs-site/architecture/native-migration.md) | Legacy Kruize to native engine migration guide |
 | [plans/recommendation-explanations.md](plans/recommendation-explanations.md) | **In Progress (Phase 14)** — Typed explanation columns and `?include=explanation` API (ADR-0296) |
 | [plans/gpu-time-slicing-persistence.md](plans/gpu-time-slicing-persistence.md) | **In Progress (Phase 14)** — GPU time-slicing persistence at ingest (ADR-0297) |
 

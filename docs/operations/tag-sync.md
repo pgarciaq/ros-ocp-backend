@@ -4,7 +4,7 @@
 > The cost-onprem Helm chart defaults to `tagsSource: api` — Koku Celery workers push tags
 > to ROS over HTTP (same path as SaaS). On-prem deployments using the advanced shared-PostgreSQL
 > mode (`ROS_TAGS_SOURCE=db`) do **not** use HTTP tag sync; ROS reads Koku tenant tables
-> directly — see [tag-filtering.md](../features/tag-filtering.md#on-prem-shared-database-advanced).
+> directly — see [tag-filtering.md](../features/tag-filtering.md#on-prem-shared-database-advanced--ros_tags_sourcedb).
 
 When Koku and ROS use separate databases, Koku pushes enabled OpenShift tag keys and
 namespace-level resolved tags to ROS after settings changes, OCP summarization, and

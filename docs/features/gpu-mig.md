@@ -11,7 +11,7 @@ returns rows where `recommended_gpu_profile` is set and not `full_gpu`.
 |------|-------|
 | API | `GET /api/cost-management/v1/recommendations/openshift/gpu/mig` |
 | Handler | [`GetGPUMIGRecommendations`](../../internal/api/handlers_gpu_mig.go) |
-| Engine | [`QueryGPURecommendations`](../../internal/engine/gpu_query.go), MIG bin-pack in [`gpu_recommender.go`](../../librobne/gpu/recommend.go) |
+| Engine | [`QueryGPURecommendations`](../../internal/engine/gpu/query.go), MIG bin-pack in [`gpu_recommender.go`](../../librobne/gpu/recommend.go) |
 | Catalog | [`gpu_catalog.yaml`](../../librobne/gpu/gpu_catalog.yaml) |
 
 Uses **recommendation terms** (`short` / `medium` / `long`), not `filter[engine]=cost|performance`.
@@ -54,7 +54,7 @@ hours charts when the nest is reason-only.
 | `GET/PUT/DELETE .../settings/terms?recommendation_type=gpu` | Term windows |
 
 Defaults include `idle_threshold` (0.02), `fb_headroom_factor` (1.20), `mig_fb_percentile` (0.98).
-See [configurability](../architecture/configurability.md#gpu).
+See [configurability](../../docs-site/architecture/configurability.md#gpu).
 
 ## Notifications
 
@@ -115,7 +115,7 @@ When the `gpu` plugin is disabled, `GET .../recommendations/openshift/gpu/mig` a
 `/gpu/*` paths return **404** with `plugin 'gpu' is not enabled` (route guards), not a container
 detail 400. GPU threshold settings (`GET .../settings/gpu`) follow the same plugin gating.
 
-See [Plugin architecture](../docs-site/architecture/plugin-architecture.md) for registry, phases, and
+See [Plugin architecture](../../docs-site/architecture/plugin-architecture.md) for registry, phases, and
 trait design. Integration coverage:
 [`handlers_gpu_mig_integration_test.go`](../../internal/api/handlers_gpu_mig_integration_test.go).
 

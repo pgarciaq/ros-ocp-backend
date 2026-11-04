@@ -1271,6 +1271,38 @@ When you change Class A facts, bump the date on that page. Optional CI drift che
 Does **not** replace `make docs-drift`. One-shot rewriter used for the backlog:
 [`scripts/fix-docs-site-links.py`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/scripts/fix-docs-site-links.py).
 
+### Internal docs link gate (`make docs-links`)
+
+[`scripts/check-internal-links.sh`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/scripts/check-internal-links.sh)
+(issue #778) checks the **internal** tree — every `*.md` under `docs/` plus
+`README.md`, `CONTRIBUTING.md` and `AGENTS.md` — for:
+
+1. Relative links that do not resolve from the **source file's own directory**
+2. Links that leave the repository
+3. `#fragment` anchors with no matching heading in the target
+
+Two details differ from `make docs-lint`:
+
+1. **GitHub's slugger, not MkDocs'.** `mkdocs.yml` publishes `docs-site/` only, so
+   nothing under `docs/` is ever rendered by MkDocs; those links are resolved by
+   GitHub's Markdown renderer when a human browses the repo. The two sluggers
+   disagree on punctuation — `Idle / Zombie detection` becomes
+   `idle--zombie-detection` on GitHub and `idle-zombie-detection` under
+   Python-Markdown. Validating internal anchors with the MkDocs slugger both
+   hides real breaks and invents false ones.
+2. **Record trees are excluded on purpose.** `docs/adr/`, `docs/audits/`,
+   `docs/archive/`, `docs/historical/`, `docs/issues/`, `docs/plans/` and
+   `docs/superpowers/` hold point-in-time records: rewriting their links would
+   falsify the record, and new records would reintroduce breaks forever.
+
+Links into sibling checkouts (`~/dev/koku/koku`, `koku-metrics-operator`,
+`cost-onprem-chart`, `iqe-*`) are skipped because CI does not check them out —
+**unless** the first path component is a tree of this repository, which means one
+`../` too many and fails.
+
+`make docs-links` hard-fails; `DOCS_LINKS_SOFT=1 make docs-links` reports only.
+CI workflow `docs-lint.yml` runs the hard check.
+
 ### Generate PDF books (local only)
 
 Build **per-section PDF books** offline for ebook/reader use. PDFs are **not**
