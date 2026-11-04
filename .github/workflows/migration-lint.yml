@@ -29,11 +29,21 @@ jobs:
           fetch-depth: 0
       - name: Lint changed migrations
         run: |
-          base="${{ github.base_ref }}"
-          if [ -z "$base" ]; then
-            base="main"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            range="origin/${{ github.base_ref }}...HEAD"
+          else
+            # Push events have no base_ref; diffing origin/main...HEAD on a
+            # long-lived fork branch lints every migration ever added,
+            # defeating the "changed files only" intent. Diff the commits
+            # actually pushed instead. A new branch's first push carries an
+            # all-zeros before-SHA — fall back to the previous commit.
+            before="${{ github.event.before }}"
+            if [ -z "$before" ] || ! git cat-file -e "$before" 2>/dev/null; then
+              before="${{ github.event.sha }}~1"
+            fi
+            range="$before..${{ github.event.sha }}"
           fi
-          mapfile -t files < <(git diff --name-only "origin/$base...HEAD" -- 'migrations/*.up.sql' | grep '\.up\.sql$' || true)
+          mapfile -t files < <(git diff --name-only "$range" -- 'migrations/*.up.sql' | grep '\.up\.sql$' || true)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "migration lint: no changed migration files"
             exit 0
