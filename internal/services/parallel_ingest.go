@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	kafka_internal "github.com/redhatinsights/ros-ocp-backend/internal/kafka"
@@ -49,10 +50,10 @@ func parallelIngestFiles(
 		remaining = append(remaining, vmFamilyFile{idx: i, file: f})
 	}
 
-	// vmTransient holds a VM-family transient error (an orphaned companion,
-	// #757) so the manifest's other file families still process before it
-	// is returned to drive the retry ladder.
-	var vmTransient error
+	// groupTransient holds the first file-group transient error (a VM orphan
+	// or a container batch failure, #757/#758) so the manifest's other file
+	// groups still process before it is returned to drive the retry ladder.
+	var groupTransient error
 	if useNativeCSVIngest {
 		ingestion.EnsureIngestPartitionsForWindow(ctx, pool)
 
@@ -78,7 +79,31 @@ func parallelIngestFiles(
 					// process now — done-skipping keeps the ladder's
 					// replays cheap — and the transient error is returned
 					// afterwards to drive the orphan's retries.
-					vmTransient = tErr
+					groupTransient = tErr
+				}
+			}
+		}
+
+		// #758: the manifest's container CSVs digest in ONE batch — per-file
+		// streams replaced the same container/day digest key, so count-based
+		// producer splits lost every file but the last. The batch's staging
+		// threshold keeps memory bounded (option B, owner-approved).
+		if plugin.EnabledFor("container") {
+			containerFiles, otherFiles := partitionContainerFiles(remaining)
+			if len(containerFiles) > 0 {
+				tErr, pErr := processContainerFileBatch(ctx, pool, log, kafkaMsg, manifestID, containerFiles)
+				if pErr {
+					permanentFailed = true
+				}
+				remaining = otherFiles
+				if len(remaining) == 0 {
+					if groupTransient != nil {
+						return groupTransient, permanentFailed
+					}
+					return tErr, permanentFailed
+				}
+				if tErr != nil && groupTransient == nil {
+					groupTransient = tErr
 				}
 			}
 		}
@@ -101,7 +126,7 @@ func parallelIngestFiles(
 				permanentFailed = true
 			}
 		}
-		return vmTransient, permanentFailed
+		return groupTransient, permanentFailed
 	}
 
 	// Use errgroup with bounded concurrency. A transient error cancels remaining work
@@ -114,8 +139,8 @@ func parallelIngestFiles(
 	var firstTransient error
 	// Seed with the VM-family transient (#757): if no per-file transient
 	// occurs, it is the one returned to drive the orphan's retry ladder.
-	if vmTransient != nil {
-		transientOnce.Do(func() { firstTransient = vmTransient })
+	if groupTransient != nil {
+		transientOnce.Do(func() { firstTransient = groupTransient })
 	}
 
 	for _, f := range remaining {
@@ -297,6 +322,126 @@ func processVMFileBatch(
 			return nil, true
 		}
 		return orphanErr, false
+	}
+	return nil, permanentFailed
+}
+
+// partitionContainerFiles splits the container CSVs out of the manifest's
+// files for the digest batch (#758); everything else keeps the per-file path.
+func partitionContainerFiles(files []vmFamilyFile) (containerFiles, otherFiles []vmFamilyFile) {
+	for _, f := range files {
+		if utils.DetermineCSVType(f.file) == types.PayloadTypeContainer {
+			containerFiles = append(containerFiles, f)
+			continue
+		}
+		otherFiles = append(otherFiles, f)
+	}
+	return containerFiles, otherFiles
+}
+
+// processContainerFileBatch digests a manifest's container CSVs in ONE batch
+// (#758, #707's container analog): per-file streams computed and replaced
+// the same container/day digest key, so count-based producer splits lost
+// every file but the last. Files are marked done only after a successful
+// Flush; the batch's staging threshold bounds memory (option B).
+func processContainerFileBatch(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	log *logrus.Entry,
+	kafkaMsg types.KafkaMsg,
+	manifestID string,
+	containerFiles []vmFamilyFile,
+) (transientErr error, permanentFailed bool) {
+	batch, err := ingestion.NewContainerDigestBatch(ctx, pool, kafkaMsg.Metadata.Org_id, kafkaMsg.Metadata.Cluster_uuid, manifestID, ingestion.ParseDigestOptions{
+		EnableGPU:  plugin.EnabledFor("gpu"),
+		EnableNode: plugin.EnabledFor("node"),
+	})
+	if err != nil {
+		// Schedule-cache load / staging-cleanup failure is environmental.
+		log.Errorf("container batch setup failed: %v", err)
+		return err, false
+	}
+
+	// The per-file plugin dispatch is bypassed (#707/#757 precedent): the
+	// container plugin's IngestCSV returns no rows, so its AfterIngest hooks
+	// are no-ops; the hooks-failed flag is cleared after the flush to match
+	// the dispatch's behavior.
+	// Crash-window correctness (#758 review finding): done-marking is
+	// per-file, but a retry that skips done files individually would digest
+	// only the un-done subset and REPLACE the complete distribution. Skip
+	// only when EVERY batch file is done; any un-done file re-processes the
+	// whole set (upserts are idempotent).
+	allDone := true
+	for _, f := range containerFiles {
+		filename := filenameForFileIndex(kafkaMsg, f.file, f.idx)
+		if !shouldSkipProcessedFile(ctx, pool, manifestID, filename) {
+			allDone = false
+			break
+		}
+	}
+	if allDone {
+		log.Infof("skipping fully-processed container batch for manifest %s (%d files)",
+			manifestID, len(containerFiles))
+		return nil, false
+	}
+
+	var succeeded []string
+	for _, f := range containerFiles {
+		if err := ctx.Err(); err != nil {
+			return err, false
+		}
+		filename := filenameForFileIndex(kafkaMsg, f.file, f.idx)
+		markFileProcessing(ctx, pool, log, kafkaMsg, filename, string(types.PayloadTypeContainer))
+		err := func() error {
+			var body io.ReadCloser
+			if err := metrics.ObservePhase(metrics.PhaseDownload, func() error {
+				var err error
+				body, err = utils.ReadCSVBodyFromUrl(f.file)
+				return err
+			}); err != nil {
+				csvFetchError.Inc()
+				return fmt.Errorf("fetch container CSV: %w", err)
+			}
+			defer func() { _ = body.Close() }()
+			return metrics.ObservePhase(metrics.PhaseParseDigest, func() error {
+				_, err := batch.AddFile(ctx, body)
+				return err
+			})
+		}()
+		if err != nil {
+			if isTransientKafkaProcessingError(err) {
+				return err, false
+			}
+			handlePermanentFileError(ctx, pool, log, kafkaMsg, filename, string(types.PayloadTypeContainer), err)
+			permanentFailed = true
+			continue
+		}
+		succeeded = append(succeeded, filename)
+	}
+
+	if err := batch.Flush(ctx); err != nil {
+		if isTransientKafkaProcessingError(err) {
+			return err, false
+		}
+		// Permanent flush failure fails the whole batch's succeeded files:
+		// none were marked done, and their data did not land.
+		for _, filename := range succeeded {
+			handlePermanentFileError(ctx, pool, log, kafkaMsg, filename, string(types.PayloadTypeContainer), err)
+		}
+		return nil, true
+	}
+	for _, filename := range succeeded {
+		markFileDone(ctx, pool, log, manifestID, filename)
+	}
+	// Mirror the plugin dispatch's post-ingest flag clearing (the hooks are
+	// no-ops on the container path — see the bypass comment above). Only
+	// when files actually ingested: an all-done replay runs no plugin, and
+	// clearing unconditionally could hide a later hook failure (#758 review
+	// finding).
+	if len(succeeded) > 0 {
+		if err := engine.SetClusterIngestHooksFailed(ctx, pool, kafkaMsg.Metadata.Org_id, kafkaMsg.Metadata.Cluster_uuid, false); err != nil {
+			log.Warnf("unable to clear ingest_hooks_failed: %v", err)
+		}
 	}
 	return nil, permanentFailed
 }

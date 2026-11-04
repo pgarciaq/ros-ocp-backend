@@ -73,6 +73,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **A manifest's container files build one daily distribution per container ([#758](https://github.com/pgarciaq/ros-ocp-backend/issues/758)):**
+  each container CSV was digested through its own stream with a
+  full-replacement upsert per container/day, so count-based producer splits
+  lost every file's samples but the last (two files with 08:00=2000m and
+  09:00=100m produced `sample_count=1, max=100`). The manifest's container
+  files now stream into one shared batch whose digests compute once from the
+  union of samples — complete percentiles, order-independent, replay
+  idempotent, with cross-payload replacement preserved. Memory stays bounded
+  by a staging threshold: past it, raw samples stage to a per-manifest
+  scratch table and the finalize computes per key, streaming — the opt-in
+  flush-batch mode's mid-file boundary loss is fixed for batched files too.
 - **VM companions persist before their files are marked done ([#757](https://github.com/pgarciaq/ros-ocp-backend/issues/757)):**
   PVC and GPU-device companion CSVs were ingested per-file during batch
   collection while their usage parents only existed after the flush — so for

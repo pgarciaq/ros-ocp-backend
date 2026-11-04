@@ -22,7 +22,7 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-const latestMigrationVersion uint = 216
+const latestMigrationVersion uint = 217
 
 // openDedicatedTestGORM gives migration tests a GORM handle bound to their
 // private container pool. OpenTestGORM is intentionally process-singleton and
