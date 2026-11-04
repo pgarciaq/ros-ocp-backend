@@ -12,8 +12,10 @@ on:
       - 'openapi.json'
       - 'mkdocs.yml'
       - 'CONTRIBUTING.md'
+      - 'CHANGELOG.md'
       - '.github/workflows/docs.yml'
       - 'scripts/generate-docs.sh'
+      - 'scripts/check-generated-docs.sh'
       - 'scripts/generate-librobne-docs.sh'
       - 'scripts/check-docs-drift.sh'
       - '.github/workflows/docs-drift.yml'
@@ -45,8 +47,8 @@ jobs:
       - name: Install mkdocs-material
         run: pip install mkdocs-material mkdocs-section-index mkdocs-git-revision-date-localized-plugin mkdocs-macros-plugin
 
-      - name: Assemble known-issues and contributing copies
-        run: ./scripts/generate-docs.sh
+      - name: Assemble generated docs and verify committed pages are not overwritten
+        run: ./scripts/check-generated-docs.sh
 
       - name: Install ripgrep
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
@@ -56,6 +58,9 @@ jobs:
 
       - name: Build documentation site
         run: mkdocs build --config-file mkdocs.yml --site-dir _site
+
+      - name: Verify the rendered Known Limitations page
+        run: ./scripts/check-generated-docs.sh --site-dir _site
 
       - name: Generate librobne API HTML (doc2go)
         run: ./scripts/generate-librobne-docs.sh _site/pkg

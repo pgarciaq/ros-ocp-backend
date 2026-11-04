@@ -31,7 +31,7 @@ Expected differences (do **not** “fix” by wholesale copy):
 | `docs/upgrade-runbook.md` | `docs-site/operations/upgrade-runbook.md` (**stub pair**: pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, docs dedup pass) |
 | `docs/operations/monitoring.md` | `docs-site/monitoring.md` |
 | `docs/operations/query-performance.md` | `docs-site/query-performance.md` |
-| `docs/known-issues.md` | `docs-site/known-issues.md` (**stub pair**: pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, docs dedup pass) |
+| `docs/known-issues.md` | `docs-site/known-issues.md` (**stub pair**: pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, docs dedup pass. The generator no longer copies the stub over the canonical page, and `make docs-check-generated` guards that — #777) |
 | `docs/features/idle-detection.md` | `docs-site/plugin-reference/idle-detection.md` |
 | `docs/features-business-hours.md` | `docs-site/plugin-reference/business-hours.md` |
 | `docs/features/quota-recommendations.md` | `docs-site/plugin-reference/quota.md` |

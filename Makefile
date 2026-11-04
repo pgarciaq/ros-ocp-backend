@@ -251,8 +251,16 @@ docs-pdf-install: docs-install ## Install PDF book dependencies (WeasyPrint + mk
 		echo "NOTE: install Chrome/Chromium for mmdc (or set DOCS_PDF_CHROME)"
 
 .PHONY: docs-generate
-docs-generate: ## Assemble known-issues/contributing into docs-site (optional gomarkdoc via DOC_GENERATE_GOMARKDOC=1)
+docs-generate: ## Assemble docs-site/contributing.md and changelog.md from their repo-root sources (optional gomarkdoc via DOC_GENERATE_GOMARKDOC=1)
 	./scripts/generate-docs.sh
+
+.PHONY: docs-check-generated
+docs-check-generated: ## Verify the generator does not overwrite committed docs-site pages, and Known Limitations is still the real page (#777)
+	./scripts/check-generated-docs.sh
+
+.PHONY: docs-check-rendered
+docs-check-rendered: ## Verify the built Known Limitations page still carries the caveats table (#777)
+	./scripts/check-generated-docs.sh --site-dir _site
 
 .PHONY: docs-drift
 docs-drift: ## Lightweight Class A docs footgun checks (tags default, plugins.go, Last verified)

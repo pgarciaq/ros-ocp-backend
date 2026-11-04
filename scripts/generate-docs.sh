@@ -9,10 +9,12 @@ set -euo pipefail
 #     plugin-reference/, architecture/, features/, operations/).
 #   - This script must NOT overwrite those curated trees.
 #   - It only refreshes:
-#       docs/known-issues.md  → docs-site/known-issues.md  (with link rewrites)
 #       CONTRIBUTING.md       → docs-site/contributing.md  (with path rewrites)
 #       CHANGELOG.md          → docs-site/changelog.md     (repo links → GitHub blob)
 #       docs-site/development.md stub when missing
+#
+# docs/known-issues.md is an internal stub; docs-site/known-issues.md is the
+# canonical page and is hand-maintained. Never copy one over the other (#777).
 #
 # Note: docs-site/changelog.md must be a real file (not a symlink to CHANGELOG.md).
 # Root CHANGELOG.md keeps relative docs/ links for GitHub; the site copy rewrites
@@ -73,25 +75,11 @@ else
     echo "  To regenerate dumps intentionally: DOC_GENERATE_GOMARKDOC=1 $0"
 fi
 
-echo "Assembling site content (known-issues, contributing, changelog)..."
+echo "Assembling site content (contributing, changelog)..."
 
 # Do not copy docs/architecture or docs/operations over docs-site/ — those trees
 # are curated and committed under docs-site/ (see #415–#417).
 
-# Top-level docs — known-issues is authored under docs/ with links that point at
-# docs-site/ via ../docs-site/... Rewrite those (and a few internal-only paths)
-# so the published site resolves correctly. See #415.
-if [ -f "$ROOT_DIR/docs/known-issues.md" ]; then
-    sed -e 's|(../docs-site/|(|g' \
-        -e 's|(design/seasonality-plugin.md)|(https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/seasonality-plugin.md)|g' \
-        -e 's|(operations/runbooks.md#[^)]*)|(monitoring.md)|g' \
-        -e 's|(operations/query-performance\.md)|(query-performance.md)|g' \
-        -e 's|\./features-f27-pvc-rightsizing\.md|features/pvc-rightsizing.md|g' \
-        -e 's|\./features-f-snapshot-staleness\.md|features/snapshot-staleness.md|g' \
-        -e 's|\./features-f26-f33-f54-f55\.md|features/idle-detection.md|g' \
-        -e 's|](\.\./internal/|](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/|g' \
-        "$ROOT_DIR/docs/known-issues.md" > "$DOCS_DIR/known-issues.md"
-fi
 if [ -f "$ROOT_DIR/CONTRIBUTING.md" ]; then
     sed -e 's|(docs/architecture/|(architecture/|g' \
         -e 's|(docs/operations/|(https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/operations/|g' \

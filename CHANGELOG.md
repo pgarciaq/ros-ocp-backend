@@ -80,6 +80,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   fallback. Kruize-only mode retains its legacy `monitoring_end_time` filter;
   the detail alias remains unchanged.
 
+- **Generated docs no longer overwrite the canonical Known Limitations page ([#777](https://github.com/pgarciaq/ros-ocp-backend/issues/777)):**
+  `scripts/generate-docs.sh` copied the internal stub `docs/known-issues.md` over
+  `docs-site/known-issues.md` on every build, so the published page carried no
+  limitations table, pointed its "full guide" link at itself, and linked an
+  internal-only `../agents/` path that 404s on the site. The copy stage (and its
+  now-dead link rewrites) is removed; the canonical page is hand-maintained and
+  committed. `make docs-check-generated` fails when generation changes a
+  committed page or when the page loses its caveats table, and
+  `make docs-check-rendered` asserts the same on the built HTML. Also corrects
+  `CONTRIBUTING.md`'s Go floor (1.25+ → 1.26+, matching `go.mod`). No API or
+  recommendation behavior changes.
+
 - **Settings authorization stops denied writes ([#751](https://github.com/pgarciaq/ros-ocp-backend/issues/751)):**
   a caller without wildcard `cost-management:settings:write` permission could
   receive HTTP 403 while the settings handler continued into a PUT or DELETE.

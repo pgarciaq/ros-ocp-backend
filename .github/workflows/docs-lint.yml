@@ -9,6 +9,7 @@ on:
       - 'CONTRIBUTING.md'
       - 'scripts/check-docs-lint.sh'
       - 'scripts/generate-docs.sh'
+      - 'scripts/check-generated-docs.sh'
       - '.github/workflows/docs-lint.yml'
       - 'Makefile'
   push:
@@ -19,6 +20,7 @@ on:
       - 'CONTRIBUTING.md'
       - 'scripts/check-docs-lint.sh'
       - 'scripts/generate-docs.sh'
+      - 'scripts/check-generated-docs.sh'
       - '.github/workflows/docs-lint.yml'
       - 'Makefile'
   workflow_dispatch:

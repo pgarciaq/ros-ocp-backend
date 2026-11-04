@@ -31,7 +31,8 @@ signatures and design notes: [Plugin Architecture §4](../architecture/plugin-ar
 |--------|----------------|
 | Edit a plugin page | Change `docs-site/plugin-reference/<name>.md` and commit |
 | Preview the site | `make docs-serve` (does **not** overwrite plugin-ref) |
-| Assemble known-issues / CONTRIBUTING copies | `make docs-generate` (CI runs this before Pages build) |
+| Assemble `contributing.md` / `changelog.md` copies | `make docs-generate` (CI runs this before Pages build) |
+| Verify the committed copies were not overwritten | `make docs-check-generated` (CI runs this before Pages build) |
 | Optional gomarkdoc dump (maintainers only) | `DOC_GENERATE_GOMARKDOC=1 make docs-generate` — **overwrites** curated `plugin.md`, `kruize.md`, and `example.md`; review the diff carefully |
 
 `scripts/generate-docs.sh` no longer copies `docs/architecture/` or `docs/operations/` over
