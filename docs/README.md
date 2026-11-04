@@ -53,7 +53,8 @@
 | [business-hours-admin-guide.md](business-hours-admin-guide.md) | Business hours — admin and operator guide |
 | [known-issues.md](../docs-site/known-issues.md) | Feature status report — executive summary, implementation status, caveats |
 | [kruize-vs-native-comparison.md](kruize-vs-native-comparison.md) | Comparison between Kruize and native engine |
-| [native-engine-performance.md](native-engine-performance.md) | Native engine performance benchmarks |
+| [native-engine-performance.md](native-engine-performance.md) | **Current** — native engine performance benchmarks, kept up to date |
+| [performance/](performance/) | Dated audit reports and their benchmark artifacts (2026-06 → 2026-09) — frozen records cited by ADRs; do not update them, and treat the page above as the current profile |
 
 ## Archive
 
