@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -71,6 +72,32 @@ func TestGeneratedDocsDeterministic(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join(mdB, "robne_explain.md")) //nolint:gosec // G304: t.TempDir output
 	require.NoError(t, err)
 	assert.Equal(t, string(a), string(b), "markdown must be byte-identical across runs")
+}
+
+// #703's guard diffs regenerated pages against committed ones, which may have
+// been committed on any earlier day, so the date in cobra's trailer must be the
+// pinned one and not the wall clock. TestGeneratedDocsDeterministic cannot catch
+// this: both of its runs share the same clock, so a time.Now() footer is
+// byte-identical within the test and only drifts a day later.
+func TestMarkdownFooterDateIsPinned(t *testing.T) {
+	_, mdDir := generateDocsToTemp(t)
+	want := mdFooterPrefix + manGeneratedAt.Format("2-Jan-2006")
+	entries, err := os.ReadDir(mdDir)
+	require.NoError(t, err)
+	require.NotEmpty(t, entries, "generator produced no markdown pages")
+	for _, e := range entries {
+		if filepath.Ext(e.Name()) != ".md" {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(mdDir, e.Name())) //nolint:gosec // G304: t.TempDir output
+		require.NoError(t, err)
+		text := string(b)
+		at := strings.LastIndex(text, mdFooterPrefix)
+		require.GreaterOrEqual(t, at, 0, "%s must carry cobra's trailer", e.Name())
+		line := strings.SplitN(text[at:], "\n", 2)[0]
+		assert.Equal(t, want, line,
+			"%s must carry the pinned generation date, not the day it was run", e.Name())
+	}
 }
 
 // #703 names the #700 hcp surface as a must-cover: the explain pages
