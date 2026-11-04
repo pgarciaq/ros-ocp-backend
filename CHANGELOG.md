@@ -73,6 +73,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Weighted digest Max no longer read from pooled storage after returning it ([#759](https://github.com/pgarciaq/ros-ocp-backend/issues/759)):**
+  `ComputeWeightedDigest` built its return value after handing the scratch
+  buffer back to the `sync.Pool`, so a concurrent caller could refill that
+  storage between the handoff and the Max read — a data race (verified by
+  the race detector) that could persist a wrong maximum in digest rows. The
+  complete result is now constructed before the pool return, making a
+  read-after-put structurally impossible; fixed in canonical `librobne` and
+  the vendored copy kept in sync.
 - **Kafka parallel consumption preserves per-partition offset order ([#756](https://github.com/pgarciaq/ros-ocp-backend/issues/756)):**
   the parallel consumer's shared job channel let a worker dequeue a higher
   offset and win the per-partition lock before a lower offset — reordering

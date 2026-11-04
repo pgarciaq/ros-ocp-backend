@@ -165,10 +165,13 @@ func ComputeWeightedDigest(values []int64, weights []float64) Digest {
 		p50, p60, p95, p98, p99 = weightedPercentilesFromPairs(pairs, totalWeight)
 	}
 
-	scratch.pairs = capWeightedPairs(pairs)
-	weightedDigestScratchPool.Put(scratch)
-
-	return Digest{
+	// #759 (V15-09): build the complete result BEFORE returning the scratch
+	// buffer to the pool. The old code read pairs[pn-1].v for Max after the
+	// Put — a concurrent owner of the pooled storage could refill it in
+	// between, and the race detector flagged the append-vs-Max-read pair.
+	// Constructing the Digest first makes a read-after-Put structurally
+	// impossible for every field, present or future.
+	digest := Digest{
 		P50:   p50,
 		P60:   p60,
 		P95:   p95,
@@ -179,6 +182,10 @@ func ComputeWeightedDigest(values []int64, weights []float64) Digest {
 		Sum:   sum,
 		Count: int64(pn),
 	}
+
+	scratch.pairs = capWeightedPairs(pairs)
+	weightedDigestScratchPool.Put(scratch)
+	return digest
 }
 
 func sortWeightedPairs(scratch *weightedDigestScratch, pairs []weightedPair) {
