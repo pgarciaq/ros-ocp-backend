@@ -49,6 +49,10 @@ func parallelIngestFiles(
 		remaining = append(remaining, vmFamilyFile{idx: i, file: f})
 	}
 
+	// vmTransient holds a VM-family transient error (an orphaned companion,
+	// #757) so the manifest's other file families still process before it
+	// is returned to drive the retry ladder.
+	var vmTransient error
 	if useNativeCSVIngest {
 		ingestion.EnsureIngestPartitionsForWindow(ctx, pool)
 
@@ -60,15 +64,21 @@ func parallelIngestFiles(
 			vmFiles, otherFiles := partitionVMFamilyFiles(remaining)
 			if len(vmFiles) > 0 {
 				tErr, pErr := processVMFileBatch(ctx, pool, log, kafkaMsg, manifestID, vmFiles)
-				if tErr != nil {
-					return tErr, permanentFailed
-				}
 				if pErr {
 					permanentFailed = true
 				}
 				remaining = otherFiles
 				if len(remaining) == 0 {
-					return nil, permanentFailed
+					return tErr, permanentFailed
+				}
+				if tErr != nil {
+					// #757 (fresh-context review finding): a VM-family
+					// transient error (an orphaned companion) must not
+					// block the manifest's other file families. They
+					// process now — done-skipping keeps the ladder's
+					// replays cheap — and the transient error is returned
+					// afterwards to drive the orphan's retries.
+					vmTransient = tErr
 				}
 			}
 		}
@@ -91,7 +101,7 @@ func parallelIngestFiles(
 				permanentFailed = true
 			}
 		}
-		return nil, permanentFailed
+		return vmTransient, permanentFailed
 	}
 
 	// Use errgroup with bounded concurrency. A transient error cancels remaining work
@@ -102,6 +112,11 @@ func parallelIngestFiles(
 	var permFailed atomic.Bool
 	var transientOnce sync.Once
 	var firstTransient error
+	// Seed with the VM-family transient (#757): if no per-file transient
+	// occurs, it is the one returned to drive the orphan's retry ladder.
+	if vmTransient != nil {
+		transientOnce.Do(func() { firstTransient = vmTransient })
+	}
 
 	for _, f := range remaining {
 		f := f
@@ -182,14 +197,24 @@ func processVMFileBatch(
 
 	// Succeeded files are marked done only after the flush: a failed flush
 	// leaves them unmarked so the manifest retry re-processes them
-	// (ingest is idempotent).
+	// (ingest is idempotent). Companion files carry their orphan status
+	// out of the flush (#757): an orphaned companion is NOT successful
+	// persistence and stays unmarked.
 	var succeeded []string
+	companions := make(map[string]*ingestion.VMCompanionFile)
 	for _, f := range vmFiles {
 		if err := ctx.Err(); err != nil {
 			return err, false
 		}
 		filename := filenameForFileIndex(kafkaMsg, f.file, f.idx)
-		if shouldSkipProcessedFile(ctx, pool, manifestID, filename) {
+		// #757: usage files skip when done; companion files always re-apply.
+		// Their upserts are idempotent replacement writes, and re-applying
+		// the full set in file order preserves last-file-wins semantics
+		// when an orphaned earlier companion re-processes after a later
+		// one already landed (fresh-context review finding).
+		fileType := utils.DetermineCSVType(f.file)
+		companionFile := fileType == types.PayloadTypeVMGPU || fileType == types.PayloadTypeVMPVC
+		if !companionFile && shouldSkipProcessedFile(ctx, pool, manifestID, filename) {
 			log.Infof("skipping already-processed file %s for manifest %s", filename, manifestID)
 			continue
 		}
@@ -210,7 +235,10 @@ func processVMFileBatch(
 			}
 			defer func() { _ = body.Close() }()
 			return metrics.ObservePhase(metrics.PhaseParseDigest, func() error {
-				_, err := batch.AddFile(ctx, body)
+				_, companion, err := batch.AddFile(ctx, body)
+				if companion != nil {
+					companions[filename] = companion
+				}
 				return err
 			})
 		}()
@@ -236,8 +264,39 @@ func processVMFileBatch(
 		}
 		return nil, true
 	}
+	var orphaned []string
 	for _, filename := range succeeded {
+		if c := companions[filename]; c != nil && c.Orphaned() {
+			orphaned = append(orphaned, filename)
+			continue
+		}
 		markFileDone(ctx, pool, log, manifestID, filename)
+	}
+	if len(orphaned) > 0 {
+		// #757: a companion whose usage parent never materialized is not
+		// successful persistence. The files stay undone; the transient
+		// error sends the message through the manifest retry ladder
+		// (visible DLQ escalation instead of silent loss — #806 tracks
+		// the delayed-redrive follow-up).
+		var missing []string
+		for _, filename := range orphaned {
+			missing = append(missing, companions[filename].MissingParents()...)
+		}
+		log.Warnf("VM companion files without usage parents (will retry): %v — missing: %v",
+			orphaned, missing)
+		orphanErr := fmt.Errorf("vm companion files without usage parents %v: %w",
+			orphaned, ingestion.ErrVMCompanionOrphaned)
+		if config.GetConfig().KafkaAutoCommit {
+			// Autocommit mode has no retry ladder — the handler tail drops
+			// transient errors — so relying on redelivery would strand the
+			// file in processing forever. Mark it terminally failed
+			// instead: visible, and not successful persistence (#757).
+			for _, filename := range orphaned {
+				handlePermanentFileError(ctx, pool, log, kafkaMsg, filename, string(types.PayloadTypeVM), orphanErr)
+			}
+			return nil, true
+		}
+		return orphanErr, false
 	}
 	return nil, permanentFailed
 }

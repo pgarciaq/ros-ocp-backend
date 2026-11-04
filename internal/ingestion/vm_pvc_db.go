@@ -99,6 +99,47 @@ func BatchLookupVMDigestIDs(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 // It streams CSV rows into digest accumulators and does not retain a []VMPVCRow
 // of every 15-minute sample. Digest IDs are fetched in a single batch query,
 // then PVC rows are upserted per VM using pgx.Batch within each transaction.
+// attachVMPVCGroups upserts PVC attachment groups against persisted digest
+// parents, returning the keys that found no parent (#757: the caller decides
+// whether a missing parent is a skip or an orphan — the standalone path logs
+// and skips, the batch path marks the file not-done).
+func attachVMPVCGroups(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, digestPVCs map[VMDigestKey][]IngestPVCDigest) ([]VMDigestKey, error) {
+	keys := make([]VMDigestKey, 0, len(digestPVCs))
+	for k := range digestPVCs {
+		keys = append(keys, k)
+	}
+
+	idMap, err := BatchLookupVMDigestIDs(ctx, pool, orgID, clusterUUID, keys)
+	if err != nil {
+		return nil, fmt.Errorf("batch lookup digest IDs: %w", err)
+	}
+
+	log := logging.ForOrg(orgID, clusterUUID)
+	var missing []VMDigestKey
+	for key, pvcs := range digestPVCs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if len(pvcs) == 0 {
+			continue
+		}
+		digestID, ok := idMap[key]
+		if !ok {
+			missing = append(missing, key)
+			log.Warnf("VM PVC CSV: no digest for %s/%s on %s, skipping PVCs (ingest VM usage first)",
+				key.Namespace, key.VMName, key.BucketDate.Format("2006-01-02"))
+			continue
+		}
+		if err := UpsertVMPVCDigests(ctx, pool, digestID, pvcs); err != nil {
+			return nil, fmt.Errorf("upsert PVC digests for %s/%s: %w", key.Namespace, key.VMName, err)
+		}
+	}
+	return missing, nil
+}
+
+// IngestVMPVCCSV attaches PVC companions to already-persisted digests — the
+// standalone per-file path. Missing parents are logged and skipped (the
+// batch path instead reports orphans so the file is not marked done, #757).
 func IngestVMPVCCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
 	acc := make(map[vmPVCAccKey]*IngestPVCDigest)
 	n := 0
@@ -114,35 +155,6 @@ func IngestVMPVCCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID,
 		return nil
 	}
 
-	digestPVCs := finalizeVMPVCGroups(acc)
-
-	keys := make([]VMDigestKey, 0, len(digestPVCs))
-	for k := range digestPVCs {
-		keys = append(keys, k)
-	}
-
-	idMap, err := BatchLookupVMDigestIDs(ctx, pool, orgID, clusterUUID, keys)
-	if err != nil {
-		return fmt.Errorf("batch lookup digest IDs: %w", err)
-	}
-
-	log := logging.ForOrg(orgID, clusterUUID)
-	for key, pvcs := range digestPVCs {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if len(pvcs) == 0 {
-			continue
-		}
-		digestID, ok := idMap[key]
-		if !ok {
-			log.Warnf("VM PVC CSV: no digest for %s/%s on %s, skipping PVCs (ingest VM usage first)",
-				key.Namespace, key.VMName, key.BucketDate.Format("2006-01-02"))
-			continue
-		}
-		if err := UpsertVMPVCDigests(ctx, pool, digestID, pvcs); err != nil {
-			return fmt.Errorf("upsert PVC digests for %s/%s: %w", key.Namespace, key.VMName, err)
-		}
-	}
-	return nil
+	_, err = attachVMPVCGroups(ctx, pool, orgID, clusterUUID, finalizeVMPVCGroups(acc))
+	return err
 }

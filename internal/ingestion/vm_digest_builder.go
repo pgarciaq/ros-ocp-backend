@@ -3,6 +3,7 @@ package ingestion
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -583,6 +584,52 @@ type VMDigestBatch struct {
 	hourlyGroups map[VMHourlyDigestKey]*vmHourlyAccumulator
 	bhCache      *bhschedule.Cache
 	total        int
+
+	// companionFiles buffers PVC / GPU-device CSVs (#757): companions query
+	// persisted digest parents, which only exist after Flush writes them —
+	// ingesting them per-file during AddFile guaranteed a skip for every
+	// genuinely new VM/day. Applied in AddFile order at Flush tail.
+	companionFiles []*VMCompanionFile
+}
+
+// ErrVMCompanionOrphaned reports that deferred companion files found no
+// persisted usage parent at Flush time (#757). Transient by design: the
+// manifest retry ladder re-drives the file until usage arrives or the ladder
+// exhausts into the DLQ (visible instead of silently done). The time-scale
+// follow-up is #806.
+var ErrVMCompanionOrphaned = errors.New("vm companion orphaned: usage parent missing")
+
+// VMCompanionFile tracks one buffered companion CSV so its persistence can
+// be deferred past the usage Flush (#757). Orphaned reports the post-Flush
+// outcome: a companion whose parent never materialized is NOT successful
+// persistence — the caller must not mark the file done.
+type VMCompanionFile struct {
+	Kind string
+
+	pvcAcc map[vmPVCAccKey]*IngestPVCDigest
+	gpuAcc map[vmGPUDeviceAccKey]*vmGPUDeviceAccumulator
+	gpuBH  map[vmGPUDeviceAccKey]*vmGPUDeviceAccumulator
+
+	orphaned bool
+	missing  []string
+}
+
+// Orphaned reports whether any of this file's attachments found no
+// persisted usage parent at Flush time.
+func (c *VMCompanionFile) Orphaned() bool { return c.orphaned }
+
+// MissingParents lists the missing parents ("namespace/vm/date") when
+// Orphaned is true.
+func (c *VMCompanionFile) MissingParents() []string { return c.missing }
+
+func (c *VMCompanionFile) recordMissing(missing []VMDigestKey) {
+	for _, k := range missing {
+		c.missing = append(c.missing,
+			k.Namespace+"/"+k.VMName+"/"+k.BucketDate.Format("2006-01-02"))
+	}
+	if len(missing) > 0 {
+		c.orphaned = true
+	}
 }
 
 // NewVMDigestBatch creates the per-payload accumulator. Loads the business
@@ -646,34 +693,61 @@ func IsVMPVCCSVHeader(header string) bool {
 }
 
 // AddFile routes ONE payload file by its header, mirroring the VM plugin's
-// IngestCSV: gpu-device and pvc companions ingest per file (their tables
-// are per-file scoped); usage rows go to the shared accumulators so
-// same-day rows across files merge (#707). Returns the kind routed to.
-func (b *VMDigestBatch) AddFile(ctx context.Context, r io.Reader) (kind string, err error) {
+// IngestCSV: gpu-device and pvc companions are buffered per file and applied
+// at Flush tail, AFTER the usage digests they depend on are persisted (#757)
+// — per-file replacement semantics (delete-then-insert per digest) are
+// unchanged, only the timing moves. Usage rows go to the shared accumulators
+// so same-day rows across files merge (#707). Returns the kind routed to and,
+// for companions, the handle carrying the post-Flush orphan status.
+func (b *VMDigestBatch) AddFile(ctx context.Context, r io.Reader) (kind string, companion *VMCompanionFile, err error) {
 	buf := bufio.NewReader(r)
 	header, err := buf.ReadString('\n')
 	if err != nil && err != io.EOF {
-		return "", fmt.Errorf("reading VM CSV header: %w", err)
+		return "", nil, fmt.Errorf("reading VM CSV header: %w", err)
 	}
 	body := io.MultiReader(strings.NewReader(header), buf)
 	switch {
 	case IsVMGPUDeviceCSVHeader(header):
-		if err := IngestVMGPUDeviceCSV(ctx, b.pool, body, b.orgID, b.clusterUUID); err != nil {
-			return "vm-gpu", fmt.Errorf("ingesting VM GPU device CSV: %w", err)
+		c := &VMCompanionFile{
+			Kind:   "vm-gpu",
+			gpuAcc: make(map[vmGPUDeviceAccKey]*vmGPUDeviceAccumulator),
 		}
-		logging.ForOrg(b.orgID, b.clusterUUID).Info("VMDigestBatch.AddFile: upserted VM GPU device rows")
-		return "vm-gpu", nil
+		if b.bhGroups != nil {
+			c.gpuBH = make(map[vmGPUDeviceAccKey]*vmGPUDeviceAccumulator)
+		}
+		_, err := forEachVMGPUDeviceCSVRow(ctx, body, func(row VMGPUDeviceRow) error {
+			addVMGPUDeviceRow(c.gpuAcc, row, nil)
+			if c.gpuBH != nil {
+				addVMGPUDeviceRow(c.gpuBH, row, VMGPUDeviceBusinessHoursWeight(b.bhCache))
+			}
+			return nil
+		})
+		if err != nil {
+			return "", nil, fmt.Errorf("parsing VM GPU device CSV: %w", err)
+		}
+		b.companionFiles = append(b.companionFiles, c)
+		logging.ForOrg(b.orgID, b.clusterUUID).Info("VMDigestBatch.AddFile: buffered VM GPU device rows")
+		return "vm-gpu", c, nil
 	case IsVMPVCCSVHeader(header):
-		if err := IngestVMPVCCSV(ctx, b.pool, body, b.orgID, b.clusterUUID); err != nil {
-			return "vm-pvc", fmt.Errorf("ingesting VM PVC CSV: %w", err)
+		c := &VMCompanionFile{
+			Kind:   "vm-pvc",
+			pvcAcc: make(map[vmPVCAccKey]*IngestPVCDigest),
 		}
-		logging.ForOrg(b.orgID, b.clusterUUID).Info("VMDigestBatch.AddFile: upserted VM PVC rows")
-		return "vm-pvc", nil
+		_, err := forEachVMPVCCSVRow(ctx, body, func(row VMPVCRow) error {
+			addVMPVCRowToGroups(c.pvcAcc, row)
+			return nil
+		})
+		if err != nil {
+			return "", nil, fmt.Errorf("parsing VM PVC CSV: %w", err)
+		}
+		b.companionFiles = append(b.companionFiles, c)
+		logging.ForOrg(b.orgID, b.clusterUUID).Info("VMDigestBatch.AddFile: buffered VM PVC rows")
+		return "vm-pvc", c, nil
 	default:
 		if _, err := b.AddCSV(ctx, body); err != nil {
-			return "vm", err
+			return "", nil, err
 		}
-		return "vm", nil
+		return "vm", nil, nil
 	}
 }
 
@@ -684,7 +758,11 @@ func (b *VMDigestBatch) Flush(ctx context.Context) error {
 	orgID, clusterUUID := b.orgID, b.clusterUUID
 	if b.total == 0 {
 		logging.ForOrg(orgID, clusterUUID).Info("ProcessVMCSV: no VM rows found")
-		return nil
+		// #757: a retry whose usage files were all done-skipped (or a
+		// companion-only manifest) still has buffered companions that must
+		// resolve against persisted parents — an empty usage batch is not
+		// a pass to drop them.
+		return b.flushCompanions(ctx)
 	}
 
 	digests := digestResultsSlice(finalizeVMDigestGroups(b.dailyGroups))
@@ -715,6 +793,67 @@ func (b *VMDigestBatch) Flush(ctx context.Context) error {
 		logging.ForOrg(orgID, clusterUUID).Infof("ProcessVMCSV: upserted %d hourly VM digests", len(hourlyMap))
 	}
 
+	// #757: companions attach only after every parent shape is persisted.
+	if err := b.flushCompanions(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+// companionFlushHook, when non-nil, runs inside flushCompanions after the
+// parents are written and before attachments apply — the "failure between
+// parent persistence and attachment" seam (#757 close criteria). Tests only.
+var companionFlushHook func() error
+
+// flushCompanions applies the buffered companion files in AddFile order,
+// preserving today's per-file replacement semantics (delete-then-insert per
+// digest). A companion whose parent is still missing is marked orphaned —
+// NOT successful persistence — so the caller leaves the file undone and the
+// manifest retry ladder re-drives it (#757, #806).
+func (b *VMDigestBatch) flushCompanions(ctx context.Context) error {
+	if len(b.companionFiles) == 0 {
+		return nil
+	}
+	if companionFlushHook != nil {
+		if err := companionFlushHook(); err != nil {
+			return fmt.Errorf("vm companion flush hook: %w", err)
+		}
+	}
+	for _, c := range b.companionFiles {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		switch {
+		case c.pvcAcc != nil:
+			missing, err := attachVMPVCGroups(ctx, b.pool, b.orgID, b.clusterUUID, finalizeVMPVCGroups(c.pvcAcc))
+			if err != nil {
+				return fmt.Errorf("attaching VM PVC companions: %w", err)
+			}
+			c.recordMissing(missing)
+		case c.gpuAcc != nil:
+			digestMap := make(map[VMDigestKey]VMDigestResult)
+			applyVMGPUDeviceAcc(c.gpuAcc, digestMap)
+			missing, err := attachVMGPUDevicesForSchedule(ctx, b.pool, b.orgID, b.clusterUUID, digestMap, string(ScheduleTypeAllHours))
+			if err != nil {
+				return fmt.Errorf("attaching VM GPU companions: %w", err)
+			}
+			c.recordMissing(missing)
+			if c.gpuBH != nil {
+				bhMap := make(map[VMDigestKey]VMDigestResult)
+				applyVMGPUDeviceAcc(c.gpuBH, bhMap)
+				bhMissing, err := attachVMGPUDevicesForSchedule(ctx, b.pool, b.orgID, b.clusterUUID, bhMap, string(ScheduleTypeBusinessHours))
+				if err != nil {
+					return fmt.Errorf("attaching VM business_hours GPU companions: %w", err)
+				}
+				c.recordMissing(bhMissing)
+			}
+		}
+		if c.orphaned {
+			logging.ForOrg(b.orgID, b.clusterUUID).Warnf(
+				"VM %s companion orphaned: no usage digest for %v (ingest VM usage first; the file stays undone and re-enters the retry ladder)",
+				c.Kind, c.missing)
+		}
+	}
 	return nil
 }
 

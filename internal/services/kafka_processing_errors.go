@@ -6,6 +6,8 @@ import (
 	"net"
 	"strings"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -21,6 +23,12 @@ import (
 func isTransientKafkaProcessingError(err error) bool {
 	if err == nil {
 		return false
+	}
+	// #757: an orphaned VM companion (usage parent missing at flush time) is
+	// transient by design — the manifest retry ladder re-drives the file
+	// until usage arrives or the ladder exhausts into the DLQ.
+	if errors.Is(err, ingestion.ErrVMCompanionOrphaned) {
+		return true
 	}
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		return true

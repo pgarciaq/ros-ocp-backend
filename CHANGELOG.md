@@ -73,6 +73,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **VM companions persist before their files are marked done ([#757](https://github.com/pgarciaq/ros-ocp-backend/issues/757)):**
+  PVC and GPU-device companion CSVs were ingested per-file during batch
+  collection while their usage parents only existed after the flush — so for
+  every genuinely new VM/day the companion skip was guaranteed, the file was
+  still marked done, and same-manifest replay never repaired the loss.
+  Companions are now buffered per file and applied after the flush writes
+  the parents (order-independent, per-file replacement semantics unchanged);
+  a companion whose usage never arrives is no longer treated as successful
+  persistence — the file stays undone and re-enters the manifest retry
+  ladder, escalating visibly to the DLQ instead of silently losing the
+  attachment (#806 tracks the delayed-redrive follow-up).
 - **Weighted digest Max no longer read from pooled storage after returning it ([#759](https://github.com/pgarciaq/ros-ocp-backend/issues/759)):**
   `ComputeWeightedDigest` built its return value after handing the scratch
   buffer back to the `sync.Pool`, so a concurrent caller could refill that

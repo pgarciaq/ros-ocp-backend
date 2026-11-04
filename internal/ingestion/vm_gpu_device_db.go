@@ -2,9 +2,11 @@ package ingestion
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
@@ -98,14 +100,26 @@ func IngestVMGPUDeviceCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, 
 	return nil
 }
 
-func upsertVMGPUDevicesForSchedule(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, digestMap map[VMDigestKey]VMDigestResult, scheduleType string) error {
+// attachVMGPUDevicesForSchedule upserts per-device GPU groups against
+// persisted digests of one schedule type, returning the keys that found no
+// parent (#757: the standalone path logs and skips; the batch path marks the
+// file not-done so the retry ladder re-drives it).
+func attachVMGPUDevicesForSchedule(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, digestMap map[VMDigestKey]VMDigestResult, scheduleType string) ([]VMDigestKey, error) {
 	log := logging.ForOrg(orgID, clusterUUID)
+	var missing []VMDigestKey
 	for key, d := range digestMap {
 		if len(d.GPUDevices) == 0 {
 			continue
 		}
 		digestID, err := LookupVMDigestID(ctx, pool, orgID, clusterUUID, key.VMName, key.Namespace, key.BucketDate.Format("2006-01-02"), scheduleType)
 		if err != nil {
+			// A missing parent is an orphan (#757); any other lookup error
+			// (DB failure, cancelled context) is a real error and must not
+			// be misreported as a missing-parent diagnosis.
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return nil, fmt.Errorf("lookup digest ID for %s/%s (%s): %w", key.Namespace, key.VMName, scheduleType, err)
+			}
+			missing = append(missing, key)
 			if scheduleType == string(ScheduleTypeBusinessHours) {
 				log.Warnf("VM GPU device CSV: no business_hours digest for %s/%s on %s, skipping BH devices",
 					key.Namespace, key.VMName, key.BucketDate.Format("2006-01-02"))
@@ -117,12 +131,17 @@ func upsertVMGPUDevicesForSchedule(ctx context.Context, pool *pgxpool.Pool, orgI
 		}
 		if err := UpsertVMGPUDevices(ctx, pool, digestID, d.GPUDevices); err != nil {
 			if scheduleType == string(ScheduleTypeBusinessHours) {
-				return fmt.Errorf("upsert BH GPU devices for %s/%s: %w", key.Namespace, key.VMName, err)
+				return nil, fmt.Errorf("upsert BH GPU devices for %s/%s: %w", key.Namespace, key.VMName, err)
 			}
-			return fmt.Errorf("upsert GPU devices for %s/%s: %w", key.Namespace, key.VMName, err)
+			return nil, fmt.Errorf("upsert GPU devices for %s/%s: %w", key.Namespace, key.VMName, err)
 		}
 	}
-	return nil
+	return missing, nil
+}
+
+func upsertVMGPUDevicesForSchedule(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, digestMap map[VMDigestKey]VMDigestResult, scheduleType string) error {
+	_, err := attachVMGPUDevicesForSchedule(ctx, pool, orgID, clusterUUID, digestMap, scheduleType)
+	return err
 }
 
 // LookupVMDigestID returns the digest primary key for a VM-day row of scheduleType
