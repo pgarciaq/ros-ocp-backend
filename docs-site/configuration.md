@@ -1,6 +1,6 @@
 # Configuration Reference
 
-> **Last verified:** 2026-10-18
+> **Last verified:** 2026-11-06
 
 Environment variables for ROS-OCP Backend deployments. Set these on the
 **API**, **processor**, and **recommendation-poller** (Kruize-legacy only —
@@ -597,7 +597,8 @@ ROS reads:
 Schema name is `org` + bare `org_id` (e.g. `1234567` → `org1234567`).
 
 **No HTTP push, Celery sync, or ServiceAccount auth** is required on either service.
-Push endpoints return 404 in this mode. Requires the `koku-schema-grants` Helm hook.
+The push endpoint (`POST /internal/tags/sync`) returns 404 in this mode; the status
+endpoint stays available and reports `source: "db"`. Requires the `koku-schema-grants` Helm hook.
 
 **Operational risk:** ROS depends on Koku table layout (`reporting_enabledtagkeys`,
 `reporting_ocptags_values`). Koku schema changes can break tag filters; the startup DB probe
@@ -703,7 +704,7 @@ or service mesh) with TokenReview retained during migration. See
 See [Tag Filtering](features/tag-filtering.md) for lifecycle scenarios, freshness guarantees,
 troubleshooting, and list API syntax (`?filter[tag:key]=value1,value2`).
 
-Internal reference: [`docs/features/tag-filtering.md`](features/tag-filtering.md),
+Internal reference: [`docs/features/tag-filtering.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/features/tag-filtering.md),
 [`docs/operations/tag-sync-auth.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/operations/tag-sync-auth.md)
 
 **Group by tag:** `GET /recommendations/openshift/savings-summary?group_by[tag:key]=*` (or flat

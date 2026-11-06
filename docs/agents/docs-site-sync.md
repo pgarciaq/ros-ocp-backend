@@ -36,6 +36,7 @@ Expected differences (do **not** “fix” by wholesale copy):
 | `docs/features-business-hours.md` | `docs-site/plugin-reference/business-hours.md` |
 | `docs/features/quota-recommendations.md` | `docs-site/plugin-reference/quota.md` |
 | `docs/features/cluster-resource-quota.md` | `docs-site/plugin-reference/cluster-quota.md` |
+| `docs/features/tag-filtering.md` | `docs-site/features/tag-filtering.md` (**stub pair**: the internal file is a pointer + internal-only notes — dual-path comparison, db-mode query path, per-endpoint implementation, deferred work; facts live on the docs-site side only. Operations stay in `docs/operations/tag-sync.md` — restructured 2026-11-06, docs dedup pass) |
 | `docs/operations/api-query-parameters.md` | `docs-site/plugin-reference/query-parameters.md` |
 | `docs/architecture/recommendation-engines.md` | `docs-site/architecture/recommendation-engines.md` |
 | `docs/architecture/configurability.md` | `docs-site/architecture/configurability.md` (**stub pair**: pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, docs dedup pass) |

@@ -20,7 +20,10 @@ periodic safety-net runs.
 | `GET` | `/api/cost-management/v1/internal/tags/status` | Per-org sync freshness (`synced_at`, tag key catalog) |
 
 Both endpoints require bearer auth when `ROS_TAGS_SOURCE=api` — see [tag-sync-auth.md](tag-sync-auth.md).
-They return **404** when `ROS_TAGS_SOURCE=db`.
+With `ROS_TAGS_SOURCE=db` the push endpoint (`POST /internal/tags/sync`) returns **404** —
+there is nothing to receive. `GET /internal/tags/status` stays available and reports
+`source: "db"` with a note instead of `synced_at`, because there is no push metadata to
+report ([`internal/api/handlers_tags_status.go`](../../internal/api/handlers_tags_status.go)).
 
 ---
 
@@ -88,14 +91,9 @@ Disabled tag keys are omitted from `tag_keys` and from namespace tag maps.
 
 ## Lifecycle scenarios
 
-| Scenario | Koku behavior | ROS result |
-|----------|---------------|------------|
-| Tag key disappears from pods (still enabled) | `tag_keys` includes key with fewer/empty `values`; namespace maps omit the key | Filters stop matching removed values |
-| Tag disabled in Settings | Key omitted from payload; immediate sync | Full-replace clears key from all containers |
-| New tag value appears | Next summarization adds value | Updated on next sync |
-| Network failure / missed event | Periodic 6-hour safety-net | `synced_at` advances when sync succeeds |
-
-For on-prem lifecycle (live DB reads), see [tag-filtering.md](../features/tag-filtering.md#tag-lifecycle-scenarios).
+The customer-facing lifecycle table (what each event does in `api` vs `db` mode) is on the
+public page: [Tag lifecycle](../../docs-site/features/tag-filtering.md#tag-lifecycle). The
+mechanics this runbook owns are above: triggers, payload fields, and full-replace semantics.
 
 ---
 

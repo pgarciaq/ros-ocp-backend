@@ -36,7 +36,7 @@ PAIRS=(
   "docs/features-business-hours.md|docs-site/plugin-reference/business-hours.md|depth differs intentionally"
   "docs/features/quota-recommendations.md|docs-site/plugin-reference/quota.md|plugin-ref"
   "docs/features/cluster-resource-quota.md|docs-site/plugin-reference/cluster-quota.md|plugin-ref"
-  "docs/features/tag-filtering.md|docs-site/features/tag-filtering.md|tag contract (depth differs)"
+  "docs/features/tag-filtering.md|docs-site/features/tag-filtering.md|stub pair (internal keeps dual-path + db-mode only)"
   "docs/operations/api-query-parameters.md|docs-site/plugin-reference/query-parameters.md|query params"
 )
 

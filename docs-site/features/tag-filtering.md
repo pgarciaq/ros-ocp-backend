@@ -156,6 +156,23 @@ trigger a recompute per click.
 Sync triggers, example Helm env vars, manual sync commands, and authentication are documented
 in [Configuration → Tag Sync](../configuration.md#tag-sync).
 
+## Tag lifecycle
+
+What happens to a filter when the tags behind it change. Behaviour is identical from the
+user's perspective once data is visible to ROS; the modes differ in *when* ROS sees a change
+and *what happens on failure*.
+
+| Event | `api` (chart / deployed default) | `db` (advanced shared database) |
+|-------|----------------------------------|---------------------------------|
+| Key enabled in Settings → Tags | Catalog updates on the next sync; values arrive with the cluster's next summarized report | Key appears in Koku's enabled table immediately; values appear after the next summarization of labeled pods |
+| Key disabled in Settings | Key omitted from the payload; the full replace clears it from every container | The JOIN excludes the key on the next query |
+| Tag mapping changed | Settings mutation triggers an immediate push with the new mapping | The next summarization rebuilds Koku's `reporting_ocptags_values` |
+| Key disappears from a cluster (still enabled) | The next summarization sends fewer or empty values; the full replace removes the stale entry | The next summarization updates the tagged values used by the JOIN |
+| New tag value appears | Visible after summarization + a successful push | Visible after the next daily summarization |
+| Values disappear (pods deleted or relabeled) | The full replace removes stale `resolved_tags` on the next sync | Stale values drop out of Koku's tables on the next summarization |
+| Sync failure (network, ROS down) | Previous tags retained; the failed org retries on the next event or the 6-hour cycle; other orgs unaffected | Not applicable — no HTTP sync |
+| ROS pod restart | No state loss; tags live in PostgreSQL | No state loss; reads are stateless |
+
 ## Advanced on-prem startup health check (`ROS_TAGS_SOURCE=db`)
 
 With `ROS_TAGS_ENABLED=true` and `ROS_TAGS_SOURCE=db`, ROS probes
@@ -167,4 +184,4 @@ This path does **not** apply when using the chart default (`api`).
 
 - [Query parameters](../plugin-reference/query-parameters.md) — full filter and pagination syntax
 - [Savings estimations](savings-estimations.md) — fleet `savings-summary` behavior
-- Internal dual-path reference: [`docs/features/tag-filtering.md`](tag-filtering.md)
+- Internal dual-path reference: [`docs/features/tag-filtering.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/features/tag-filtering.md)
