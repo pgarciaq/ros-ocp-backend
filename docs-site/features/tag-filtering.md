@@ -1,6 +1,6 @@
 # Tag filtering
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-11-06
 
 !!! info "Quick Facts"
     **Filter syntax:** `filter[tag:key]=value` (bracket notation, preferred) or `?tag=key:value` (legacy flat)  
@@ -114,6 +114,11 @@ Optional scoping when grouping: `filter[cluster]`, `filter[project]` (see [Query
 tags. Pod-level labels are not individually resolvable — tag filtering operates at
 namespace granularity.
 
+**One value per tag key:** `resolved_tags` holds a single value per key in push mode. When
+Koku observes several values for one namespace and key, the payload keeps the alphabetically
+first and the `tag_keys` catalog lists all of them. Multi-value storage is not implemented
+yet.
+
 In advanced on-prem mode (`ROS_TAGS_SOURCE=db`), ROS list queries read Koku tenant tables
 (`reporting_enabledtagkeys`, `reporting_ocptags_values`). A Koku upgrade that renames
 tables or changes `cluster_ids[]` / `namespaces[]` semantics can break tag filters without
@@ -134,6 +139,19 @@ Default for both the **cost-onprem chart** and **SaaS**. Tags flow **one way (Ko
 `POST /api/cost-management/v1/internal/tags/sync`. Event-driven sync runs within seconds
 of Settings changes or OCP summarization; a Celery Beat safety-net runs every **6 hours**.
 Alert if `GET /internal/tags/status?org_id=` shows `synced_at` older than ~7 hours.
+
+**Source and coverage.** Koku builds the payload from its per-report-period label summaries
+(pod and PV labels) for report periods from the start of last month through the end of this
+month — the same sources and window the Koku Tags API uses. Every cluster that reported
+inside that window is included, whichever day it last summarized; a cluster summarized a day
+earlier no longer disappears from tag filters. A cluster that stops reporting keeps its tags
+until its last report period leaves the window.
+
+**Tag-key batching.** Tag keys take effect for a cluster when its next report is summarized.
+The `tag_keys` catalog updates on the next sync, but namespace values arrive with that
+cluster's next summarized report; enabling or disabling several keys at once produces one
+catalog update, not one per key. This is intentional — toggling keys one by one must not
+trigger a recompute per click.
 
 Sync triggers, example Helm env vars, manual sync commands, and authentication are documented
 in [Configuration → Tag Sync](../configuration.md#tag-sync).

@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-> **Last verified:** 2026-11-01
+> **Last verified:** 2026-11-06
 
 Architecture Decision Records (ADRs) document significant design choices in
 ros-ocp-backend: the problem context, the decision made, and its consequences.
@@ -8,7 +8,7 @@ They preserve the reasoning behind the native recommendation engine, plugin
 architecture, ingestion pipeline, API contracts, and operational policies so
 future contributors can understand *why* the system works the way it does.
 
-The project maintains **342 ADRs** in the repository under `docs/adr/`. Each
+The project maintains **344 ADRs** in the repository under `docs/adr/`. Each
 record follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions).
 
 ## Full ADR index
@@ -93,6 +93,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0350](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0350-robne-multi-payload-input.md) | robne multi-payload input: first-is-primary, identity-based joins | Repeatable --input (first = recommendation cluster, later = advisory context); per-payload consistency guard unchanged; identity-based joins eliminate role ambiguity; advisory independent of the hcp capacity plugin; content-conditional envelope version; deferred generalizations in #725 |
 | [0351](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0351-topology-reads-uncached-bounded-per-call.md) | Topology reads cluster-scoped facts uncached, bounded per call | `r.apiReader` instead of the cached client — a denied or unsynced informer blocks forever inside controller-runtime before any error exists to record; 5s per-call deadline scoped to topology, never the reconcile context; degradation named in `topology.collectionError` |
 | [0352](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0352-per-request-rbac-scope-and-scope-free-caches.md) | Per-request RBAC scope; scope-free caches | Affirmative eligibility — absent AND explicitly-empty openshift grants deny (Koku lattice); enforcement in data helpers on every request, never middleware; caches hold org-level payloads, per-user rendering post-cache; new data routes must consume the helpers |
+| [0353](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0353-ros-tag-push-reads-per-period-label-summaries.md) | Tag push reads Koku label summaries per period | The payload source is now the two label-summary tables the Koku Tags API itself reads, in the same month-snapped window — a single tenant-wide "latest day" slice dropped any cluster summarized a day earlier, and full-replace then wiped its tags; multi-value keys collapse deterministically until #814; the batching toggle path is unchanged |
 
 ## Domains covered
 

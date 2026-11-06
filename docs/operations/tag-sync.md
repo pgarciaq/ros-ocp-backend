@@ -60,8 +60,16 @@ When `ROS_TAGS_SOURCE=db`, these tasks are no-ops.
 | Field | Meaning |
 |-------|---------|
 | `synced_at` | ISO-8601 UTC timestamp when Koku built the payload |
-| `tag_keys` | All **enabled** OCP tag keys and distinct values in the current billing period |
+| `tag_keys` | All **enabled** OCP tag keys and distinct values from the label summaries in the month window |
 | `namespace_tags` | Per `(cluster_uuid, namespace)` resolved tags applied to all containers in that namespace |
+
+The payload is built from Koku's per-report-period label summaries
+(`reporting_ocpusagepodlabel_summary` + `reporting_ocpstoragevolumelabel_summary`) for
+report periods in `[last month start, this month end]` — the same sources and window the
+Koku Tags API uses (ADR-0353). A cluster that summarized on an older day is still in the
+payload; that is the point. Values are unioned per namespace and key, then collapsed to the
+alphabetically first value, because `resolved_tags` stores a single value per key
+(multi-value storage is tracked in #814).
 
 ---
 

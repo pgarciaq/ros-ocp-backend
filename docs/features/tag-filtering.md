@@ -217,7 +217,10 @@ flowchart LR
 Koku summarization completes (or Settings API mutates enabled tags)
   → schedule_ros_tag_sync(schema) [api source only]
   → Celery task sync_ros_ocp_tags
-  → build_namespace_tags_payload() from OCPUsageLineItemDailySummary.all_labels
+  → build_namespace_tags_payload() from reporting_ocpusagepodlabel_summary
+       + reporting_ocpstoragevolumelabel_summary (report periods from last
+       month start through this month end; the Koku Tags API's own sources
+       and window)
   → POST /api/cost-management/v1/internal/tags/sync
        Authorization: Bearer <Kubernetes ServiceAccount token>
   → ROS: TokenReview validation → full-replace transaction
@@ -274,7 +277,34 @@ never pushes tag data back to Koku.
 | **ROS** (resource optimization backend) | Receives and stores tags in `org_container_keys.resolved_tags` |
 
 Direction is always **Koku → ROS**. Koku owns enabled tag keys (`reporting_enabledtagkeys`)
-and observed namespace labels from OCP summarization (`OCPUsageLineItemDailySummary.all_labels`).
+and observed namespace labels from its per-report-period label summaries
+(`reporting_ocpusagepodlabel_summary`, `reporting_ocpstoragevolumelabel_summary`) — the same
+two sources the Koku Tags API reads. The payload covers report periods from the start of
+last month through the end of this month, so every cluster that reported inside that window
+contributes, whichever day it last summarized (ADR-0353).
+
+### Payload source and window
+
+| Aspect | Value |
+|--------|-------|
+| Sources | `reporting_ocpusagepodlabel_summary` (pod labels) + `reporting_ocpstoragevolumelabel_summary` (PV labels) |
+| Window | `report_period_start` in `[last month start, this month end]` — the Tags API's month-snapped default |
+| Aggregation | Values unioned per `(cluster_id, namespace, key)`, then collapsed to the alphabetically first value |
+| Why not the daily summary | `OCPUsageLineItemDailySummary` at a single tenant-wide latest day omits any cluster summarized a day earlier; org-scoped full replace then wiped that cluster's tags |
+
+Two consequences worth knowing operationally:
+
+- **Month-granular stickiness.** A cluster that stops reporting keeps its tags until its
+  last report period leaves the window (up to roughly two months). Dropping tags on a
+  calendar boundary would be worse: those namespaces still exist in ROS.
+- **Batching, not lag.** Enabling or disabling a tag key updates the `tag_keys` catalog on
+  the next sync, but namespace values arrive with the cluster's next summarized report.
+  Several toggles in a row produce one catalog update — by design, so toggling keys one by
+  one does not trigger one recompute each.
+
+A key can hold several values for one namespace in Koku; `resolved_tags` stores one, so the
+payload picks the alphabetically first deterministically. Multi-value storage is tracked in
+[#814](https://github.com/pgarciaq/ros-ocp-backend/issues/814).
 
 ### Sync mechanism
 
@@ -677,11 +707,20 @@ TokenReview will remain supported during migration behind a feature flag
 Monitor SaaS sync duration and Koku `ROS tag sync failed` logs. Alert on stale
 `synced_at` beyond 7 hours.
 
+The push payload is built from label-summary rows — roughly
+keys × namespaces × nodes per report period inside the window. The query selects only the
+columns the payload needs, but the row count is not small on a large tenant; payload size
+and sync duration at scale have not been measured. If sync duration becomes a concern, the
+first step is a synthetic large-tenant measurement, not a window change (narrowing the
+window is what #770 fixed).
+
 ---
 
 ## Known limitations
 
 - **Namespace-scoped resolution:** All containers in a namespace share the same resolved tags for filtering. Pod-level labels are not individually resolvable (Koku summarizes at namespace level).
+- **One value per tag key:** `resolved_tags` stores a single value per key. When Koku sees several values for one namespace and key, the push payload keeps the alphabetically first one; the `tag_keys` catalog still lists all values. Tracked in [#814](https://github.com/pgarciaq/ros-ocp-backend/issues/814).
+- **`ROS_TAGS_SOURCE=db` has a different view of clusters:** db mode reads Koku's `reporting_ocptags_values`, whose `cluster_ids[]` / `namespaces[]` arrays are rebuilt from one provider's report periods on each run. A cluster whose provider did not run last can be missing there even though push mode includes it. Tracked in [#815](https://github.com/pgarciaq/ros-ocp-backend/issues/815).
 - **Workaround:** Use namespace-level labels consistently; control granularity via Koku Settings → enabled tags.
 - **Future:** Per-pod label storage would be required for pod-level tag resolution in ROS.
 

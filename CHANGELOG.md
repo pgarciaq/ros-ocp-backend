@@ -73,6 +73,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Tag filters no longer lose a cluster that summarized on an older day ([#770](https://github.com/pgarciaq/ros-ocp-backend/issues/770)):**
+  Koku built the push payload from `OCPUsageLineItemDailySummary.all_labels` at
+  one tenant-wide latest `usage_start`. A cluster whose most recent report was
+  even one day older was absent from the payload, and ROS's org-scoped full
+  replace then reset its `resolved_tags` — an entire cluster silently stopped
+  matching tag filters while every other cluster looked fine. The payload is now
+  built from Koku's per-report-period label summaries
+  (`reporting_ocpusagepodlabel_summary` + `reporting_ocpstoragevolumelabel_summary`)
+  for report periods from last month start through this month end — the same
+  sources and month-snapped window the Koku Tags API uses. Values are unioned
+  per `(cluster, namespace, key)` and collapsed to the alphabetically first
+  value, because `resolved_tags` stores one per key. Payload envelope, storage,
+  and full-replace semantics are unchanged (ADR-0353); tag-key batching on
+  Settings toggles is unchanged and intentional. Multi-value storage (#814) and
+  the `db`-mode divergence (#815) remain open.
+
 - **A manifest's container files build one daily distribution per container ([#758](https://github.com/pgarciaq/ros-ocp-backend/issues/758)):**
   each container CSV was digested through its own stream with a
   full-replacement upsert per container/day, so count-based producer splits
