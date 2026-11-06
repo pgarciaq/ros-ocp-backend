@@ -124,7 +124,7 @@ List API supports Koku `?filter[tag:key]=value1,value2` on `org_container_keys` 
 See [Tag Filtering](features/tag-filtering.md).
 
 **Auth:** ServiceAccount token via TokenReview API today; **mTLS** planned for on-prem.
-See [Tag Filtering](features/tag-filtering.md) and [Configuration — Tag sync](configuration.md#tag-filtering-enabled-tag-keys).
+See [Tag Filtering](features/tag-filtering.md) and [Configuration — Tag sync](configuration.md#tag-sync).
 
 **Group by tag (savings summary):** `GET .../savings-summary?group_by[tag:environment]=*`
 groups container savings per tag value via `org_container_keys` (requires

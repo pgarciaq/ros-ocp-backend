@@ -74,6 +74,7 @@ done
 echo
 echo "docs-sync-check: SAME=$same DIFF=$diff MISSING=$missing"
 echo "Note: DIFF is normal (link style, Last verified, intentional depth)."
+echo "Stub pairs never become SAME — their facts live on the docs-site side only; do not copy back."
 echo "When editing Class A facts, update both sides of the pair — see docs/agents/docs-site-sync.md"
 
 if [[ "$FAIL_ON_DIFF" -eq 1 && ( "$diff" -gt 0 || "$missing" -gt 0 ) ]]; then

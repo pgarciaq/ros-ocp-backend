@@ -10,7 +10,7 @@ snapshot staleness, etc.), see [Configurability Reference](../architecture/confi
 This document focuses on **platform wiring**, **performance tuning**, and
 **operational controls**.
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-11-06
 
 ---
 
@@ -176,7 +176,7 @@ See **Performance Tuning** for `ROS_RESHIP_CONCURRENCY`.
 
 Recommendation domains are toggled at runtime via two environment variables that load into
 `Config.EnabledPlugins` / `Config.DisabledPlugins` (`internal/config/config.go`) and are applied in
-[`internal/plugin/registry.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/registry.go). See [Environment variables outside Config](#environment-variables-outside-config).
+[`internal/plugin/registry.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/registry.go).
 
 ### Plugin enablement
 
@@ -254,7 +254,7 @@ exposed for list filtering when tag sync is enabled.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ROS_TAGS_ENABLED` | `true` (chart); `false` (Koku binary unset) | Master switch for tag list filters (and push API when source=api). |
+| `ROS_TAGS_ENABLED` | `true` | Master switch for tag list filters (and push API when source=api). Koku has a separate setting of the same name that defaults to `false`; the chart wires both. |
 | `ROS_TAGS_SOURCE` | `api` (chart / deployed); `db` (binary unset) | `api` = push into `resolved_tags` (on-prem chart and SaaS default); `db` = direct Koku PostgreSQL reads (advanced). |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated Kubernetes ServiceAccount names allowed to call the push API (api source only). |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for push auth (api source). |

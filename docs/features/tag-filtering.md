@@ -52,7 +52,7 @@ files present.
 | **Worst-case staleness** | Summarization schedule only | Up to ~6h if pushes fail |
 | **Inter-service auth** | Not required | Kubernetes ServiceAccount TokenReview |
 | **Koku config required** | None for tag sync | `ROS_TAGS_ENABLED=true`, `ROS_TAGS_SOURCE=api`, `ROS_OCP_BACKEND_URL` |
-| **ROS push endpoints** | Return 404 (disabled) | Active when `ROS_TAGS_ENABLED=true` |
+| **ROS push endpoints** | `POST /internal/tags/sync` returns 404; `GET /internal/tags/status` stays available and reports `source: "db"` | Active when `ROS_TAGS_ENABLED=true` |
 | **Failure mode (Koku down)** | ROS cannot read fresh tags | Last successful sync retained |
 | **Failure mode (network)** | N/A | Eventual consistency; periodic retry |
 | **Operational complexity** | Lower (one DB) | Higher (auth, monitoring, Celery) |
@@ -117,7 +117,7 @@ payloads or env vars.
 
 | Table | Purpose |
 |-------|---------|
-| `reporting_enabledtagkeys` | Which OCP tag keys are enabled for filtering (`enabled=true`, `provider_type='OCP'`) |
+| `reporting_enabledtagkeys` | Enabled OCP tag keys — read by the tag catalog (`internal/tags/db_provider.go`) and the startup probe. **Not** consulted by the filter JOIN |
 | `reporting_ocptags_values` | Distinct `(key, value)` pairs with parallel `cluster_ids[]` and `namespaces[]` arrays linking tags to cluster/namespace scope |
 
 **Implementation:** [`internal/tags/db_provider.go`](../../internal/tags/db_provider.go),

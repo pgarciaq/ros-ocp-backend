@@ -1,6 +1,6 @@
 # Koku Integration Contract
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-11-06
 
 This document describes integration between ROS-OCP-Backend and Koku: **data ingestion**,
 **tag filtering**, **cost/savings estimation** (`effective_rates`), **savings recalculation**,
@@ -26,7 +26,7 @@ when configured).
 | **Data ingestion** | Koku → ROS (Kafka + S3) | [Data ingestion](#data-ingestion-contract) · [`kafka-schema.md`](kafka-schema.md) | `internal/kafka/consumer.go`, `internal/services/report_processor.go` | [`masu/external/ros_report_shipper.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/external/ros_report_shipper.py), [`kafka_msg_handler.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/external/kafka_msg_handler.py) |
 | **Effective rates** | ROS → Koku (HTTP GET) | [Effective rates](#effective-rates-endpoint) | [`internal/costdata/provider.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/costdata/provider.go) | [`masu/api/effective_rates.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/api/effective_rates.py) |
 | **Savings recalculation** | Koku → ROS (HTTP POST) | [Savings recalculation](#savings-recalculation-after-cost-model-changes) | [`internal/engine/savings_recalculate.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/savings_recalculate.go) | [`masu/processor/ros_savings_recalc.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/processor/ros_savings_recalc.py) |
-| **Tag filtering** | DB (on-prem) or HTTP push (SaaS) | [Tag filtering](#tag-filtering-enabled-tag-keys) | [`internal/tags/`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/tags/) | [`masu/processor/ros_tag_sync.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/processor/ros_tag_sync.py) (SaaS only) |
+| **Tag filtering** | DB (on-prem) or HTTP push (SaaS) | [Tag filtering](../features/tag-filtering.md) | [`internal/tags/`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/tags/) | [`masu/processor/ros_tag_sync.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/processor/ros_tag_sync.py) (SaaS only) |
 | **Business-hours reship** | ROS → Koku (HTTP POST) | [Reship](#business-hours-reship-reship_ros) | [`internal/reship/`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/reship/) | [`masu/api/reship_ros.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/api/reship_ros.py) |
 | **User currency** | ROS → Koku (HTTP GET) | [Multi-currency](#multi-currency-savings-conversion) | [`internal/costdata/provider.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/costdata/provider.go) | [`masu/api/user_currency.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/api/user_currency.py) |
 | **Exchange rate** | ROS → Koku (HTTP GET) | [Multi-currency](#multi-currency-savings-conversion) | [`internal/costdata/provider.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/costdata/provider.go) | [`masu/api/exchange_rate.py`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/api/exchange_rate.py) |
@@ -68,13 +68,13 @@ ROS recommendation list APIs support `filter[tag:key]=value`. Tag **keys** are g
 
 | Deployment | Chart default | Binary default | How tags reach ROS |
 |------------|---------------|----------------|-------------------|
-| **On-prem** (cost-onprem chart) | `api` | `db` | **api:** Koku Celery [`sync_ros_ocp_tags`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/processor/ros_tag_sync.py) POSTs to ROS `POST /api/cost-management/v1/internal/tags/sync` (chart default). **db (advanced):** ROS JOINs Koku tenant tables `reporting_enabledtagkeys` + `reporting_ocptags_values` at query time on a shared PostgreSQL instance — no HTTP sync |
+| **On-prem** (cost-onprem chart) | `api` | `db` | **api:** Koku Celery [`sync_ros_ocp_tags`](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/koku/masu/processor/ros_tag_sync.py) POSTs to ROS `POST /api/cost-management/v1/internal/tags/sync` (chart default). **db (advanced):** ROS JOINs Koku's `reporting_ocptags_values` at query time on a shared PostgreSQL instance — no HTTP sync; `reporting_enabledtagkeys` supplies the key catalog and the startup probe |
 | **SaaS** | `api` | `api` | Same push path as on-prem `api` mode |
 
 Detailed docs:
 
 - [Tag Filtering](../features/tag-filtering.md) — filter syntax, lifecycle, SQL paths, and push-auth (`api` mode)
-- [Configuration — tags](../configuration.md#tag-filtering-enabled-tag-keys) — env vars and chart defaults
+- [Configuration — tags](../configuration.md#tag-sync) — env vars and chart defaults
 - Koku: [`ros-ocp-integration.md` § Tag Sync](https://github.com/pgarciaq/koku/blob/pgarciaq-rosocp-superpowers-phase17/docs/architecture/ros-ocp-integration.md#tag-sync-koku--ros)
 
 ---

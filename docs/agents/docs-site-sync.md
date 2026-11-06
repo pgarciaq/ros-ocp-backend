@@ -4,7 +4,8 @@
 MkDocs site. They need not be identical prose, but **customer-relevant facts must stay in
 sync** when you edit either side. Prefer editing `docs-site/` for public contracts
 (defaults, API paths, deploy behavior), then mirror into `docs/` when a parallel internal
-page exists.
+page exists — unless the pair is a **stub pair** (see below), where the internal file is a
+pointer by design.
 
 Do **not** rely on CI to copy `docs/architecture/` or `docs/operations/` over `docs-site/` —
 that overwrite was removed in #417 because it wiped curated public pages (Last verified,
@@ -15,6 +16,9 @@ Expected differences (do **not** “fix” by wholesale copy):
 - Link style: `docs/` uses repo-relative paths; `docs-site/` uses GitHub/`{{ git_branch }}` links
 - `> **Last verified:**` stamps live on Class A **docs-site** pages
 - Intentional depth: e.g. idle-detection / business-hours internals vs public plugin-ref
+- **Stub pairs** (rows marked *stub pair* below): the internal file is a pointer plus
+  internal-only notes, so it never matches the public page. Do not mirror facts back into
+  `docs/` — those pairs are edited on the `docs-site/` side only.
 
 `docs/` contains internal developer documentation.
 `docs-site/` contains the public-facing documentation website.
@@ -51,8 +55,10 @@ Inventory / checklist: `make docs-sync-check` (`scripts/check-docs-sync.sh`).
 
 1. Find the matching pair from the table (or `make docs-sync-check`)
 2. If the change is **customer-relevant** (defaults, API paths, deploy contracts, feature
-   status), apply the same fact on the other side (adapt links; do not clobber depth)
-3. Prefer `docs-site/` as SoT for public contracts; mirror Class A into `docs/`
+   status), apply the same fact on the other side (adapt links; do not clobber depth).
+   **Stub pairs are the exception** — their facts live on the `docs-site/` side only
+3. Prefer `docs-site/` as SoT for public contracts; mirror Class A into `docs/` unless the
+   pair is a stub pair
 4. If no public equivalent exists but content is customer-facing, suggest creating one
 5. For **Class A** docs-site pages, bump `> **Last verified:** YYYY-MM-DD` — see
    CONTRIBUTING.md “Last-verified convention”
