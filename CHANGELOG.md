@@ -73,6 +73,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Two management clusters no longer share one api-tax advisory row ([#763](https://github.com/pgarciaq/ros-ocp-backend/issues/763)):**
+  the `hcp_correlation_advisories` key was `(org_id, hc_cluster_id,
+  window_start)`, and api-tax advisories write `hc_cluster_id=''`
+  (shared-plane evidence) — so two management clusters (farms) in one
+  org/window hit the same row and the upsert replaced the evidence while
+  keeping the first farm's identity: one farm's UUID served with another
+  farm's webhook facts, and visible to the wrong farm's cluster-scope
+  grant. The key now includes `management_cluster_uuid` (migration 000218;
+  all four writer conflict targets follow). Per-HC advisories are unchanged
+  — the management cluster is functionally determined by the HC, so
+  at-most-one-advisory-per-HC holds as before (ADR-0349 §3 amendment).
 - **Tag filters no longer lose a cluster that summarized on an older day ([#770](https://github.com/pgarciaq/ros-ocp-backend/issues/770)):**
   Koku built the push payload from `OCPUsageLineItemDailySummary.all_labels` at
   one tenant-wide latest `usage_start`. A cluster whose most recent report was

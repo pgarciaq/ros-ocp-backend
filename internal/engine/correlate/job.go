@@ -30,7 +30,7 @@ func writeAdvisory(ctx context.Context, pool *pgxpool.Pool, orgID, hcID, mgmtClu
 			h_p99_s, h_threshold_s, c_ratio, n_signals,
 			expires_at
 		) VALUES ($1,$2,$3,$4,$5,'do_not_add_workers_first','high',$6,$7,$8,$9,$10)
-		ON CONFLICT (org_id, hc_cluster_id, window_start)
+		ON CONFLICT (org_id, hc_cluster_id, window_start, management_cluster_uuid)
 		DO UPDATE SET verdict = EXCLUDED.verdict, confidence = EXCLUDED.confidence,
 			h_p99_s = EXCLUDED.h_p99_s, h_threshold_s = EXCLUDED.h_threshold_s,
 			c_ratio = EXCLUDED.c_ratio, n_signals = EXCLUDED.n_signals,

@@ -4,6 +4,8 @@
 
 Accepted (design) — implementation tracked in #717
 
+Amended (2026-11-07) — The §3 key was extended with `management_cluster_uuid` ([#763](https://github.com/pgarciaq/ros-ocp-backend/issues/763) / V15-13): api-tax's `hc_cluster_id=''` rows from **two management clusters (farms) in one org** collided on the 3-column key, and the upsert's `DO UPDATE` replaced evidence but not identity — one farm's UUID served with another farm's webhook facts, visible to the wrong farm's #791 scope grant. See the amendment in §3.
+
 ## Phase
 
 HCP fleet FinOps — advisory serving (W2 headroom, W3 zombie, W5 api-tax advisories; W8 sleep joins at implementation)
@@ -33,6 +35,10 @@ The table PK is `(org_id, hc_cluster_id, window_start)`; every correlator pass u
 - **W8's sleep rule is partitioned from zombie by design** (idle-always → zombie; active-in-BH-and-idle-outside → sleep; pinned by a Review Focus test in the W8 plan).
 
 **Constraint on future rules:** any new per-HC rule must be predicate-partitioned from the existing rules, **or** the PK must be extended with the verdict column (a migration plus changes to every write path). Rules that can co-fire on one HC with an equal `window_start` silently clobber — last writer wins in `RunCycle` order (headroom → api-tax → zombie). The endpoint contract documents at-most-one-advisory-per-HC, and a pinned test enforces the upsert semantics.
+
+**Amendment (#763):** the PK is now `(org_id, hc_cluster_id, window_start, management_cluster_uuid)` (migration 000218; every write path's conflict target extended). The §3 invariant as originally written implicitly assumed **one management cluster (farm) per org** — a legitimate multi-farm topology broke it: two farms' api-tax writes both keyed `(org, '', window)`, and the upsert replaced evidence while keeping the first writer's identity (the mixing the V15-13 audit proved). The extension preserves the invariant's substance: for per-HC rows the management cluster is functionally determined by the HC (one farm owns an HC), so at-most-one-advisory-per-(HC, window) still holds semantically; for shared-plane rows (`hc=''`) the management cluster **is** the distinguishing identity, so each farm gets its own row — and the #791 scope filter (`management_cluster_uuid = ANY(...)`) improves from "one farm may see a mixed row" to "each farm sees exactly its own". The escape-hatch clause above was exercised with a different column than it named: the hazard that arrived first was multi-farm identity, not co-firing verdicts. The verdict-column extension remains the (still unused) remedy for co-firing per-HC rules.
+
+Two boundary notes. (1) **Upgrade:** pre-fix shared-plane rows may already be mixed, undetectably (evidence records no originating farm) — migration 000218 purges `hc_cluster_id=''` rows rather than serve a possibly-mixed row to expiry; farms with live evidence re-fire within the hour (the table is fires-only, hourly-refreshed). (2) **HC farm moves:** per-HC enumeration follows fresh association snapshots, and two farms can transiently both claim one HC within the snapshot-freshness window — post-fix that yields two correctly-attributed rows for one HC (a transient, self-expiring deviation from at-most-one-per-HC) where pre-fix it yielded one *mixed* row; strictly better, accepted rather than re-engineered.
 
 ### 4. Public enum, nullable identity, no pagination in v1
 

@@ -189,7 +189,7 @@ func GetHCPAdvisories(c echo.Context) error {
 		advArgs = append(advArgs, allowedClusters)
 	}
 	advQuery += `
-		ORDER BY window_start DESC, hc_cluster_id
+		ORDER BY window_start DESC, hc_cluster_id, management_cluster_uuid
 		LIMIT $` + strconv.Itoa(len(advArgs)+1)
 	advArgs = append(advArgs, hcpAdvisoriesMaxRows)
 

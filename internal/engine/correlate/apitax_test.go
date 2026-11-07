@@ -2,6 +2,7 @@ package correlate
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -90,6 +91,35 @@ func apitaxAdvisories(t *testing.T, ctx context.Context, pool *pgxpool.Pool, org
 	return out
 }
 
+// apitaxFarmAdvisories returns each shared-plane (hc=”) advisory's
+// management cluster UUID and signals — #763 pins per-farm attribution.
+func apitaxFarmAdvisories(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID string) []map[string]interface{} {
+	t.Helper()
+	rows, err := pool.Query(ctx, `
+		SELECT management_cluster_uuid::text, n_signals
+		FROM hcp_correlation_advisories WHERE org_id = $1 AND hc_cluster_id = ''`,
+		orgID)
+	require.NoError(t, err)
+	defer rows.Close()
+	var out []map[string]interface{}
+	for rows.Next() {
+		var mgmt string
+		var signals []string
+		require.NoError(t, rows.Scan(&mgmt, &signals))
+		out = append(out, map[string]interface{}{
+			"mgmt": mgmt, "signals": signals,
+		})
+	}
+	require.NoError(t, rows.Err())
+	return out
+}
+
+// signalsJoined renders a row's signals for Contains/NotContains assertions.
+func signalsJoined(row map[string]interface{}) string {
+	parts := row["signals"].([]string)
+	return strings.Join(parts, " ")
+}
+
 func TestAPITax_FiresOnHotP99(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -176,4 +206,106 @@ func TestSeedAPITaxWindow_MonthBoundary(t *testing.T) {
 		orgID, windowStart.Add(-time.Hour), windowStart).Scan(&rows))
 	assert.Equal(t, len(apitaxLEs)*2, rows,
 		"both hourly windows (previous-month 23:30 and current-month 00:30) must be seeded")
+}
+
+// The #763 (V15-13) farm-identity fixtures: two management clusters in one
+// org, each with its own hot webhook — distinct UUIDs, distinct webhook
+// names, distinct evidence values so a mis-attributed row cannot pass by
+// coincidence.
+const (
+	farmA = "11111111-1111-4111-8111-111111111111"
+	farmB = "22222222-2222-4222-8222-222222222222"
+)
+
+// TestAPITax_TwoFarmsDoNotMix is #763's end-to-end repro: two management
+// clusters (farms) with hot webhooks in one org/window must produce TWO
+// shared-plane advisories — each farm's UUID carrying its own webhook
+// evidence. Baseline: the (org_id, hc_cluster_id, window_start) conflict
+// key collapsed both writes into one row and the DO UPDATE replaced the
+// evidence but not the identity — the first farm's UUID served with the
+// second farm's webhook.
+func TestAPITax_TwoFarmsDoNotMix(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := testutil.TestOrgID + "-apitax-763"
+	start := apitaxFireWindow()
+
+	seedAPITaxWindow(t, ctx, pool, orgID, farmA, "slow.a.example", start, 3.0, 5000, 10)
+	seedAPITaxWindow(t, ctx, pool, orgID, farmB, "slow.b.example", start, 3.0, 6000, 20)
+
+	fired, err := RunAPITaxCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, fired, 2, "both farms' hot webhooks must fire")
+
+	rows := apitaxFarmAdvisories(t, ctx, pool, orgID)
+	require.Len(t, rows, 2,
+		"two farms in one org/window must produce two attributed rows — the 3-column key collapsed them into one mixed row (#763)")
+	byFarm := map[string]map[string]interface{}{}
+	for _, r := range rows {
+		byFarm[r["mgmt"].(string)] = r
+	}
+	require.Contains(t, byFarm, farmA, "farm A's row must exist with its own identity")
+	require.Contains(t, byFarm, farmB, "farm B's row must exist with its own identity")
+	assert.Contains(t, signalsJoined(byFarm[farmA]), "slow.a.example",
+		"farm A's advisory must carry farm A's webhook evidence")
+	assert.NotContains(t, signalsJoined(byFarm[farmA]), "slow.b.example",
+		"farm A's advisory must not carry farm B's evidence (#763 mixing)")
+	assert.Contains(t, signalsJoined(byFarm[farmB]), "slow.b.example",
+		"farm B's advisory must carry farm B's webhook evidence")
+	assert.NotContains(t, signalsJoined(byFarm[farmB]), "slow.a.example",
+		"farm B's advisory must not carry farm A's evidence (#763 mixing)")
+}
+
+// TestAPITax_FarmUpsertSemantics pins the writer's upsert contract under the
+// extended key: farm order never matters (the baseline's UPDATE-evidence-
+// but-not-identity asymmetry made it matter), and the same farm rewritten
+// stays one row with evidence refreshed in place.
+func TestAPITax_FarmUpsertSemantics(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	p := DefaultPolicy()
+	ws := apitaxFireWindow()
+	we := ws.Add(time.Hour)
+
+	// Both write orders: two attributed rows either way.
+	for i, order := range [][]string{{farmA, farmB}, {farmB, farmA}} {
+		orgID := testutil.TestOrgID + "-apitax-763-order"
+		if i > 0 {
+			orgID += "-rev"
+		}
+		for _, farm := range order {
+			webhook := "slow.a.example"
+			if farm == farmB {
+				webhook = "slow.b.example"
+			}
+			require.NoError(t, writeAPITaxAdvisory(ctx, pool, orgID, farm, webhook, 3.0, 0.05, ws, we, p))
+		}
+		rows := apitaxFarmAdvisories(t, ctx, pool, orgID)
+		require.Len(t, rows, 2,
+			"write order must not change farm attribution — the baseline kept the first writer's identity with the second writer's evidence (#763)")
+		for _, r := range rows {
+			mgmt := r["mgmt"].(string)
+			want := "slow.a.example"
+			notWant := "slow.b.example"
+			if mgmt == farmB {
+				want, notWant = "slow.b.example", "slow.a.example"
+			}
+			assert.Contains(t, signalsJoined(r), want,
+				"farm %s must carry its own evidence (order %v)", mgmt, order)
+			assert.NotContains(t, signalsJoined(r), notWant,
+				"farm %s must not carry the other farm's evidence (order %v)", mgmt, order)
+		}
+	}
+
+	// The same farm rewritten: one row, evidence refreshed in place.
+	orgID := testutil.TestOrgID + "-apitax-763-repeat"
+	require.NoError(t, writeAPITaxAdvisory(ctx, pool, orgID, farmA, "first.example", 3.0, 0.05, ws, we, p))
+	require.NoError(t, writeAPITaxAdvisory(ctx, pool, orgID, farmA, "second.example", 3.2, 0.06, ws, we, p))
+	rows := apitaxFarmAdvisories(t, ctx, pool, orgID)
+	require.Len(t, rows, 1, "the same farm rewritten must stay one row — the upsert contract")
+	assert.Equal(t, farmA, rows[0]["mgmt"])
+	assert.Contains(t, signalsJoined(rows[0]), "second.example",
+		"the repeated write must refresh evidence in place")
+	assert.NotContains(t, signalsJoined(rows[0]), "first.example",
+		"stale evidence must not survive the refresh")
 }

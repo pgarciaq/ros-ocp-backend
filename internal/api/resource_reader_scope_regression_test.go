@@ -294,6 +294,53 @@ func TestReaderScope_HCPAdvisories(t *testing.T) {
 	assert.Len(t, data, 2, "wildcard sees the advisory")
 }
 
+// TestReaderScope_HCPAdvisories_SharedPlaneFarmIsolation pins #763's scope
+// improvement: with the management cluster in the advisories key, two farms'
+// shared-plane (hc=”) rows coexist, and each farm's grant sees exactly its
+// own — never another farm's evidence under its identity.
+func TestReaderScope_HCPAdvisories_SharedPlaneFarmIsolation(t *testing.T) {
+	setupEligibilityTest(t)
+	ctx := context.Background()
+	seedReaderScopeOrg(t, ctx)
+
+	// Two farms' shared-plane rows in one org/window (the #763 shape). Farm
+	// A = the seeded reader-scope A cluster; farm B = readerClusterB.
+	_, err := database.GetPool().Exec(ctx, `INSERT INTO hcp_correlation_advisories
+		(org_id, hc_cluster_id, management_cluster_uuid, window_start, window_end, verdict, confidence,
+		 h_p99_s, h_threshold_s, c_ratio, n_signals, expires_at)
+		VALUES ($1, '', $2, now() - interval '4 hours', now() - interval '3 hours',
+			'tune_noisy_webhook', 'high', 3.1, 0.3, NULL, '{"webhook:slow.a.example"}', now() + interval '1 day'),
+		       ($1, '', $3, now() - interval '4 hours', now() - interval '3 hours',
+			'tune_noisy_webhook', 'high', 3.2, 0.3, NULL, '{"webhook:slow.b.example"}', now() + interval '1 day')`,
+		testutil.TestOrgID, testutil.TestClusterUUID, readerClusterB)
+	require.NoError(t, err)
+
+	path := "/api/cost-management/v1/recommendations/openshift/hcp/advisories"
+
+	// A-only: exactly its own farm's shared-plane row — not B's, and with
+	// A's own evidence (not B's swapped in).
+	resp := readerScopeJSON(t, readerClusterAPerms(), path)
+	data, _ := resp["data"].([]interface{})
+	require.Len(t, data, 1, "farm A's grant must see exactly its own shared-plane advisory")
+	row := data[0].(map[string]interface{})
+	assert.Equal(t, testutil.TestClusterUUID, row["management_cluster_uuid"],
+		"the row farm A sees must be attributed to farm A (#763)")
+	assert.Contains(t, row["evidence"], "webhook:slow.a.example",
+		"the row farm A sees must carry farm A's evidence, not farm B's (#763 mixing)")
+	assert.NotContains(t, row["evidence"], "webhook:slow.b.example",
+		"farm B's evidence must not be served under farm A's identity (#763)")
+
+	// B grant: its own shared-plane row plus its two seeded per-HC rows.
+	resp = readerScopeJSON(t, map[string][]string{"openshift.cluster": {readerClusterB}}, path)
+	data, _ = resp["data"].([]interface{})
+	assert.Len(t, data, 3, "farm B's grant sees its shared-plane row and its HCs' advisories")
+
+	// Unrelated grant: neither farm's rows.
+	resp = readerScopeJSON(t, map[string][]string{"openshift.cluster": {"77777777-7777-7777-7777-777777777777"}}, path)
+	data, _ = resp["data"].([]interface{})
+	assert.Empty(t, data, "an unrelated grant sees no advisories")
+}
+
 // TestReaderScope_OOMTimelineAndDetails: out-of-scope resolved IDs return
 // 404 byte-identical to unknown IDs (Koku's queryset convention); the OOM
 // timeline serves its 7 entries to an authorized caller only.

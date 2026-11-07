@@ -39,7 +39,7 @@ func TestGetHCPAdvisories_Integration(t *testing.T) {
 				org_id, hc_cluster_id, management_cluster_uuid, window_start, window_end,
 				verdict, confidence, h_p99_s, h_threshold_s, c_ratio, n_signals, expires_at
 			) VALUES ($1, $2, $3::uuid, '2026-10-16T00:00:00Z', '2026-10-30T00:00:00Z', $4, $5, $6, $7, $8, $9, `+expiry+`)
-			ON CONFLICT (org_id, hc_cluster_id, window_start) DO UPDATE SET
+			ON CONFLICT (org_id, hc_cluster_id, window_start, management_cluster_uuid) DO UPDATE SET
 				verdict = EXCLUDED.verdict, confidence = EXCLUDED.confidence,
 				h_p99_s = EXCLUDED.h_p99_s, h_threshold_s = EXCLUDED.h_threshold_s,
 				c_ratio = EXCLUDED.c_ratio, n_signals = EXCLUDED.n_signals, expires_at = EXCLUDED.expires_at`,
@@ -194,7 +194,7 @@ func TestGetHCPAdvisories_UpsertInvariant_Integration(t *testing.T) {
 				verdict, confidence, h_p99_s, h_threshold_s, c_ratio, n_signals, expires_at
 			) VALUES ($1, 'hc-invariant', '33333333-3333-3333-3333-333333333333'::uuid, '2026-10-16T00:00:00Z', '2026-10-30T00:00:00Z',
 				$2, 'high', $3, 1, NULL, '{}', now() + interval '24 hours')
-			ON CONFLICT (org_id, hc_cluster_id, window_start) DO UPDATE SET
+			ON CONFLICT (org_id, hc_cluster_id, window_start, management_cluster_uuid) DO UPDATE SET
 				verdict = EXCLUDED.verdict, h_p99_s = EXCLUDED.h_p99_s`,
 			testutil.TestOrgID, verdict, p99)
 		require.NoError(t, err)
