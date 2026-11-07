@@ -186,7 +186,17 @@ func evalSleepSignature(days map[string]map[sleepKey]*sleepWorkloadDay, windowSt
 		dayBHActive := false
 		for k, r := range rows {
 			if !r.bhMeasured || !r.allMeasured {
-				continue
+				// #761 (V15-11): a USER workload with exactly one stream
+				// measured makes the day unknown — never silently skipped
+				// while a sibling covers the day. Absence of a BH row does
+				// not prove zero off-hours usage: the producer omits
+				// all-zero-BH groups by design (the normal night-only
+				// shape), so the off-hours split is unknowable — unknown,
+				// never zero-activity (ADR-0348 §5, workload grain).
+				if isZombieUserNamespace(k.ns, syncedExact, syncedPrefixes) {
+					return 0, 0, false, false
+				}
+				continue // system workload: stream shape irrelevant
 			}
 			covered = true
 			if !isZombieUserNamespace(k.ns, syncedExact, syncedPrefixes) {

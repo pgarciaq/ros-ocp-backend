@@ -150,3 +150,104 @@ func TestWeeklyOutsideHours_MidnightCrossing(t *testing.T) {
 	// day * 5 days = 80.
 	assert.InDelta(t, 80.0, weeklyOutsideHours(s), 0.001)
 }
+
+// nightOnlyFixture is #761's (V15-11) offline repro shape: the BH-signature
+// web workload plus an exclusively overnight CronJob that appears ONLY in
+// the all-hours stream — the producer's normal shape (GroupCSVRowsForStream
+// drops weight-≤0 rows when off_hours_weight=0). Distinct values so a
+// mis-attributed day cannot pass by coincidence.
+func nightOnlyFixture(now time.Time, bh, outside int64, days int) ([]types.KeyedDigest, []types.KeyedDigest) {
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -days)
+	var all, bhRows []types.KeyedDigest
+	mk := func(day time.Time, ns, wl string, usage int64, isBH bool) {
+		kd := types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: ns, Workload: wl, WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: day, CPUUsageP50MC: usage},
+		}
+		if isBH {
+			bhRows = append(bhRows, kd)
+		} else {
+			all = append(all, kd)
+		}
+	}
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		mk(d, "demo-app", "web", bh, true)
+		mk(d, "demo-app", "web", bh+outside, false)
+		mk(d, "kube-system", "coredns", 2000, true)
+		mk(d, "kube-system", "coredns", 2100, false)
+		// The night-only CronJob: all-hours 2000m, NO BH row.
+		mk(d, "batch-jobs", "night-cron", 2000, false)
+	}
+	return all, bhRows
+}
+
+// TestSleepCandidate_NightOnlyNoBHRowIsSilent is #761's offline repro: a
+// user workload with all-hours data and no BH row must make the day
+// unknown — never silently skipped while the web sibling establishes the
+// day's coverage. Baseline: high-confidence sleep advice for a cluster
+// whose night job runs exactly in the hours the advisory would sleep away.
+func TestSleepCandidate_NightOnlyNoBHRowIsSilent(t *testing.T) {
+	now := time.Now()
+	all, bh := nightOnlyFixture(now, 300, 0, 14)
+	got := SleepCandidate("hc-761", TierNonProd, DaySums(all, bh), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"a night-only user workload with no BH row must make the day unknown (#761)")
+}
+
+// Control: a system-namespace workload with a missing BH row stays skipped —
+// the platform exclusion is preserved and a valid candidate still fires.
+func TestSleepCandidate_SystemMissingBHRowStillFires(t *testing.T) {
+	now := time.Now()
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	var all, bhRows []types.KeyedDigest
+	mk := func(day time.Time, ns, wl string, usage int64, isBH bool) {
+		kd := types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: ns, Workload: wl, WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: day, CPUUsageP50MC: usage},
+		}
+		if isBH {
+			bhRows = append(bhRows, kd)
+		} else {
+			all = append(all, kd)
+		}
+	}
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		mk(d, "demo-app", "web", 300, true)
+		mk(d, "demo-app", "web", 300, false)
+		// System workload: all-hours only.
+		mk(d, "kube-system", "coredns", 2100, false)
+	}
+	got := SleepCandidate("hc-761-sys", TierNonProd, DaySums(all, bhRows), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	require.NotNil(t, got, "a system workload's stream shape is irrelevant — the exclusion is preserved (#761)")
+	assert.Equal(t, SleepVerdict, got.Verdict)
+}
+
+// Control: the reverse shape — a user workload with a BH row and NO
+// all-hours row — also reads unknown after the fix.
+func TestSleepCandidate_BHOnlyUserWorkloadIsSilent(t *testing.T) {
+	now := time.Now()
+	all, bh := nightOnlyFixture(now, 300, 0, 14)
+	// Drop the night-cron rows from `all`, then add the BH-ONLY user
+	// workload to the BH stream (the reverse shape: BHMeasured=true,
+	// AllMeasured=false).
+	var filtered []types.KeyedDigest
+	for _, kd := range all {
+		if kd.Key.Namespace == "batch-jobs" {
+			continue
+		}
+		filtered = append(filtered, kd)
+	}
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		bh = append(bh, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "bh-only", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 250},
+		})
+	}
+	got := SleepCandidate("hc-761-bhonly", TierNonProd, DaySums(filtered, bh), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"a user workload with a BH row and no all-hours row must read unknown (#761)")
+}

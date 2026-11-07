@@ -73,6 +73,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **A night-only workload can no longer hide from the sleep-safety test ([#761](https://github.com/pgarciaq/ros-ocp-backend/issues/761)):**
+  the non-prod sleep predicate skipped any workload missing one of its two
+  digest streams, and a workload that runs only outside business hours
+  legitimately has no business-hours digest row (the producer drops
+  all-zero-BH groups by design). Its off-hours CPU was therefore invisible:
+  a business-hours web workload established the day's coverage and
+  high-confidence `schedule_nonprod_sleep` fired for a cluster whose
+  night-only CronJob runs exactly in the hours the advisory would sleep
+  away. A user workload with exactly one stream now makes the day unknown
+  — silence, never a wrong advisory (ADR-0348 §5 amendment, workload
+  grain). The gate is deliberately conservative: a single-stream workload
+  whose all-hours total is below the outside-idle floor is provably inert
+  yet still silences the day, keeping the coverage rule threshold-free.
+  System-namespace exclusions are unchanged.
 - **Two management clusters no longer share one api-tax advisory row ([#763](https://github.com/pgarciaq/ros-ocp-backend/issues/763)):**
   the `hcp_correlation_advisories` key was `(org_id, hc_cluster_id,
   window_start)`, and api-tax advisories write `hc_cluster_id=''`

@@ -795,3 +795,25 @@ func TestComputeContainerDigest_RestartCountSum(t *testing.T) {
 	// OOM must keep its own lane: a restart/oom cross-wire would yield 5 here.
 	assert.Equal(t, int64(30), d.OOMCountSum)
 }
+
+// TestGroupCSVRows_NightOnlyContainer_NoBHGroup (#761): a container whose
+// every row falls outside the business-hours window produces NO BH group at
+// all — the off_hours_weight=0 fast path drops weight-≤0 rows at grouping
+// time. This is the normal producer shape behind a missing BH digest row:
+// the sleep predicate must read it as unknown coverage, never zero-activity.
+func TestGroupCSVRows_NightOnlyContainer_NoBHGroup(t *testing.T) {
+	day := time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC) // Tuesday
+	night1 := day.Add(2 * time.Hour)                   // Tue 02:00 UTC = 21:00 NY (prev day), outside BH
+	night2 := day.Add(23 * time.Hour)                  // Tue 23:00 UTC = 18:00 NY, outside BH
+	rows := []MetricRow{
+		{IntervalStart: night1, Namespace: "batch-jobs", WorkloadName: "night-cron", WorkloadType: "cronjob", ContainerName: "c1", CPUUsageMC: 1000},
+		{IntervalStart: night2, Namespace: "batch-jobs", WorkloadName: "night-cron", WorkloadType: "cronjob", ContainerName: "c1", CPUUsageMC: 1000},
+	}
+	sched := weekdaySchedule()
+	weightFn := BusinessHoursRowWeightFn(sched)
+	bhGroups := GroupCSVRowsForStream(rows, "org1", "cluster-1", ScheduleTypeBusinessHours, weightFn)
+	allGroups := GroupCSVRows(rows, "org1", "cluster-1")
+	require.Len(t, allGroups, 1, "the all-hours stream always groups rows")
+	assert.Empty(t, bhGroups,
+		"a night-only container produces no BH group — the normal missing-BH-row shape (#761)")
+}

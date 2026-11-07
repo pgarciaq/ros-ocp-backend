@@ -28,10 +28,13 @@ const (
 )
 
 // sleepDay is one seeded (namespace, workload) day: BH-stream and
-// all-hours-stream CPU in mC. The outside-BH value is all - bh.
+// all-hours-stream CPU in mC. The outside-BH value is all - bh. bhAbsent
+// seeds NO business_hours row (the producer's normal night-only shape:
+// GroupCSVRowsForStream drops weight-≤0 rows when off_hours_weight=0).
 type sleepDay struct {
-	bh  int64
-	all int64
+	bh       int64
+	all      int64
+	bhAbsent bool
 }
 
 func sleepWindow() (start, end time.Time) {
@@ -79,7 +82,7 @@ func seedSleepDigests(t *testing.T, ctx context.Context, pool *pgxpool.Pool, org
 	for i := 0; i < 14; i++ {
 		day := start.AddDate(0, 0, i).Format("2006-01-02")
 		for k, w := range spec[i] {
-			if i != partialDay {
+			if i != partialDay && !w.bhAbsent {
 				_, err := pool.Exec(ctx, `
 					INSERT INTO daily_container_digests (
 						bucket_date, org_id, cluster_uuid, namespace, workload,
@@ -381,4 +384,101 @@ func TestSleepCandidate_OrgDefaultScheduleQualifies(t *testing.T) {
 	fired, err := RunSleepCandidateCycle(ctx, pool)
 	require.NoError(t, err)
 	assert.Equal(t, 1, fired, "org-wide default defines the HC's hours")
+}
+
+// nightOnlyHosted is #761's (V15-11) audit fixture: the BH-signature web
+// workload PLUS an exclusively overnight CronJob with all-hours data and NO
+// BH row — the producer's normal shape for a workload with zero rows during
+// business hours (GroupCSVRowsForStream drops weight-≤0 rows when
+// off_hours_weight=0). Distinct values (web 300, night 2000) so a
+// mis-attributed day cannot pass by coincidence.
+func nightOnlyHosted() map[int]map[nswl]sleepDay {
+	spec := bhSignatureHosted(300, 0)
+	for i := 0; i < 14; i++ {
+		spec[i][nswl{"batch-jobs", "night-cron"}] = sleepDay{bh: 0, all: 2000, bhAbsent: true}
+	}
+	return spec
+}
+
+// TestSleepCandidate_NightOnlyNoBHRowIsUnknown is #761's server repro: a
+// user workload with all-hours data and no BH row must make the day
+// unknown — never silently skipped while the web sibling establishes the
+// day's coverage. Baseline: the night job's `continue` hid its
+// outside=2000 from the safety test and high-confidence sleep advice fired
+// for a cluster whose night job runs exactly in the hours the advisory
+// would sleep away.
+func TestSleepCandidate_NightOnlyNoBHRowIsUnknown(t *testing.T) {
+	org := testutil.TestOrgID + "-s-761"
+	pool := sleepFixture(t, org, sHC5, hcTierNonProd, nightOnlyHosted(), -1, true)
+	ctx := context.Background()
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fired,
+		"a night-only user workload with no BH row must make the day unknown (#761)")
+	assert.Empty(t, sleepAdvisories(t, ctx, pool, org),
+		"sleep advice must not fire while a user workload's off-hours split is unknowable (#761)")
+}
+
+// Control: the night job ALONE (no sibling to cover the day) is silent on
+// both the baseline and the fixed tree. On the baseline the mechanism is
+// dayBHActive: the skipped night job never establishes in-hours activity
+// (the platform row cannot); post-fix the per-workload gate also returns
+// unknown. Pinned so the outcome is not mistaken for the fix's mechanism.
+func TestSleepCandidate_NightOnlyAloneIsSilent(t *testing.T) {
+	org := testutil.TestOrgID + "-s-761-alone"
+	spec := map[int]map[nswl]sleepDay{}
+	for i := 0; i < 14; i++ {
+		spec[i] = map[nswl]sleepDay{
+			{"batch-jobs", "night-cron"}: {bh: 0, all: 2000, bhAbsent: true},
+			{"kube-system", "coredns"}:   {bh: 2000, all: 2100},
+		}
+	}
+	pool := sleepFixture(t, org, sHC6, hcTierNonProd, spec, -1, true)
+	ctx := context.Background()
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fired, "the night job alone cannot establish in-hours activity (dayBHActive), and post-fix the gate reads unknown")
+	assert.Empty(t, sleepAdvisories(t, ctx, pool, org))
+}
+
+// Control: a SYSTEM-namespace workload with a missing BH row stays skipped —
+// the platform exclusion is preserved and a valid sleep candidate still
+// fires. (The seeder's platform rows carry both streams; this makes one's
+// BH row absent.)
+func TestSleepCandidate_SystemMissingBHRowStillFires(t *testing.T) {
+	org := testutil.TestOrgID + "-s-761-sys"
+	spec := bhSignatureHosted(300, 0)
+	for i := 0; i < 14; i++ {
+		spec[i][nswl{"kube-system", "coredns"}] = sleepDay{bh: 0, all: 2100, bhAbsent: true}
+	}
+	pool := sleepFixture(t, org, sHC7, hcTierNonProd, spec, -1, true)
+	ctx := context.Background()
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 1, fired,
+		"a system workload's stream shape is irrelevant — the exclusion is preserved (#761)")
+	require.Len(t, sleepAdvisories(t, ctx, pool, org), 1)
+}
+
+// Control: the reverse shape — a user workload with a BH row and NO
+// all-hours row — also reads unknown after the fix (structurally
+// near-impossible from this producer, handled conservatively for free).
+func TestSleepCandidate_BHOnlyUserWorkloadIsUnknown(t *testing.T) {
+	org := testutil.TestOrgID + "-s-761-bhonly"
+	spec := bhSignatureHosted(300, 0)
+	for i := 0; i < 14; i++ {
+		spec[i][nswl{"demo-app", "bh-only"}] = sleepDay{bh: 250, all: 0}
+	}
+	// The seeder has no allAbsent flag; delete the all-hours rows for the
+	// bh-only workload post-seed to build the reverse shape.
+	pool := sleepFixture(t, org, sHC8, hcTierNonProd, spec, -1, true)
+	ctx := context.Background()
+	_, err := pool.Exec(ctx, `DELETE FROM daily_container_digests
+		WHERE org_id = $1 AND namespace = 'demo-app' AND workload = 'bh-only' AND schedule_type = 'all_hours'`, org)
+	require.NoError(t, err)
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fired,
+		"a user workload with a BH row and no all-hours row must read unknown (#761)")
+	assert.Empty(t, sleepAdvisories(t, ctx, pool, org))
 }

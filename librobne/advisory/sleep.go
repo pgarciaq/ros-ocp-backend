@@ -154,7 +154,17 @@ func SleepCandidate(hcID, tier string, sums map[string]map[DayKey]DaySum, sched 
 		dayBHActive := false
 		for k, r := range rows {
 			if !r.BHMeasured || !r.AllMeasured {
-				continue
+				// #761 (V15-11): a USER workload with exactly one stream
+				// measured makes the day unknown — never silently skipped
+				// while a sibling covers the day. Absence of a BH row does
+				// not prove zero off-hours usage: the producer omits
+				// all-zero-BH groups by design (the normal night-only
+				// shape), so the off-hours split is unknowable — unknown,
+				// never zero-activity (ADR-0348 §5, workload grain).
+				if isUserNamespace(k.NS, exact, prefixes) {
+					return nil
+				}
+				continue // system workload: stream shape irrelevant
 			}
 			covered = true
 			if !isUserNamespace(k.NS, exact, prefixes) {
