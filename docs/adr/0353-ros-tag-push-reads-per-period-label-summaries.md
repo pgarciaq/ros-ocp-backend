@@ -94,6 +94,45 @@ window than Koku's, and the two disagreed in production.
   `cluster_alias` is ever rewritten, so a changed cluster ID creates a new
   period rather than retagging old rows under the new ID.
 
+## Values Are Never Pruned (decided 2026-11-07)
+
+Koku's label summaries **accumulate** values within a report period: the pod and
+volume SQL write the stored array back as a union with the new run
+(`unnest(va."values" || coalesce(ls."values", '{}'::text[]))`), and the only
+`DELETE` in either file removes rows for keys whose
+`reporting_enabledtagkeys.enabled` is false. Combined with the two-period window,
+a value that stops appearing on a workload keeps matching it for **up to two
+monthly periods**, and a relabeled namespace can match both its old and new
+value for that long (the api payload keeps one of them —
+`sorted(values)[0]` — so which one wins is arbitrary, not last-writer).
+
+**Decision: accept it as the contract.** It is now stated in
+`docs-site/features/tag-filtering.md#tag-lifecycle`, and the reasons the
+alternatives lost are:
+
+- **Prune per period (Koku).** The same tables feed Koku's Tags API catalog and
+  the OCP-on-cloud `matched_tags` SQL, which joins `reporting_ocptags_values` to
+  provider tag values on **key and value** for cost allocation. A mid-period
+  prune would withdraw value matches for earlier days of the same period, so
+  cost allocation could change retroactively within a period.
+- **Per-cluster latest summarized day (value whitelist).** A namespace with no
+  line item on that cluster's most recent day — idle this week, or a partial or
+  late-arriving report — loses all of its labels. That is #770's failure class
+  again, at namespace granularity and on a much shorter clock.
+- **A ROS-side recency gate.** For *values* it is not implementable where the
+  dates are missing: `org_container_keys.resolved_tags` is a flat map with no
+  per-value timestamps, and `reporting_ocptags_values` carries
+  `cluster_ids`/`namespaces` arrays but no dates, so any value-recency rule has
+  to run in the builder — inheriting the two objections above. A *row* recency
+  gate is a different, implementable choice: `org_container_keys.last_reported`
+  freezes when a cluster stops being processed, and `is_stale` records a missed
+  cycle for clusters that still are. Neither addresses value staleness, so they
+  are tracked separately in #820.
+
+**What would reopen this:** a tenant where a value must stop matching
+immediately, e.g. a key removed for compliance reasons, or users reporting stale
+tag matches after a relabel.
+
 ## Verification
 
 - Regression test `test_build_namespace_tags_payload_spans_clusters_and_report_periods`
