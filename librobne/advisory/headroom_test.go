@@ -228,3 +228,107 @@ func sloSamples(rows []csv.SLORow) []Sample {
 	}
 	return out
 }
+
+// msCalmSnapshot builds a coherent metrics-server progression (the #762
+// non-gating source): calm uniform counts across the fixture's le set.
+func msCalmSnapshot(collected time.Time, count int64) []csv.SLORow {
+	var out []csv.SLORow
+	for _, le := range []float64{0.1, 0.5, 1.0, 2.0, 3.0, infLE()} {
+		out = append(out, csv.SLORow{
+			HCClusterID: hHC, WindowStart: collected.Add(-time.Hour), WindowEnd: collected,
+			VerbGroup: "mutating", Le: le, BucketCount: count,
+			CollectedAt: collected, Source: "metrics-server",
+		})
+	}
+	return out
+}
+
+// msSlowSnapshot: the same source's hot observation — the growth
+// concentrated at le=3.0 (slow buckets), the shape that reads p99 ~3s. A
+// uniform-count snapshot would read as the FASTEST bucket and mask the
+// gate (the review's vacuous-fixture finding).
+func msSlowSnapshot(collected time.Time, base int64) []csv.SLORow {
+	rows := msCalmSnapshot(collected, base)
+	for i := range rows {
+		if rows[i].Le >= 3.0 {
+			rows[i].BucketCount = base + 1001
+		}
+	}
+	return rows
+}
+
+// #762 (V15-12): the H leg gates on source=kubernetes (#644 amendment).
+// Non-gating metrics-server samples must not replace or mix with Kubernetes
+// samples in the quantile path — calm Kubernetes plus a later coherent
+// metrics-server snapshot with slow buckets must stay SILENT. On the
+// baseline the latest-wins map key (verb, le) let the metrics-server sample
+// replace the Kubernetes one and fired a false high-confidence advisory.
+func TestHeadroom_NonGatingSourceDoesNotFire(t *testing.T) {
+	now := time.Now()
+	in := headroomFixture(now) // calm kubernetes + the HOT kubernetes snapshot
+
+	// Replace the hot kubernetes snapshot with calm kubernetes-only input:
+	// rebuild the SLO rows as calm, then add the slow METRICS-SERVER
+	// snapshot one minute later.
+	windowEnd := now.UTC().Truncate(time.Hour)
+	windowStart := windowEnd.Add(-time.Hour)
+	slo := calmHourlySLO(windowStart.AddDate(0, 0, -8), windowStart)
+	base := 100 * int64(len(slo)/6)
+	// Calm continuation through the window (kubernetes only).
+	slo = append(slo, sloSnapshot(windowStart.Add(50*time.Minute), map[float64]int64{
+		0.1: base + 1, 0.5: base + 1, 1.0: base + 1, 2.0: base + 1,
+		3.0: base + 1, infLE(): base + 1,
+	})...)
+	// The non-gating source with its OWN coherent history (so its
+	// latest/latestBefore pair exists — a bare in-window snapshot without
+	// history would be dropped by the two-snapshot rule and mask the gate)
+	// and SLOW buckets (growth at le=3.0) one minute later.
+	msBase := 100 * int64(len(slo)/12)
+	for t := windowStart.Add(-2 * time.Hour); t.Before(windowStart); t = t.Add(time.Hour) {
+		slo = append(slo, msCalmSnapshot(t, msBase)...)
+	}
+	slo = append(slo, msSlowSnapshot(windowStart.Add(51*time.Minute), msBase)...)
+	in.SLORows = slo
+
+	got := EvaluateHeadroom(in)
+	assert.Nil(t, got,
+		"a non-gating metrics-server sample must not fire the H leg — the latest-wins (verb,le) key let it replace the Kubernetes sample (#762)")
+}
+
+// Reverse timing: the non-gating source arrives FIRST; the calm Kubernetes
+// snapshot later must still decide — silence.
+func TestHeadroom_NonGatingSourceReverseTiming(t *testing.T) {
+	now := time.Now()
+	in := headroomFixture(now)
+	windowEnd := now.UTC().Truncate(time.Hour)
+	windowStart := windowEnd.Add(-time.Hour)
+	slo := calmHourlySLO(windowStart.AddDate(0, 0, -8), windowStart)
+	base := 100 * int64(len(slo)/6)
+	// The slow metrics-server snapshot FIRST (with its own history so the
+	// pair exists — the same coherence requirement)...
+	msBase := 100 * int64(len(slo)/12)
+	for t := windowStart.Add(-2 * time.Hour); t.Before(windowStart); t = t.Add(time.Hour) {
+		slo = append(slo, msCalmSnapshot(t, msBase)...)
+	}
+	slo = append(slo, msSlowSnapshot(windowStart.Add(49*time.Minute), msBase)...)
+	// ...calm kubernetes later.
+	slo = append(slo, sloSnapshot(windowStart.Add(50*time.Minute), map[float64]int64{
+		0.1: base + 1, 0.5: base + 1, 1.0: base + 1, 2.0: base + 1,
+		3.0: base + 1, infLE(): base + 1,
+	})...)
+	in.SLORows = slo
+
+	got := EvaluateHeadroom(in)
+	assert.Nil(t, got, "reverse timing: the calm Kubernetes sample must decide, not the earlier metrics-server one (#762)")
+}
+
+// Genuine-pain control: the SAME slow buckets on the KUBERNETES source must
+// still fire — the gate must not anesthetize the real signal.
+func TestHeadroom_GenuineKubernetesPainStillFires(t *testing.T) {
+	now := time.Now()
+	got := EvaluateHeadroom(headroomFixture(now)) // the hot snapshot IS kubernetes
+	require.NotNil(t, got, "genuine Kubernetes pain must fire after the source gate (#762)")
+	assert.Equal(t, HeadroomVerdict, got.Verdict)
+	p99 := got.Details["hosted_api_p99_seconds"].(float64)
+	assert.GreaterOrEqual(t, p99, 2.0)
+}

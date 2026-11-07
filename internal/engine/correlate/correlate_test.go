@@ -82,20 +82,20 @@ func seedBaselineWeek(t *testing.T, ctx context.Context, pool *pgxpool.Pool, org
 	}
 }
 
-func seedHCManagement(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, mgmt, ns, hc string, cpuUsage, cpuRequest int64) {
+func seedHCManagement(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc string) {
 	t.Helper()
 	now := time.Now().UTC()
-	require.NoError(t, pgrec.EnsureIngestClusterRow(ctx, pool, orgID, "src-corr", mgmt, mgmt, now))
-	require.NoError(t, pgrec.UpdateHCPNamespaces(ctx, pool, orgID, "src-corr", mgmt, []string{ns}))
-	require.NoError(t, pgrec.UpsertHCPSnapshots(ctx, pool, orgID, mgmt, "m-corr",
+	require.NoError(t, pgrec.EnsureIngestClusterRow(ctx, pool, orgID, "src-corr", corrMgmt, corrMgmt, now))
+	require.NoError(t, pgrec.UpdateHCPNamespaces(ctx, pool, orgID, "src-corr", corrMgmt, []string{corrNS}))
+	require.NoError(t, pgrec.UpsertHCPSnapshots(ctx, pool, orgID, corrMgmt, "m-corr",
 		[]topology.HCPSnapshotEntry{{
-			HCPNamespace: ns, HostedClusterID: hc, HcUID: "uid-" + hc,
+			HCPNamespace: corrNS, HostedClusterID: hc, HcUID: "uid-" + hc,
 			ObservedAt: now.Format(time.RFC3339), Complete: true,
 		}}))
 	testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-		BucketDate: now.AddDate(0, 0, -1), OrgID: orgID, ClusterUUID: mgmt,
-		Namespace: ns, Workload: "etcd", WorkloadType: "statefulset", ContainerName: "etcd",
-		CPURequestP50MC: cpuRequest, CPUUsageP95MC: cpuUsage,
+		BucketDate: now.AddDate(0, 0, -1), OrgID: orgID, ClusterUUID: corrMgmt,
+		Namespace: corrNS, Workload: "etcd", WorkloadType: "statefulset", ContainerName: "etcd",
+		CPURequestP50MC: 1000, CPUUsageP95MC: 950,
 	})
 }
 
@@ -149,7 +149,7 @@ func TestCorrelator_FiresOnPainfulCPCalmWorkers(t *testing.T) {
 
 	seedWindowPair(t, ctx, pool, orgID, hc, start, 0.8, 2000)
 	seedBaselineWeek(t, ctx, pool, orgID, hc, start)
-	seedHCManagement(t, ctx, pool, orgID, corrMgmt, corrNS, hc, 950, 1000)
+	seedHCManagement(t, ctx, pool, orgID, hc)
 	seedNodeRecs(t, ctx, pool, orgID, hc, "{}")
 
 	res, err := RunCycle(ctx, pool)
@@ -175,7 +175,7 @@ func TestCorrelator_SilentWhenWorkersPressured(t *testing.T) {
 
 	seedWindowPair(t, ctx, pool, orgID, hc, start, 0.8, 2000)
 	seedBaselineWeek(t, ctx, pool, orgID, hc, start)
-	seedHCManagement(t, ctx, pool, orgID, corrMgmt, corrNS, hc, 950, 1000)
+	seedHCManagement(t, ctx, pool, orgID, hc)
 	seedNodeRecs(t, ctx, pool, orgID, hc, "{12}")
 
 	res, err := RunCycle(ctx, pool)
@@ -253,4 +253,97 @@ func TestCorrelator_SweepsExpired(t *testing.T) {
 	_, err = RunCycle(ctx, pool)
 	require.NoError(t, err)
 	assert.Empty(t, corrAdvisories(t, ctx, pool, orgID, hc), "expired advisories must be swept")
+}
+
+// seedBucketWindowSource is seedBucketWindow with an explicit source (#762):
+// the non-gating metrics-server snapshots for the mixing repro.
+func seedBucketWindowSource(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc, source string, windowStart time.Time, peakLE, peakCount, countScale float64) {
+	t.Helper()
+	seedBucketWindowSourceAt(t, ctx, pool, orgID, hc, source, windowStart, peakLE, peakCount, countScale, windowStart.Add(50*time.Minute))
+}
+
+// seedBucketWindowSourceAt: the explicit collected timestamp — the #762 repro
+// needs the non-gating source LATER than kubernetes (the original latest-wins
+// replaces on After; equal collected times keep the first-seen row and mask
+// the mechanism).
+func seedBucketWindowSourceAt(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc, source string, windowStart time.Time, peakLE, peakCount, countScale float64, collected time.Time) {
+	t.Helper()
+	require.NoError(t, ingestion.EnsureSLOPartitionsForMonth(ctx, pool, windowStart))
+	cum := 0.0
+	for _, le := range corrLEs {
+		d := countScale
+		if le == peakLE {
+			d = peakCount
+		}
+		cum += d
+		_, err := pool.Exec(ctx, `
+				INSERT INTO hosted_api_bucket_rollups (
+					window_start, window_end, org_id, cluster_uuid, hc_cluster_id,
+					verb_group, le, bucket_count, collected_at, source
+				) VALUES ($1, $2, $3, $4, $5, 'mutating', $6, $7, $8, $9)
+				ON CONFLICT (org_id, cluster_uuid, hc_cluster_id, window_start, window_end, verb_group, le, source)
+				DO UPDATE SET bucket_count = EXCLUDED.bucket_count, collected_at = EXCLUDED.collected_at`,
+			windowStart.UTC(), windowStart.Add(time.Hour).UTC(), orgID, hc, hc,
+			le, int64(cum), collected.UTC(), source)
+		require.NoError(t, err)
+	}
+}
+
+// TestCorrelator_NonGatingSourceDoesNotFire is #762's server-side repro: a
+// calm Kubernetes window plus a coherent metrics-server snapshot one minute
+// later (slow buckets, same verb/bounds) must NOT fire. On the baseline the
+// loadBucketSamples/windowP99 key (verb, le) let the metrics-server sample
+// replace the Kubernetes one and produced do_not_add_workers_first with the
+// audit's numbers (p99 ~2.98 vs threshold ~0.3).
+func TestCorrelator_NonGatingSourceDoesNotFire(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := testutil.TestOrgID + "-corr-762"
+	hc := "dddddddd-4444-4444-4444-444444444444"
+	start := corrFireWindow()
+
+	// Calm Kubernetes baseline week + a CALM kubernetes fire window: the
+	// volume concentrated at le=0.025 (the seedBaselineWeek shape — the
+	// default boundary count is 1, the peak carries the growth).
+	seedBaselineWeek(t, ctx, pool, orgID, hc, start)
+	seedBucketWindowSource(t, ctx, pool, orgID, hc, "kubernetes", start.Add(-time.Hour), 0.025, 1000, 1.0)
+	seedBucketWindowSource(t, ctx, pool, orgID, hc, "kubernetes", start, 0.025, 1050, 1.0)
+	// The non-gating source with its own coherent progression (a previous
+	// window too) and slow buckets concentrated at le=2.98.
+	seedBucketWindowSource(t, ctx, pool, orgID, hc, "metrics-server", start.Add(-time.Hour), 3.0, 500, 1.0)
+	seedBucketWindowSourceAt(t, ctx, pool, orgID, hc, "metrics-server", start, 3.0, 2500, 1.0, start.Add(51*time.Minute))
+	seedHCManagement(t, ctx, pool, orgID, hc)
+	seedNodeRecs(t, ctx, pool, orgID, hc, "{}")
+
+	_, err := RunCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Empty(t, corrAdvisories(t, ctx, pool, orgID, hc),
+		"a non-gating metrics-server sample must not fire the H leg — the (verb,le) latest-wins key let it replace the Kubernetes sample (#762)")
+}
+
+// Reverse timing + genuine-pain control for the server side: the slow
+// buckets on the KUBERNETES source (with the metrics-server rows also
+// present) must still fire — the gate must not anesthetize.
+func TestCorrelator_GenuineKubernetesPainStillFires(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := testutil.TestOrgID + "-corr-762-real"
+	hc := "eeeeeeee-5555-5555-5555-555555555555"
+	start := corrFireWindow()
+
+	seedBaselineWeek(t, ctx, pool, orgID, hc, start)
+	// Non-gating rows present in the same windows (the mixing temptation).
+	seedBucketWindowSource(t, ctx, pool, orgID, hc, "metrics-server", start.Add(-time.Hour), 0.025, 30, 900)
+	seedBucketWindowSource(t, ctx, pool, orgID, hc, "metrics-server", start, 0.025, 30, 950)
+	// The genuine kubernetes pain.
+	seedWindowPair(t, ctx, pool, orgID, hc, start, 0.8, 2000)
+	seedHCManagement(t, ctx, pool, orgID, hc)
+	seedNodeRecs(t, ctx, pool, orgID, hc, "{}")
+
+	res, err := RunCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, res.Fired, 1, "genuine Kubernetes pain must fire with the non-gating rows present (#762)")
+	advs := corrAdvisories(t, ctx, pool, orgID, hc)
+	require.Len(t, advs, 1)
+	assert.Equal(t, "do_not_add_workers_first", advs[0]["verdict"])
 }

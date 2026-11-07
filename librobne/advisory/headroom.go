@@ -102,7 +102,16 @@ func evalHeadroom(rows []csv.SLORow, hcID string, windowEnd time.Time, p Headroo
 		if r.HCClusterID != hcID {
 			continue
 		}
-		all = append(all, Sample{Group: r.VerbGroup, LE: r.Le, Count: float64(r.BucketCount), Collected: r.CollectedAt})
+		// #762 (V15-12), the #644 amendment's gate: H gates on
+		// source/job=kubernetes. Other sources (metrics-server, metrics)
+		// have different compiled bucket schemas and are recorded,
+		// non-gating — mixing them into the quantile path let a later
+		// non-gating sample replace the Kubernetes one and fire a false
+		// high-confidence advisory.
+		if r.Source != "kubernetes" {
+			continue
+		}
+		all = append(all, Sample{Group: r.VerbGroup, LE: r.Le, Count: float64(r.BucketCount), Collected: r.CollectedAt, Source: r.Source})
 	}
 	if len(all) == 0 {
 		return 0, 0, false, false

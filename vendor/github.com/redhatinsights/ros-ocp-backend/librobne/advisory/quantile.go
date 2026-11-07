@@ -140,6 +140,11 @@ type Sample struct {
 	LE        float64
 	Count     float64
 	Collected time.Time
+	// Source is the histogram's origin (the #644 amendment's job label,
+	// e.g. "kubernetes" or "metrics-server"). Different sources compile
+	// different bucket schemas — samples are keyed per source so they never
+	// combine (#762). The empty value is a single-source caller (apitax).
+	Source string
 }
 
 // WindowP99 computes the p99 per group over one window from cumulative
@@ -148,15 +153,23 @@ type Sample struct {
 // for hourly cycles). minSpan gates the time between the two snapshots
 // (the 30m min-data rule); 0 disables the span gate but never the
 // two-snapshot requirement. Unknown on any gap.
+//
+// #762: samples pair per (group, le, source) — a source's latest only
+// baselines against its OWN latestBefore. PRECONDITION: all samples for
+// one group must come from a SINGLE source — the group's bucket list
+// merges sources before Deltas, so a mixed-source caller gets
+// order-dependent garbage. Callers gate first (headroom: kubernetes only;
+// apitax: one source).
 func WindowP99(all []Sample, windowStart, windowEnd time.Time, minSpan time.Duration) (map[string]float64, bool) {
 	type key struct {
-		group string
-		le    float64
+		group  string
+		le     float64
+		source string
 	}
 	latest := make(map[key]Sample)
 	latestBefore := make(map[key]Sample)
 	for _, s := range all {
-		k := key{s.Group, s.LE}
+		k := key{s.Group, s.LE, s.Source}
 		inWindow := !s.Collected.Before(windowStart) && !s.Collected.After(windowEnd)
 		if inWindow {
 			if prev, ok := latest[k]; !ok || s.Collected.After(prev.Collected) {

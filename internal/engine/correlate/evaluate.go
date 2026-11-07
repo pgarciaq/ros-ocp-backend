@@ -53,12 +53,16 @@ type bucketSample struct {
 	le        float64
 	count     float64
 	collected time.Time
+	// source is the histogram's origin (#644 amendment): different jobs
+	// compile different bucket schemas — samples are keyed per source so
+	// they never combine (#762).
+	source string
 }
 
 // loadBucketSamples reads cumulative bucket snapshots for hc+groups in [from, to).
 func loadBucketSamples(ctx context.Context, pool *pgxpool.Pool, orgID, hcID string, from, to time.Time) ([]bucketSample, error) {
 	rows, err := pool.Query(ctx, `
-		SELECT verb_group, le, bucket_count, collected_at
+		SELECT verb_group, le, bucket_count, collected_at, source
 		FROM hosted_api_bucket_rollups
 		WHERE org_id = $1 AND hc_cluster_id = $2
 		  AND window_start >= $3 AND window_end <= $4
@@ -72,7 +76,7 @@ func loadBucketSamples(ctx context.Context, pool *pgxpool.Pool, orgID, hcID stri
 	for rows.Next() {
 		var s bucketSample
 		var count int64
-		if err := rows.Scan(&s.verbGroup, &s.le, &count, &s.collected); err != nil {
+		if err := rows.Scan(&s.verbGroup, &s.le, &count, &s.collected, &s.source); err != nil {
 			return nil, fmt.Errorf("scan bucket sample: %w", err)
 		}
 		s.count = float64(count)
@@ -88,15 +92,22 @@ func loadBucketSamples(ctx context.Context, pool *pgxpool.Pool, orgID, hcID stri
 // before window start (bounded to 2h back for hourly cycles). minSpan gates
 // the time between the two snapshots (the 30m min-data rule); 0 disables the
 // span gate but never the two-snapshot requirement. Unknown on any gap.
+//
+// #762: samples pair per (verb, le, source) — a source's latest only
+// baselines against its OWN latestBefore. PRECONDITION: all samples for
+// one verb group must come from a SINGLE source — byGroup merges sources
+// before Deltas, so a mixed-source caller gets order-dependent garbage.
+// evalH gates first (kubernetes only); apitax is single-source.
 func windowP99(all []bucketSample, windowStart, windowEnd time.Time, minSpan time.Duration) (map[string]float64, bool) {
 	type key struct {
-		verb string
-		le   float64
+		verb   string
+		le     float64
+		source string
 	}
 	latest := make(map[key]bucketSample)
 	latestBefore := make(map[key]bucketSample)
 	for _, s := range all {
-		k := key{s.verbGroup, s.le}
+		k := key{s.verbGroup, s.le, s.source}
 		inWindow := !s.collected.Before(windowStart) && !s.collected.After(windowEnd)
 		if inWindow {
 			if prev, ok := latest[k]; !ok || s.collected.After(prev.collected) {
@@ -143,6 +154,19 @@ func windowP99(all []bucketSample, windowStart, windowEnd time.Time, minSpan tim
 	return out, len(out) > 0
 }
 
+// filterGatingSource keeps only the #644 gating source (kubernetes) for
+// the H leg. Legacy rows with an empty source (the migration default) are
+// unknown-origin and do not gate.
+func filterGatingSource(in []bucketSample) []bucketSample {
+	out := in[:0]
+	for _, s := range in {
+		if s.source == "kubernetes" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // evalH reports hosted pain: max group p99 vs max(absolute, multiple of the
 // 7-day baseline median). Baseline = median of daily p99s (day-aggregated
 // deltas), computed with the same quantile path — no second math.
@@ -155,6 +179,11 @@ func evalH(ctx context.Context, pool *pgxpool.Pool, orgID, hcID string, windowEn
 	if err != nil || len(all) == 0 {
 		return 0, 0, false, false
 	}
+	// #762 (V15-12), the #644 amendment's gate: H gates on
+	// source/job=kubernetes; other sources are recorded, non-gating. The
+	// single filtered slice feeds BOTH the fire window and the daily
+	// baselines — one coherent source policy.
+	all = filterGatingSource(all)
 	groups, ok := windowP99(all, windowStart, windowEnd, minSpan)
 	if !ok {
 		return 0, 0, false, false
