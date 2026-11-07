@@ -5,6 +5,12 @@
 # Primary value: catch MkDocs docs_dir escapes — e.g. ../../docs/design/foo.md
 # becomes /docs/design/foo.md on GitHub Pages and 404s (only docs-site/ is published).
 #
+# Also validates in-page fragments against the ids the published renderer
+# produces (#802). mkdocs.yml pins GitHub's slug rule via
+# pymdownx.slugs.slugify, so a heading has the same anchor on GitHub and on the
+# site; this script re-implements that rule (and uses pymdownx directly when it
+# is installed) plus Python-Markdown's duplicate suffixes.
+#
 # External http(s) and {{ git_branch }} GitHub URLs are skipped (checked elsewhere
 # or resolve at MkDocs build). Class A Last-verified presence is checked.
 #
@@ -54,6 +60,89 @@ CLASS_A_STAMP_REQUIRED = [
 # Files whose relative-link findings are ignored (empty = none).
 # Changelog is generated from CHANGELOG.md with GitHub blob rewrites — not allowlisted.
 SKIP_ESCAPE_FILES: set[str] = set()
+
+# Anchors are validated with the renderer's own slugger (#802 Option B, where
+# mkdocs.yml pins pymdownx.slugs.slugify so the site publishes GitHub ids).
+try:
+    from pymdownx.slugs import slugify as _pymdownx_slugify_factory
+
+    _pymdownx_slugify = _pymdownx_slugify_factory(case="lower")
+except ImportError:  # docs-lint's CI job installs only Python — fall back below.
+    _pymdownx_slugify = None
+
+INLINE_CODE_RE = re.compile(r"`([^`]*)`")
+INLINE_LINK_RE = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
+INLINE_HTML_RE = re.compile(r"</?[^>]+>")
+
+# (heading markdown, expected id) pairs read from the built site. Guards the
+# stdlib fallback against drifting from the renderer.
+SLUG_CORPUS = {
+    "Idle / zombie detection": "idle--zombie-detection",
+    "VM — admin-only (no Settings API field)": "vm--admin-only-no-settings-api-field",
+    "List API — Node recommendations": "list-api--node-recommendations",
+    "6.1 Ingestion (`report_processor.go`)": "61-ingestion-report_processorgo",
+    "1.0.0 Phase16 — 2026-07-02 — Phase 16: multi-GPU awareness and node GPU count":
+        "100-phase16--2026-07-02--phase-16-multi-gpu-awareness-and-node-gpu-count",
+}
+
+HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$", re.M)
+_ids_cache: dict[Path, set[str]] = {}
+
+
+def rendered_heading(raw: str) -> str:
+    """Text a renderer puts inside the heading: code spans and link labels only."""
+    text = INLINE_CODE_RE.sub(r"\1", raw)
+    text = INLINE_LINK_RE.sub(r"\1", text)
+    return INLINE_HTML_RE.sub("", text)
+
+
+def heading_slug(raw: str) -> str:
+    text = rendered_heading(raw)
+    if _pymdownx_slugify is not None:
+        return _pymdownx_slugify(text, "-")
+    out = re.sub(r"[^\w\- ]", "", text.strip()).lower()
+    return out.replace(" ", "-")
+
+
+def page_ids(md: Path) -> set[str]:
+    """Ids the renderer publishes for a page, duplicate suffixes included."""
+    cached = _ids_cache.get(md)
+    if cached is not None:
+        return cached
+    ids: set[str] = set()
+    seen: dict[str, int] = {}
+    text = strip_fenced_code(md.read_text(encoding="utf-8", errors="replace"))
+    for m in HEADING_RE.finditer(text):
+        base = heading_slug(m.group(2))
+        if base in seen:
+            seen[base] += 1
+            ids.add(f"{base}_{seen[base]}")
+        else:
+            seen[base] = 0
+            ids.add(base)
+    _ids_cache[md] = ids
+    return ids
+
+
+def fragment_page(src: Path, url: str) -> Path | None:
+    """Markdown page a fragment belongs to, or None when out of scope."""
+    if url.startswith("#"):
+        return src
+    path = unquote(urlparse(url).path)
+    if not path or path.startswith("/"):
+        return None
+    base = src.resolve().parent if src.is_symlink() else src.parent
+    target = (base / path).resolve()
+    if target.is_dir():
+        target = target / "index.md"
+    if not target.suffix:
+        target = Path(str(target) + ".md")
+    try:
+        target.relative_to(docs_site_root)
+    except ValueError:
+        return None  # symlinked out of the tree (generated changelog) or escaped
+    return target if target.is_file() else None
+
 
 
 def strip_fenced_code(text: str) -> str:
@@ -150,9 +239,42 @@ for md in sorted(docs_site.rglob("*.md")):
             broken.append(f"{rel}: {url} (missing {missing})")
 
 print("docs-lint: relative links in docs-site/ (fenced code skipped)")
+
+# Fragment pass (#802): every in-page anchor must be an id the renderer
+# publishes. Separate from the loop above because is_external() deliberately
+# skips "#..." (same-page) links there.
+anchors: list[str] = []
+for md in sorted(docs_site.rglob("*.md")):
+    rel = str(md)
+    text = strip_fenced_code(md.read_text(encoding="utf-8", errors="replace"))
+    for m in LINK_RE.finditer(text):
+        url = m.group(2)
+        if url.startswith("#"):
+            page, frag = md.resolve(), url[1:]
+        else:
+            if is_external(url):
+                continue
+            page = fragment_page(md, url)
+            if page is None:
+                continue
+            frag = urlparse(url).fragment
+        if not frag:
+            continue
+        if unquote(frag) not in page_ids(page):
+            anchors.append(
+                f"{rel}: {url} (no heading #{unquote(frag)} in {page.relative_to(docs_site_root)})"
+            )
+
+slug_drift = [
+    f"{markdown!r} -> {heading_slug(markdown)!r}, expected {expected!r}"
+    for markdown, expected in SLUG_CORPUS.items()
+    if heading_slug(markdown) != expected
+]
+
 print(f"  escaped (Pages 404 risk):     {len(escaped)}")
 print(f"  escaped (allowlisted files):  {len(escaped_skipped)}  [{', '.join(sorted(SKIP_ESCAPE_FILES)) or 'none'}]")
 print(f"  broken in-site targets:       {len(broken)}")
+print(f"  broken in-page anchors:       {len(anchors)}")
 
 def show(title: str, rows: list[str], limit: int = 40) -> None:
     if not rows:
@@ -165,6 +287,8 @@ def show(title: str, rows: list[str], limit: int = 40) -> None:
 
 show("ESCAPED — rewrite to GitHub blob/{{ git_branch }} or in-site path", escaped)
 show("BROKEN in-site — fix path or remove", broken)
+show("BROKEN anchors — point at an existing heading (ids follow GitHub's slug rule)", anchors)
+show("SLUG DRIFT — check-docs-lint's fallback disagrees with the published rule", slug_drift)
 
 missing_stamps = []
 for rel in CLASS_A_STAMP_REQUIRED:
@@ -182,7 +306,7 @@ if missing_stamps:
 else:
     print("\ndocs-lint OK: Class A Last verified stamps present")
 
-findings = len(escaped) + len(broken) + len(missing_stamps)
+findings = len(escaped) + len(broken) + len(anchors) + len(slug_drift) + len(missing_stamps)
 if findings == 0:
     print("\ndocs-lint: all checks passed")
     sys.exit(0)

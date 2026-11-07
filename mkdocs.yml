@@ -63,6 +63,16 @@ markdown_extensions:
   - tables
   - toc:
       permalink: true
+      # GitHub's slug rule, so one anchor form works on GitHub and on the
+      # published site (#802). pymdownx strips ``[^\w\- ]`` and turns each
+      # space into a hyphen, which is what GitHub does after rendering; the
+      # Python-Markdown default collapses punctuation-and-space runs instead
+      # (``VM — admin`` -> ``vm-admin`` here, ``vm--admin`` on GitHub).
+      # scripts/check-docs-lint.sh re-implements this rule to validate
+      # fragments, and cross-checks itself against pymdownx when installed.
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
 
 nav:
   - Home: index.md

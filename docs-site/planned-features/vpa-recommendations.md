@@ -148,7 +148,7 @@ requires pod restarts. **Always** use safety gates:
 | **Change magnitude** | Large memory decreases need human review |
 | **Rollback** | Snapshot VPA + Deployment spec before apply; revert on OOM or latency regression |
 
-See [Node Recommendations Roadmap — safety gates](../features/node-recommendations.md#fleet-consolidation-advisory-only-tier-1)
+See [Node Recommendations Roadmap — safety gates](../features/node-recommendations.md#fleet-consolidation--advisory-only-tier-1)
 for the advisory automation model ROS uses across recommendation types.
 
 ---

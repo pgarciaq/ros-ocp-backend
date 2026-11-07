@@ -871,7 +871,7 @@ current usage is below 85%.
 Namespace **ResourceQuota** and OpenShift **ClusterResourceQuota** list tabs are implemented in
 **koku-ui-ros** (`optimizationsQuotasTable/`, `optimizationsClusterQuotasTable/`). Detail/breakdown
 pages and history sparklines remain future work — see
-[quota feature roadmap](features/quota-recommendations.md#roadmap-future-work).
+[quota feature roadmap](features/quota-recommendations.md#roadmap--future-work).
 
 ### Namespace ResourceQuota
 
@@ -1452,7 +1452,7 @@ Lists containers with MIG profile recommendations (`recommended_gpu_profile` set
   tie-break: cluster + namespace + container + GPU model) plus `offset`/`limit`
   fallback, with sort and filters pushed to SQL. Fine at any fleet depth; the
   former in-memory path is retained only as point-in-time discussion in the
-  [feature-status archive](historical/feature-status-archive.md#gpu-mig-known-limitations-gap-5).
+  [feature-status archive](historical/feature-status-archive.md#gpu-mig--known-limitations-gap-5).
 - **Per-container recommendations only:** Each row is an independent MIG profile suggestion.
   The API does not propose consolidating multiple containers onto fewer GPUs to free a
   physical GPU (cluster-wide bin-packing is future work).

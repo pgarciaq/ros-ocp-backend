@@ -357,7 +357,7 @@ Details: [Cost Integration — Savings recalculation](architecture/cost-integrat
 |----------|---------|-------------|
 | `ROS_RETENTION_MONTHS` | `6` | Digest partition retention (months). |
 | `ROS_HISTORY_RETENTION_DAYS` | `90` | Container recommendation history and quality partition retention. |
-| `ROS_VM_REC_HISTORY_RETENTION_DAYS` | `90` | VM recommendation history snapshot retention (`vm_recommendation_history`). Exposed read-only as `history_retention_days` on `GET /settings/vm`. See [Configurability — VM](architecture/configurability.md#vm-admin-only-no-settings-api-field). |
+| `ROS_VM_REC_HISTORY_RETENTION_DAYS` | `90` | VM recommendation history snapshot retention (`vm_recommendation_history`). Exposed read-only as `history_retention_days` on `GET /settings/vm`. See [Configurability — VM](architecture/configurability.md#vm--admin-only-no-settings-api-field). |
 | `ROS_STALENESS_THRESHOLD_HOURS` | `48` | Hours before recommendations marked stale. |
 | `ROS_STALE_DATA_THRESHOLD_HOURS` | (alias) | Same as `ROS_STALENESS_THRESHOLD_HOURS`. |
 | `ROS_STALE_CLEANUP_DAYS` | `30` | Delete stale recommendations after N days. (`ROS_STALE_ARCHIVE_DAYS` deprecated alias) |
@@ -488,7 +488,7 @@ suppressed when `pod_scheduling_headroom` &lt; `pod_headroom_consolidation_gate`
 notification code **74** fires when headroom &lt; `pod_headroom_notification_threshold` (default
 **10%**). Requires `pod_capacity` in operator CSV / digests. See
 [Configurability — Node](architecture/configurability.md#node) and
-[List API — Node recommendations](architecture/configurability.md#list-api-node-recommendations).
+[List API — Node recommendations](architecture/configurability.md#list-api--node-recommendations).
 
 ---
 
@@ -730,7 +730,7 @@ reachability (see [Tag Filtering](features/tag-filtering.md#advanced-on-prem-sta
 ## List API (selected)
 
 Deployment env vars above; query parameters and response fields for list endpoints are in
-[Configurability Reference — List API](architecture/configurability.md#list-api-node-recommendations).
+[Configurability Reference — List API](architecture/configurability.md#list-api--node-recommendations).
 
 | Endpoint | Notable query params / fields |
 |----------|-------------------------------|

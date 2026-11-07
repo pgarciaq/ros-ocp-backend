@@ -63,7 +63,7 @@ changes are required for data collection.
 > **File routing (implemented):** The storage CSV is in the manifest `files`
 > array (cost pipeline). The Koku listener was updated to also route it to the
 > ROS Kafka topic — see `koku/masu/external/kafka_msg_handler.py` (the
-> `_ros_extra_patterns` tuple). See the [snapshot staleness design doc](snapshot-staleness.md#two-strategies-both-documented) for the
+> `_ros_extra_patterns` tuple). See the [snapshot staleness design doc](snapshot-staleness.md) for the
 > architectural rationale behind this "Strategy A" approach.
 
 **CSV columns used:**
@@ -113,7 +113,7 @@ not a UI bug.
 
 Configure term windows via `GET/PUT .../settings/terms?recommendation_type=pvc`.
 Configure `min_trend_days` via `GET/PUT .../settings/pvc`. See
-[Configurability — PVC](../architecture/configurability.md#pvc-right-sizing).
+[Configurability — PVC](../architecture/configurability.md#pvc).
 
 ## Growth Trend Projection
 
@@ -279,7 +279,7 @@ Bracket syntax is preferred; flat ROS aliases are also accepted. See
 
 `mounted_by` is the most recently observed pod that mounted the PVC (from the storage
 CSV `pod` column, persisted as `last_seen_pod`). It is display context only — not a
-stable workload identity for VM correlation (see [known issues](../historical/feature-status-archive.md#pvc-storage-rightsizing-req-63)).
+stable workload identity for VM correlation (see [known issues](../historical/feature-status-archive.md#pvc--storage-rightsizing-req-63)).
 
 `vm_name` is set when the mounting pod is a `virt-launcher-*` workload and the operator
 storage CSV includes the `vm_name` column (authoritative KubeVirt VM link).

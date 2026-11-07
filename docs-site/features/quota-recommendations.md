@@ -356,7 +356,7 @@ Planned UI scope:
 
 Until UI ships, use the REST API or internal tooling. See
 [UI integration guide](../ui-integration-guide.md#4b-resourcequota-and-clusterresourcequota-recommendations)
-and [Deferred: Quota UI](../historical/feature-status-archive.md#deferred-quota-ui).
+and [Deferred: Quota UI](../historical/feature-status-archive.md#deferred-quota-detail-ui-historical).
 
 ### Savings and fleet rollup
 
@@ -383,5 +383,5 @@ for ResourceQuota FinOps totals. ClusterResourceQuota follows the same pattern.
 | **Per-quota identity (legacy operators)** | Without `quota_name` in namespace CSV, multiple ResourceQuota objects merge into one row |
 
 **Not planned:** Dollar savings for freed pod quota slots (see internal doc
-[Pod savings feasibility](quota-recommendations.md#pod-savings-feasibility-analysis)).
+*Pod savings feasibility*, `docs/features/quota-recommendations.md`).
 Use **`pods_freed`** for capacity reporting and node consolidation savings for node-level FinOps impact.

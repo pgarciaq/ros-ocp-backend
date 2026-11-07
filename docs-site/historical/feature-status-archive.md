@@ -579,7 +579,7 @@ The list UI **omits** the estimated monthly savings column because `estimated_sa
 only for `tighten` rows; most rows are `raise`/`optimal` with null savings. API consumers may still
 sort/filter by `estimated_monthly_savings`.
 
-See [quota-recommendations.md](../features/quota-recommendations.md#roadmap-future-work) and
+See [quota-recommendations.md](../features/quota-recommendations.md#roadmap--future-work) and
 [ui-integration-guide.md](../ui-integration-guide.md#4b-resourcequota-and-clusterresourcequota-recommendations).
 
 ### Deferred: Quota detail UI (historical)
@@ -707,7 +707,7 @@ item **10** below.
 
 The following items are **not** shipping defects. They are tracked enhancements
 deferred until prerequisites or customer scale justify the investment. Gap 5 detail:
-[GPU MIG — Known limitations (Gap 5)](#gpu-mig-known-limitations-gap-5).
+[GPU MIG — Known limitations (Gap 5)](#gpu-mig--known-limitations-gap-5).
 
 | # | Item | Consumer | Why deferred | Prerequisites |
 |---|------|----------|--------------|---------------|
@@ -1019,7 +1019,7 @@ missing prerequisites, not a backend defect.
 
 | Prerequisite | Symptom when missing | Fix |
 |--------------|----------------------|-----|
-| **DCGM exporter** on GPU nodes (`DCGM_FI_PROF_SM_ACTIVE`, `PROF_DRAM_ACTIVE`, `PROF_PIPE_TENSOR_ACTIVE`, FB metrics; CC 7.0+) | Fallback to `nvidia_gpu_duty_cycle` only → weak or `no_profiling` classification; no safe replica math | Deploy GPU Operator / DCGM exporter v3.1+ (see docs-site [GPU time-slicing — Prerequisites](../features/gpu-time-slicing.md#prerequisites)) |
+| **DCGM exporter** on GPU nodes (`DCGM_FI_PROF_SM_ACTIVE`, `PROF_DRAM_ACTIVE`, `PROF_PIPE_TENSOR_ACTIVE`, FB metrics; CC 7.0+) | Fallback to `nvidia_gpu_duty_cycle` only → weak or `no_profiling` classification; no safe replica math | Deploy GPU Operator / DCGM exporter v3.1+ (see docs-site [GPU time-slicing](../features/gpu-time-slicing.md)) |
 | **Namespace label** `cost_management_optimizations: "true"` (or legacy `insights_cost_management_optimizations`) | Cost CSV has GPUs; ROS `gpu_container_digests` empty for namespace | Label GPU workload namespaces; wait for operator ROS upload + ingest |
 | **GPU cost model rate** `gpu_core_usage_per_hour` | Recommendations with utilization and replicas but no dollar savings fields | Assign cost model with GPU rates to the cluster |
 | **`gpu` plugin enabled** (`ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`) | `404` on `/recommendations/openshift/gpu/*` | Include `gpu` in enabled plugins (default) |
@@ -1033,7 +1033,7 @@ Authoritative detail: [docs-site/features/gpu-time-slicing.md](../features/gpu-t
 
 ## GPU Summary `timeslicing.count` Divergence
 
-Tracked as **intentional future-work trade-off** in [GPU: Deferred / Future Work](#gpu-deferred-future-work) item **8** — not a defect backlog item.
+Tracked as **intentional future-work trade-off** in [GPU: Deferred / Future Work](#gpu-deferred--future-work) item **8** — not a defect backlog item.
 
 **Severity:** Cosmetic / semantic gap (not a bug)
 
@@ -1082,12 +1082,12 @@ actionable node-level guidance.
 - **Section visibility / navigation** → summary `timeslicing.count`
 - **Empty state** → explain telemetry exists but no group passed engine gates
 
-See docs-site [Summary vs list count semantics](../features/gpu-time-slicing.md#summary-vs-list-count-semantics) and
-[UI Integration Guide](../features/gpu-time-slicing.md#summary-vs-list-count-semantics).
+See docs-site [GPU time-slicing](../features/gpu-time-slicing.md) and the
+[UI Integration Guide](../ui-integration-guide.md).
 
 ### Resolution options (if product requires alignment later)
 
-Deferred item **8** in [GPU: Deferred / Future Work](#gpu-deferred-future-work) catalogs these paths:
+Deferred item **8** in [GPU: Deferred / Future Work](#gpu-deferred--future-work) catalogs these paths:
 
 1. **Rename field** to `gpu_node_groups` and document as monitored groups only
 2. **Run the engine** on all triples during summary (adds query cost)

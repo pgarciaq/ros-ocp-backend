@@ -11,7 +11,7 @@ This guide is for senior QE engineers (and developers) validating the **entire R
 If you are validating the native engine for the first time:
 
 1. **Read** [Validation priority](#validation-priority-suggested-order) — follow **P0 → P3** order.
-2. **Deploy** [Path A: Integrated Koku on-prem + native ROS](#path-a-integrated-koku-on-prem-native-ros) locally, or use **cost-onprem-chart** on OpenShift (`scripts/deploy-test-cost-onprem.sh`). *The chart is the working lab deployment path today; it is deprecated upstream in favor of koku-service-operator — the migration is tracked in [#682](https://github.com/pgarciaq/ros-ocp-backend/issues/682), and this page moves when that lands.*
+2. **Deploy** [Path A: Integrated Koku on-prem + native ROS](#path-a-integrated-koku-on-prem--native-ros) locally, or use **cost-onprem-chart** on OpenShift (`scripts/deploy-test-cost-onprem.sh`). *The chart is the working lab deployment path today; it is deprecated upstream in favor of koku-service-operator — the migration is tracked in [#682](https://github.com/pgarciaq/ros-ocp-backend/issues/682), and this page moves when that lands.*
 3. **Ingest** NISE data (`--ros-ocp-info --write-monthly`) and run the [API smoke script](#2-verify-each-plugin-api-smoke).
 4. **Automated gate:** the cost-onprem-chart full suite (`NAMESPACE=cost-onprem ./scripts/run-pytest.sh --all --no-ui`; the suite has grown to ~900 selected tests). CI default without `--extended` is ~**88** tests. Numbers are point-in-time — see [step 3 of the QE workflow](#3-automated-tests-cost-onprem-chart) for the latest verified run.
 5. **Deeper coverage:** [IQE integration tests](#4-iqe-integration-tests-iqe-ros-ocp-plugin) and Bruno collections in `costmgmt-api-cheatsheet`.
@@ -2463,7 +2463,7 @@ Re-ingest that data, then re-run container/node list or detail calls to confirm 
 
 ## GPU recommendations testing
 
-GPU validation spans **container workloads** (MIG profiles, per-container classification) and **node-level time-slicing**, plus **VM guest GPU** (see [VM GPU](#vm-gpu-vm-usage-optional-gpu-device-csv) below). See [GPU MIG](../features/gpu-mig.md) and [GPU time-slicing](../features/gpu-time-slicing.md).
+GPU validation spans **container workloads** (MIG profiles, per-container classification) and **node-level time-slicing**, plus **VM guest GPU** (see [VM GPU](#vm-gpu-vm-usage--optional-gpu-device-csv) below). See [GPU MIG](../features/gpu-mig.md) and [GPU time-slicing](../features/gpu-time-slicing.md).
 
 ### Container GPU (ROS usage CSV + container plugin)
 
@@ -2525,7 +2525,7 @@ curl -s -H "x-rh-identity: $IDENTITY" \
 | API filter | `filter[gpu_classification]=idle` (and `underutilized`, `memory_saturated`, `compute_saturated`, `mixed`) |
 | API detail | `GET .../recommendations/openshift/vm/detail?...` → verify `gpu_devices[]` (uuid, model, classification, utilization) |
 | DB | `vm_gpu_device_digests` joined to `daily_vm_digests` |
-| Notifications | **50**–**54** (see [VM notification quick reference](#vm-notification-quick-reference)) |
+| Notifications | **50**–**54** (see [VM notification quick reference](#vm-notification-quick-reference-codes-1819-3757)) |
 | Logs | `VM GPU device CSV: no digest for` if device CSV precedes usage digest |
 
 ```bash

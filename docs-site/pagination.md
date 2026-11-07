@@ -111,7 +111,7 @@ sort). Changing filters or sort between pages can skip or duplicate rows.
 Offset pagination must scan and discard `offset` rows before returning `limit` rows, so
 cost grows with page number. Keyset pagination seeks from an indexed sort key — **stable
 latency at any depth** when `ORDER BY` matches the index (see
-[Query Performance — `org_container_keys`](query-performance.md#pagination-architecture-org_container_keys)).
+[Query Performance — `org_container_keys`](query-performance.md#pagination-architecture--org_container_keys)).
 
 | Approx. page depth | Offset / `limit` | Keyset / `after` |
 |--------------------|-------------------|------------------|

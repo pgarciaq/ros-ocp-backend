@@ -128,7 +128,7 @@ before changing production scaling policy:
 | **Rollback** | Snapshot HPA spec before patch; revert on error-rate or latency regression |
 
 Node consolidation uses the same advisory model with built-in headroom gates —
-see [Node Recommendations Roadmap — Tier 1](../features/node-recommendations.md#fleet-consolidation-advisory-only-tier-1).
+see [Node Recommendations Roadmap — Tier 1](../features/node-recommendations.md#fleet-consolidation--advisory-only-tier-1).
 
 ### VPA dual-advisor validation (available today)
 

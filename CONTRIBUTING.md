@@ -1265,8 +1265,13 @@ When you change Class A facts, bump the date on that page. Optional CI drift che
    internals, or an in-site page.
 2. **Broken in-site relative targets**
 3. **Class A pages missing** `> **Last verified:** YYYY-MM-DD`
+4. **Dead `#fragment` anchors** — checked against the ids the published renderer
+   produces. `mkdocs.yml` pins GitHub's slug rule, so a heading has the same
+   anchor on the site and in the repo, duplicate suffixes included.
+   `mkdocs build` reports the same mismatches as
+   `INFO … does not contain an anchor` lines, which settle any disagreement.
 
-`make docs-lint` fails on escaped/broken relative links or missing Class A stamps.
+`make docs-lint` fails on escaped/broken relative links, dead anchors, or missing Class A stamps.
 `make docs-lint-soft` is report-only. CI workflow `docs-lint.yml` runs the hard check.
 Does **not** replace `make docs-drift`. One-shot rewriter used for the backlog:
 [`scripts/fix-docs-site-links.py`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/scripts/fix-docs-site-links.py).
@@ -1283,13 +1288,13 @@ Does **not** replace `make docs-drift`. One-shot rewriter used for the backlog:
 
 Two details differ from `make docs-lint`:
 
-1. **GitHub's slugger, not MkDocs'.** `mkdocs.yml` publishes `docs-site/` only, so
-   nothing under `docs/` is ever rendered by MkDocs; those links are resolved by
-   GitHub's Markdown renderer when a human browses the repo. The two sluggers
-   disagree on punctuation — `Idle / Zombie detection` becomes
-   `idle--zombie-detection` on GitHub and `idle-zombie-detection` under
-   Python-Markdown. Validating internal anchors with the MkDocs slugger both
-   hides real breaks and invents false ones.
+1. **One slug rule, two trees.** `mkdocs.yml` pins `pymdownx.slugs.slugify`
+   (GitHub's rule) for `docs-site/`, so `Idle / zombie detection` is
+   `idle--zombie-detection` on the published site and in the repo alike, and
+   both gates apply that same rule to their own tree. The one place the two
+   renderers still differ is the duplicate-heading counter: Python-Markdown
+   appends `_1`, GitHub appends `-1`, so the *second* heading with identical
+   text gets a different anchor in each.
 2. **Record trees are excluded on purpose.** `docs/adr/`, `docs/audits/`,
    `docs/archive/`, `docs/historical/`, `docs/issues/`, `docs/plans/` and
    `docs/superpowers/` hold point-in-time records: rewriting their links would

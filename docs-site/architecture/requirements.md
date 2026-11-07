@@ -1241,7 +1241,7 @@ memory_limit = max(memory_limit_from_percentile, last_oom_limit × backoff_multi
 
 ### GPU deferred items (beyond REQ-5.5)
 
-Documented in [known-issues.md § GPU: Deferred / Future Work](../historical/feature-status-archive.md#gpu-deferred-future-work). Summary:
+Documented in [known-issues.md § GPU: Deferred / Future Work](../historical/feature-status-archive.md#gpu-deferred--future-work). Summary:
 
 | # | Item | Consumer | Why deferred |
 |---|------|----------|--------------|
@@ -2535,13 +2535,13 @@ All new endpoints follow the same patterns as existing recommendation endpoints:
 
 ### Node Recommendation Response Format (Phase 8c)
 
-See [REQ-8c.10](#req-8c10-api--node--machineset-recommendation-endpoints-high) for full response schema.
+See [REQ-8c.10](#req-8c10-api--node--machineset-recommendation-endpoints-high--partial) for full response schema.
 
 Filters: `cluster_uuid`, `node`, `machineset_name`, `instance_type`, `is_underutilized` (bool), `is_overcommitted` (bool), `stranded_resource` (`cpu`|`memory`).
 
 ### MachineSet Recommendation Response Format (Phase 8c)
 
-See [REQ-8c.10](#req-8c10-api--node--machineset-recommendation-endpoints-high) for full response schema.
+See [REQ-8c.10](#req-8c10-api--node--machineset-recommendation-endpoints-high--partial) for full response schema.
 
 Filters: `cluster_uuid`, `machineset_name`, `current_instance_type`, `is_saturated` (bool), `is_idle` (bool), `is_flapping` (bool).
 

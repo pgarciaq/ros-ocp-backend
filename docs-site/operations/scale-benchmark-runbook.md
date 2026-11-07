@@ -746,5 +746,5 @@ their history.
 | Stress | 100K | Every 1h | Max load, observe steady-state behavior |
 
 For scale profiles, generate a custom static YAML using the
-[config generation script](#generating-nise-config-programmatically) and mount
+[config generation script](#generate-the-nise-configuration-yaml) and mount
 it as a ConfigMap or PVC in the nise-populator CronJob.

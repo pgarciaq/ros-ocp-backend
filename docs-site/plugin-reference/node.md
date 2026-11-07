@@ -162,7 +162,7 @@ For stranded-resource nodes, responses may include `suggested_instance_type`, `i
 
 ## Idle detection
 
-Node utilization list supports idle/zombie filters aligned with workload idle state on the node. See [Idle / zombie detection](idle-detection.md#node-utilization).
+Node utilization list supports idle/zombie filters aligned with workload idle state on the node. See [Idle / zombie detection](idle-detection.md#node-idle).
 
 ## Notification codes
 

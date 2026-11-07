@@ -74,5 +74,5 @@ Technical reference (threshold env vars, confidence scoring, source files):
 
 - [GPU MIG Recommendations](gpu-mig.md) — profile selection after classification
 - [GPU Time-Slicing](gpu-time-slicing.md) — node-level software sharing
-- [Idle / Zombie Detection](idle-detection.md#gpu-idle) — separate idle-state tracking (`gpu_idle_state`)
+- [Idle / Zombie Detection](idle-detection.md#node-gpu-and-pvc-support) — separate idle-state tracking (`gpu_idle_state`)
 - [gpu plugin reference](../plugin-reference/gpu.md) — API endpoints and settings

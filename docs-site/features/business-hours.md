@@ -405,5 +405,5 @@ extended namespace flow: `cost-onprem-chart/tests/suites/e2e/test_namespace_reco
 - [Plugin reference — Business hours](../plugin-reference/business-hours.md)
 - [History & quality](history-and-quality.md) — History is all-hours snapshots; Peak hours charts are today's nest
 - [Configurability — Business Hours](../architecture/configurability.md#business-hours)
-- [UI integration — Business hours settings](../ui-integration-guide.md#business-hours-settings)
+- [UI integration — Business hours settings](../ui-integration-guide.md#10-settings-business-hours)
 - [Namespace recommendations](namespace-recommendations.md#business-hours)

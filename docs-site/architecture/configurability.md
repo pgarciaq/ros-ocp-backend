@@ -820,6 +820,7 @@ Inline idle and zombie classification during container/GPU recommendation runs.
 | GPU DRAM active (basis points) <br><em>GPU idle if DRAM below 500 bp (5%).</em> | 500 | `ROS_IDLE_GPU_DRAM_ACTIVE_BP` | `/settings/idle-detection` | `idle_detection.thresholds.gpu_dram_active_basis_points` | Yes |
 | Exclude namespaces (CSV globs) <br><em>Globs never classified idle (`kube-system`, `openshift-*`).</em> | `kube-system,openshift-*` | `ROS_IDLE_EXCLUDE_NAMESPACES` | `/settings/idle-detection` | `idle_detection.exclusions.namespaces` | Yes |
 | Exclude workload types (CSV) <br><em>Kinds excluded (`DaemonSet` default).</em> | `DaemonSet` | `ROS_IDLE_EXCLUDE_WORKLOAD_TYPES` | `/settings/idle-detection` | `idle_detection.exclusions.workload_types` | Yes |
+
 ### Idle — admin-only (env overrides, not in PUT body)
 
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |

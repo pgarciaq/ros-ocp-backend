@@ -121,7 +121,7 @@ legacy response fields and UUID alias fallback. In native mode, its date window
 uses `updated_at` like the canonical list; in Kruize-only mode the legacy
 `monitoring_end_time` filter remains. Its detail alias remains on the legacy
 handler. Prefer the canonical path for new clients; see the
-[UI integration guide](../ui-integration-guide.md#2-recommendation-list-container-namespace)
+[UI integration guide](../ui-integration-guide.md#2-recommendation-list-container--namespace)
 for the compatibility differences.
 
 **Keyset pagination** (preferred): use `after` with `meta.next_cursor` when `meta.has_next` is true. Offset pagination remains for legacy clients:
@@ -201,7 +201,7 @@ GET .../recommendations/openshift/550e8400-e29b-41d4-a716-446655440000
 }
 ```
 
-Full parameter reference: [UI Integration Guide](../ui-integration-guide.md#2-recommendation-list-container-namespace).
+Full parameter reference: [UI Integration Guide](../ui-integration-guide.md#2-recommendation-list-container--namespace).
 
 ### Filters
 

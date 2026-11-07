@@ -12,7 +12,7 @@ there is no fat interface forcing empty methods.
 | **What each trait means** (this page) | Catalog + per-trait notes below |
 | **Who implements what** | [Trait matrix](../plugin-reference/index.md#trait-matrix) on the plugin-reference overview |
 | **Go signatures & design history** | [Plugin Architecture §4](plugin-architecture.md#4-plugin-interfaces-trait-based) |
-| **Term window defaults** | [§9.1 TermProvider defaults](plugin-architecture.md#91-termprovider-per-plugin-default-terms) |
+| **Term window defaults** | [§9.1 TermProvider defaults](plugin-architecture.md#91-termprovider--per-plugin-default-terms) |
 | **Scaffold a plugin** | [`make new-plugin`](../development.md#adding-a-plugin) / [`cmd/newplugin`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/cmd/newplugin) |
 
 Canonical definitions: [`internal/plugin/plugin.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/plugin.go).
@@ -69,7 +69,7 @@ Runs after a matching `CSVIngestor` finishes (`HookAfterCSVTypes` + `AfterIngest
 
 Classic pattern: `gpu` and `node` hook after `container` CSV to upsert domain digests without claiming the container file.
 
-Hooks are non-fatal by default (errors increment Prometheus counters). See [Plugin Architecture §6.1](plugin-architecture.md#61-ingestion-report_processordo).
+Hooks are non-fatal by default (errors increment Prometheus counters). See [Plugin Architecture §6.1](plugin-architecture.md#61-ingestion-report_processorgo).
 
 ## APIProvider
 
@@ -114,7 +114,7 @@ Enables:
 - Tenant overrides via `PUT /settings/terms?recommendation_type=<name>`
 - Admin locks via `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>`
 
-**Do not use** for binary / threshold recommendations (`snapshot`) or domains that do not expose multi-window engines (`quota`, `cluster-quota` today). Per-plugin default windows: [§9.1](plugin-architecture.md#91-termprovider-per-plugin-default-terms).
+**Do not use** for binary / threshold recommendations (`snapshot`) or domains that do not expose multi-window engines (`quota`, `cluster-quota` today). Per-plugin default windows: [§9.1](plugin-architecture.md#91-termprovider--per-plugin-default-terms).
 
 ## MigrationProvider (reserved)
 

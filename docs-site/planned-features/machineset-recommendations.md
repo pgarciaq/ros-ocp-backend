@@ -45,7 +45,7 @@ MachineSet.**
 - **Does not include:** PDB checks, scheduling simulation, or MachineSet replica metrics from the operator.
 - **Industry alignment:** Same advisory model as AWS Compute Optimizer, Kubecost, and CAST AI (recommendations without automated apply).
 
-See [Node consolidation (Tier 1)](../features/node-recommendations.md#fleet-consolidation-advisory-only-tier-1) for full Tier 1 behavior.
+See [Node consolidation (Tier 1)](../features/node-recommendations.md#fleet-consolidation--advisory-only-tier-1) for full Tier 1 behavior.
 
 ### Tier 2a — Advisory MachineSet node-count recommendations
 
@@ -182,7 +182,7 @@ IQE and other consumers before public launch.
 
 ## Consolidation model — current scope and limitations
 
-Tier 1 consolidation (`applyInstanceTypeConsolidation` in [recommend_nodes.go](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/node/recommend.go)) is **advisory only** — see [Tier 1 — Advisory consolidation](#tier-1-advisory-consolidation-with-safety-gates-shipped) above and the [feature doc](../features/node-recommendations.md#fleet-consolidation-advisory-only-tier-1).
+Tier 1 consolidation (`applyInstanceTypeConsolidation` in [recommend_nodes.go](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/node/recommend.go)) is **advisory only** — see [Tier 1 — Advisory consolidation](#tier-1--advisory-consolidation-with-safety-gates-shipped) above and the [feature doc](../features/node-recommendations.md#fleet-consolidation--advisory-only-tier-1).
 
 ### Current scope (Tier 1)
 
@@ -399,7 +399,7 @@ Catalog refreshes daily. Cached data used for up to 48 hours on API failure.
 
 - `daily_node_digests.machineset_name` — **exists** (operator population done).
 - `node_recommendations.machineset_name` — **exists** for correlation.
-- `machineset_recommendations` + `machineset_recommendation_history` — **not created** (see [REQ-8c.5 in requirements.md](../architecture/requirements.md#req-8c5-tier-2--machineset-right-sizing-high--not-implemented)).
+- `machineset_recommendations` + `machineset_recommendation_history` — **not created** (see [REQ-8c.5 in requirements.md](../architecture/requirements.md#req-8c5-tier-2a--advisory-machineset-node-count-recommendations-high--not-implemented)).
 
 **Shipped:** `GET .../machinesets` with `filter[cluster]`, `filter[machineset_name]`, keyset pagination, CSV.
 

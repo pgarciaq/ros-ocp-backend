@@ -361,7 +361,7 @@ Container recommendations already had this column (migration 000026).
 
 - **Safe on live deployments** — additive `ADD COLUMN IF NOT EXISTS`, no data backfill required
 - Savings populate on the **next ingestion cycle** after deploy when `KOKU_MASU_URL` is set and `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default)
-- See [Configurability Reference — Savings / Cost](../architecture/configurability.md#savings-cost) for savings-related env vars
+- See [Configurability Reference — Savings / Cost](../architecture/configurability.md#savings--cost) for savings-related env vars
 - No worker stop required (unlike migration 000058 PK rebuild)
 - Rollback: run `000070` down migration to drop the columns (savings values are recomputed on re-upgrade)
 
