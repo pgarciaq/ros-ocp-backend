@@ -1,6 +1,6 @@
 # Test Data Recipes
 
-> **Last verified:** 2026-09-14
+> **Last verified:** 2026-11-08
 
 How to generate targeted test data for each native engine plugin using NISE fixtures.
 
@@ -43,7 +43,7 @@ How to generate targeted test data for each native engine plugin using NISE fixt
 | Snapshot classification | `ocp_report_snapshot_classification.yml` | 4 snapshots: stale, orphaned, never-restored, active |
 | **Quotas** | | |
 | Namespace quota | `ocp_report_quota.yml` | High pod requests, explicit resource_quota used values |
-| Cluster quota | `ocp_report_cluster_quota.yml` | 2 CRQs with high used/hard ratios, tighten/raise paths |
+| Cluster quota | `ocp_report_cluster_quota.yml` | 2 CRQs with high used/hard ratios across CPU, memory, storage and pods, plus real namespace membership |
 | **Nodes** | | |
 | Node idle consolidation | `ocp_report_node_idle_consolidation.yml` | 6 nodes: zombie, idle, 4 lightly-loaded m5 workers for consolidation |
 | **Forecasting** | | |
@@ -310,8 +310,11 @@ curl -s -H "x-rh-identity: $IDENTITY" \
   | python3 -m json.tool
 ```
 
-**What to look for:** Two CRQs (`e2e-crq-team`, `e2e-crq-platform`) with 85–90% utilization
-ratios. The cluster-quota plugin recommends adjusting hard limits based on actual usage.
+**What to look for:** Two CRQs (`e2e-crq-team`, `e2e-crq-platform`) declaring high used/hard
+ratios on CPU, memory, storage and pods (storage 420/500 GiB and 800/1000 GiB, pods 175/200
+and 410/500), with namespace membership `crq-e2e-ns` and `crq-e2e-ns,openshift-monitoring`.
+`object_count_hard: 0` declares "no object quota", so no object-count recommendation is
+produced. The cluster-quota plugin recommends adjusting hard limits based on actual usage.
 
 ### Node Consolidation
 
