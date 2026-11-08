@@ -151,9 +151,9 @@ func loadTermWindows(ctx context.Context, pool *pgxpool.Pool, orgID string) (map
 	return result, nil
 }
 
-// AssembleBoxplots queries daily_container_digests and returns pre-aggregated
+// AssemblePercentileBands queries daily_container_digests and returns pre-aggregated
 // percentile-band plot data per daily bucket.
-func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey, termName string, orgID string) (*NativePlot, error) {
+func AssemblePercentileBands(ctx context.Context, pool *pgxpool.Pool, key ContainerKey, termName string, orgID string) (*NativePlot, error) {
 	windows, err := loadTermWindows(ctx, pool, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("load term windows: %w", err)
@@ -188,7 +188,7 @@ func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey,
 		key.OrgID, key.ClusterUUID, key.Namespace, key.Workload, key.WorkloadType, key.ContainerName,
 		start, end)
 	if err != nil {
-		return nil, fmt.Errorf("AssembleBoxplots query: %w", err)
+		return nil, fmt.Errorf("AssemblePercentileBands query: %w", err)
 	}
 	defer rows.Close()
 
@@ -203,7 +203,7 @@ func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey,
 			&cpuP50, &cpuP95, &cpuP99, &cpuMax,
 			&memP50, &memP95, &memP99, &memMax,
 			&throttleP95, &throttleMax); err != nil {
-			return nil, fmt.Errorf("AssembleBoxplots scan: %w", err)
+			return nil, fmt.Errorf("AssemblePercentileBands scan: %w", err)
 		}
 
 		plotsData[dailyBucketKey(bucket)] = plotDetailsFromDigest(
@@ -211,7 +211,7 @@ func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey,
 			throttleP95, throttleMax)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("AssembleBoxplots rows: %w", err)
+		return nil, fmt.Errorf("AssemblePercentileBands rows: %w", err)
 	}
 
 	if len(plotsData) == 0 {
@@ -224,8 +224,8 @@ func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey,
 	}, nil
 }
 
-// AssembleAllTermBoxplots computes plots for multiple terms in a single query (UNION ALL).
-func AssembleAllTermBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey, termNames []string, orgID string) (map[string]*NativePlot, error) {
+// AssembleAllTermPercentileBands computes plots for multiple terms in a single query (UNION ALL).
+func AssembleAllTermPercentileBands(ctx context.Context, pool *pgxpool.Pool, key ContainerKey, termNames []string, orgID string) (map[string]*NativePlot, error) {
 	if pool == nil || len(termNames) == 0 {
 		return map[string]*NativePlot{}, nil
 	}
@@ -275,7 +275,7 @@ func AssembleAllTermBoxplots(ctx context.Context, pool *pgxpool.Pool, key Contai
 	query := strings.Join(unionParts, " UNION ALL ") + " ORDER BY term_name, bucket_date"
 	rows, err := pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("AssembleAllTermBoxplots query: %w", err)
+		return nil, fmt.Errorf("AssembleAllTermPercentileBands query: %w", err)
 	}
 	defer rows.Close()
 
@@ -291,7 +291,7 @@ func AssembleAllTermBoxplots(ctx context.Context, pool *pgxpool.Pool, key Contai
 			&cpuP50, &cpuP95, &cpuP99, &cpuMax,
 			&memP50, &memP95, &memP99, &memMax,
 			&throttleP95, &throttleMax); err != nil {
-			return nil, fmt.Errorf("AssembleAllTermBoxplots scan: %w", err)
+			return nil, fmt.Errorf("AssembleAllTermPercentileBands scan: %w", err)
 		}
 		if plotsByTerm[termName] == nil {
 			plotsByTerm[termName] = map[string]NativePlotsData{}
@@ -301,7 +301,7 @@ func AssembleAllTermBoxplots(ctx context.Context, pool *pgxpool.Pool, key Contai
 			throttleP95, throttleMax)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("AssembleAllTermBoxplots rows: %w", err)
+		return nil, fmt.Errorf("AssembleAllTermPercentileBands rows: %w", err)
 	}
 
 	for termName, plotsData := range plotsByTerm {
@@ -320,9 +320,9 @@ type NamespaceKey struct {
 	Namespace   string
 }
 
-// AssembleNamespaceBoxplots queries daily_namespace_digests and returns
+// AssembleNamespacePercentileBands queries daily_namespace_digests and returns
 // pre-aggregated percentile-band plot data per daily bucket.
-func AssembleNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key NamespaceKey, termName string, orgID string) (*NativePlot, error) {
+func AssembleNamespacePercentileBands(ctx context.Context, pool *pgxpool.Pool, key NamespaceKey, termName string, orgID string) (*NativePlot, error) {
 	windows, err := loadTermWindows(ctx, pool, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("load term windows: %w", err)
@@ -352,7 +352,7 @@ func AssembleNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key Name
 		ORDER BY bucket_date`,
 		key.OrgID, key.ClusterUUID, key.Namespace, start, end)
 	if err != nil {
-		return nil, fmt.Errorf("AssembleNamespaceBoxplots query: %w", err)
+		return nil, fmt.Errorf("AssembleNamespacePercentileBands query: %w", err)
 	}
 	defer rows.Close()
 
@@ -365,14 +365,14 @@ func AssembleNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key Name
 		if err := rows.Scan(&bucket,
 			&cpuP50, &cpuP95, &cpuP99, &cpuMax,
 			&memP50, &memP95, &memP99, &memMax); err != nil {
-			return nil, fmt.Errorf("AssembleNamespaceBoxplots scan: %w", err)
+			return nil, fmt.Errorf("AssembleNamespacePercentileBands scan: %w", err)
 		}
 
 		plotsData[dailyBucketKey(bucket)] = plotDetailsFromDigest(
 			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax, 0, 0)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("AssembleNamespaceBoxplots rows: %w", err)
+		return nil, fmt.Errorf("AssembleNamespacePercentileBands rows: %w", err)
 	}
 
 	if len(plotsData) == 0 {
@@ -385,8 +385,8 @@ func AssembleNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key Name
 	}, nil
 }
 
-// AssembleAllTermNamespaceBoxplots computes namespace plots for multiple terms in one query.
-func AssembleAllTermNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key NamespaceKey, termNames []string, orgID string) (map[string]*NativePlot, error) {
+// AssembleAllTermNamespacePercentileBands computes namespace plots for multiple terms in one query.
+func AssembleAllTermNamespacePercentileBands(ctx context.Context, pool *pgxpool.Pool, key NamespaceKey, termNames []string, orgID string) (map[string]*NativePlot, error) {
 	if pool == nil || len(termNames) == 0 {
 		return map[string]*NativePlot{}, nil
 	}
@@ -432,7 +432,7 @@ func AssembleAllTermNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, k
 	query := strings.Join(unionParts, " UNION ALL ") + " ORDER BY term_name, bucket_date"
 	rows, err := pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("AssembleAllTermNamespaceBoxplots query: %w", err)
+		return nil, fmt.Errorf("AssembleAllTermNamespacePercentileBands query: %w", err)
 	}
 	defer rows.Close()
 
@@ -446,7 +446,7 @@ func AssembleAllTermNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, k
 		if err := rows.Scan(&termName, &bucket,
 			&cpuP50, &cpuP95, &cpuP99, &cpuMax,
 			&memP50, &memP95, &memP99, &memMax); err != nil {
-			return nil, fmt.Errorf("AssembleAllTermNamespaceBoxplots scan: %w", err)
+			return nil, fmt.Errorf("AssembleAllTermNamespacePercentileBands scan: %w", err)
 		}
 		if plotsByTerm[termName] == nil {
 			plotsByTerm[termName] = map[string]NativePlotsData{}
@@ -455,7 +455,7 @@ func AssembleAllTermNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, k
 			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax, 0, 0)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("AssembleAllTermNamespaceBoxplots rows: %w", err)
+		return nil, fmt.Errorf("AssembleAllTermNamespacePercentileBands rows: %w", err)
 	}
 
 	for termName, plotsData := range plotsByTerm {
@@ -467,9 +467,9 @@ func AssembleAllTermNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, k
 	return out, nil
 }
 
-// AssembleAllTermBoxplotsBH computes business-hours plots for multiple terms in a single query.
-// Identical to AssembleAllTermBoxplots except schedule_type = 'business_hours'.
-func AssembleAllTermBoxplotsBH(ctx context.Context, pool *pgxpool.Pool, key ContainerKey, termNames []string, orgID string) (map[string]*NativePlot, error) {
+// AssembleAllTermPercentileBandsBH computes business-hours plots for multiple terms in a single query.
+// Identical to AssembleAllTermPercentileBands except schedule_type = 'business_hours'.
+func AssembleAllTermPercentileBandsBH(ctx context.Context, pool *pgxpool.Pool, key ContainerKey, termNames []string, orgID string) (map[string]*NativePlot, error) {
 	if pool == nil || len(termNames) == 0 {
 		return map[string]*NativePlot{}, nil
 	}
@@ -519,7 +519,7 @@ func AssembleAllTermBoxplotsBH(ctx context.Context, pool *pgxpool.Pool, key Cont
 	query := strings.Join(unionParts, " UNION ALL ") + " ORDER BY term_name, bucket_date"
 	rows, err := pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("AssembleAllTermBoxplotsBH query: %w", err)
+		return nil, fmt.Errorf("AssembleAllTermPercentileBandsBH query: %w", err)
 	}
 	defer rows.Close()
 
@@ -535,7 +535,7 @@ func AssembleAllTermBoxplotsBH(ctx context.Context, pool *pgxpool.Pool, key Cont
 			&cpuP50, &cpuP95, &cpuP99, &cpuMax,
 			&memP50, &memP95, &memP99, &memMax,
 			&throttleP95, &throttleMax); err != nil {
-			return nil, fmt.Errorf("AssembleAllTermBoxplotsBH scan: %w", err)
+			return nil, fmt.Errorf("AssembleAllTermPercentileBandsBH scan: %w", err)
 		}
 		if plotsByTerm[termName] == nil {
 			plotsByTerm[termName] = map[string]NativePlotsData{}
@@ -545,7 +545,7 @@ func AssembleAllTermBoxplotsBH(ctx context.Context, pool *pgxpool.Pool, key Cont
 			throttleP95, throttleMax)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("AssembleAllTermBoxplotsBH rows: %w", err)
+		return nil, fmt.Errorf("AssembleAllTermPercentileBandsBH rows: %w", err)
 	}
 
 	for termName, plotsData := range plotsByTerm {
@@ -557,9 +557,9 @@ func AssembleAllTermBoxplotsBH(ctx context.Context, pool *pgxpool.Pool, key Cont
 	return out, nil
 }
 
-// AssembleAllTermNamespaceBoxplotsBH computes business-hours namespace plots for multiple terms.
-// Identical to AssembleAllTermNamespaceBoxplots except schedule_type = 'business_hours'.
-func AssembleAllTermNamespaceBoxplotsBH(ctx context.Context, pool *pgxpool.Pool, key NamespaceKey, termNames []string, orgID string) (map[string]*NativePlot, error) {
+// AssembleAllTermNamespacePercentileBandsBH computes business-hours namespace plots for multiple terms.
+// Identical to AssembleAllTermNamespacePercentileBands except schedule_type = 'business_hours'.
+func AssembleAllTermNamespacePercentileBandsBH(ctx context.Context, pool *pgxpool.Pool, key NamespaceKey, termNames []string, orgID string) (map[string]*NativePlot, error) {
 	if pool == nil || len(termNames) == 0 {
 		return map[string]*NativePlot{}, nil
 	}
@@ -605,7 +605,7 @@ func AssembleAllTermNamespaceBoxplotsBH(ctx context.Context, pool *pgxpool.Pool,
 	query := strings.Join(unionParts, " UNION ALL ") + " ORDER BY term_name, bucket_date"
 	rows, err := pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("AssembleAllTermNamespaceBoxplotsBH query: %w", err)
+		return nil, fmt.Errorf("AssembleAllTermNamespacePercentileBandsBH query: %w", err)
 	}
 	defer rows.Close()
 
@@ -619,7 +619,7 @@ func AssembleAllTermNamespaceBoxplotsBH(ctx context.Context, pool *pgxpool.Pool,
 		if err := rows.Scan(&termName, &bucket,
 			&cpuP50, &cpuP95, &cpuP99, &cpuMax,
 			&memP50, &memP95, &memP99, &memMax); err != nil {
-			return nil, fmt.Errorf("AssembleAllTermNamespaceBoxplotsBH scan: %w", err)
+			return nil, fmt.Errorf("AssembleAllTermNamespacePercentileBandsBH scan: %w", err)
 		}
 		if plotsByTerm[termName] == nil {
 			plotsByTerm[termName] = map[string]NativePlotsData{}
@@ -628,7 +628,7 @@ func AssembleAllTermNamespaceBoxplotsBH(ctx context.Context, pool *pgxpool.Pool,
 			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax, 0, 0)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("AssembleAllTermNamespaceBoxplotsBH rows: %w", err)
+		return nil, fmt.Errorf("AssembleAllTermNamespacePercentileBandsBH rows: %w", err)
 	}
 
 	for termName, plotsData := range plotsByTerm {

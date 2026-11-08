@@ -20,7 +20,7 @@ func TestPlotDetails_JSONFields(t *testing.T) {
 	assert.Equal(t, "cores", pd.Format)
 }
 
-func TestAssembleBoxplots_ShortTerm_DailyBuckets(t *testing.T) {
+func TestAssemblePercentileBands_ShortTerm_DailyBuckets(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -40,7 +40,7 @@ func TestAssembleBoxplots_ShortTerm_DailyBuckets(t *testing.T) {
 		MemUsageP99KiB: 2048*1024 + 900, MemUsageMaxKiB: 2048*1024 + 1024,
 	})
 
-	plot, err := AssembleBoxplots(ctx, pool, key, "short_term", key.OrgID)
+	plot, err := AssemblePercentileBands(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 	assert.Equal(t, 1, plot.DataPoints, "short_term 24h window should have one daily bucket")
@@ -56,7 +56,7 @@ func TestAssembleBoxplots_ShortTerm_DailyBuckets(t *testing.T) {
 	}
 }
 
-func TestAssembleBoxplots_MediumTerm_DailyWindows(t *testing.T) {
+func TestAssemblePercentileBands_MediumTerm_DailyWindows(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -81,13 +81,13 @@ func TestAssembleBoxplots_MediumTerm_DailyWindows(t *testing.T) {
 		})
 	}
 
-	plot, err := AssembleBoxplots(ctx, pool, key, "medium_term", key.OrgID)
+	plot, err := AssemblePercentileBands(ctx, pool, key, "medium_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 	assert.GreaterOrEqual(t, plot.DataPoints, 6, "medium_term should have ~7 daily buckets")
 }
 
-func TestAssembleBoxplots_NoData_ReturnsNil(t *testing.T) {
+func TestAssemblePercentileBands_NoData_ReturnsNil(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -97,12 +97,12 @@ func TestAssembleBoxplots_NoData_ReturnsNil(t *testing.T) {
 		ContainerName: "none",
 	}
 
-	plot, err := AssembleBoxplots(ctx, pool, key, "short_term", key.OrgID)
+	plot, err := AssemblePercentileBands(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	assert.Nil(t, plot, "no data should return nil plot")
 }
 
-func TestAssembleBoxplots_UnitConversion(t *testing.T) {
+func TestAssemblePercentileBands_UnitConversion(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -121,7 +121,7 @@ func TestAssembleBoxplots_UnitConversion(t *testing.T) {
 		MemUsageP50KiB: 2048, MemUsageP95KiB: 2100, MemUsageP99KiB: 2150, MemUsageMaxKiB: 2200,
 	})
 
-	plot, err := AssembleBoxplots(ctx, pool, key, "short_term", key.OrgID)
+	plot, err := AssemblePercentileBands(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 	require.Equal(t, 1, plot.DataPoints)
@@ -132,7 +132,7 @@ func TestAssembleBoxplots_UnitConversion(t *testing.T) {
 	}
 }
 
-func TestAssembleBoxplots_CPUThrottle_Populated(t *testing.T) {
+func TestAssemblePercentileBands_CPUThrottle_Populated(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -152,7 +152,7 @@ func TestAssembleBoxplots_CPUThrottle_Populated(t *testing.T) {
 		MemUsageP50KiB: 1024, MemUsageP95KiB: 1500, MemUsageP99KiB: 1800, MemUsageMaxKiB: 2048,
 	})
 
-	plot, err := AssembleBoxplots(ctx, pool, key, "short_term", key.OrgID)
+	plot, err := AssemblePercentileBands(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 	require.Equal(t, 1, plot.DataPoints)
@@ -165,7 +165,7 @@ func TestAssembleBoxplots_CPUThrottle_Populated(t *testing.T) {
 	}
 }
 
-func TestAssembleBoxplots_CPUThrottle_OmittedWhenZero(t *testing.T) {
+func TestAssemblePercentileBands_CPUThrottle_OmittedWhenZero(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -185,7 +185,7 @@ func TestAssembleBoxplots_CPUThrottle_OmittedWhenZero(t *testing.T) {
 		MemUsageP50KiB: 1024, MemUsageP95KiB: 1500, MemUsageP99KiB: 1800, MemUsageMaxKiB: 2048,
 	})
 
-	plot, err := AssembleBoxplots(ctx, pool, key, "short_term", key.OrgID)
+	plot, err := AssemblePercentileBands(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 	require.Equal(t, 1, plot.DataPoints)
@@ -226,7 +226,7 @@ func TestMonitoringEndTime_NoData(t *testing.T) {
 	assert.True(t, met.IsZero() || met.Year() == 1, "no data should return zero-equivalent time")
 }
 
-func TestAssembleNamespaceBoxplots_ShortTerm_DailyBuckets(t *testing.T) {
+func TestAssembleNamespacePercentileBands_ShortTerm_DailyBuckets(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -254,7 +254,7 @@ func TestAssembleNamespaceBoxplots_ShortTerm_DailyBuckets(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "short_term", key.OrgID)
+	plot, err := AssembleNamespacePercentileBands(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 	assert.Equal(t, 1, plot.DataPoints)
@@ -270,7 +270,7 @@ func TestAssembleNamespaceBoxplots_ShortTerm_DailyBuckets(t *testing.T) {
 	}
 }
 
-func TestAssembleNamespaceBoxplots_MediumTerm_DailyWindows(t *testing.T) {
+func TestAssembleNamespacePercentileBands_MediumTerm_DailyWindows(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -302,13 +302,13 @@ func TestAssembleNamespaceBoxplots_MediumTerm_DailyWindows(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "medium_term", key.OrgID)
+	plot, err := AssembleNamespacePercentileBands(ctx, pool, key, "medium_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 	assert.GreaterOrEqual(t, plot.DataPoints, 6, "medium_term should have ~7 daily buckets")
 }
 
-func TestAssembleNamespaceBoxplots_LongTerm_15Days(t *testing.T) {
+func TestAssembleNamespacePercentileBands_LongTerm_15Days(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -340,13 +340,13 @@ func TestAssembleNamespaceBoxplots_LongTerm_15Days(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "long_term", key.OrgID)
+	plot, err := AssembleNamespacePercentileBands(ctx, pool, key, "long_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 	assert.GreaterOrEqual(t, plot.DataPoints, 14, "long_term should have ~15 daily buckets")
 }
 
-func TestAssembleNamespaceBoxplots_NoData_ReturnsNil(t *testing.T) {
+func TestAssembleNamespacePercentileBands_NoData_ReturnsNil(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -355,12 +355,12 @@ func TestAssembleNamespaceBoxplots_NoData_ReturnsNil(t *testing.T) {
 		Namespace: "none",
 	}
 
-	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "short_term", key.OrgID)
+	plot, err := AssembleNamespacePercentileBands(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	assert.Nil(t, plot, "no data should return nil plot")
 }
 
-func TestAssembleNamespaceBoxplots_UnknownTerm_ReturnsError(t *testing.T) {
+func TestAssembleNamespacePercentileBands_UnknownTerm_ReturnsError(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -369,13 +369,13 @@ func TestAssembleNamespaceBoxplots_UnknownTerm_ReturnsError(t *testing.T) {
 		Namespace: testutil.TestNamespace,
 	}
 
-	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "extra_long_term", key.OrgID)
+	plot, err := AssembleNamespacePercentileBands(ctx, pool, key, "extra_long_term", key.OrgID)
 	assert.Error(t, err, "unknown term should error")
 	assert.Nil(t, plot)
 	assert.Contains(t, err.Error(), "unknown term")
 }
 
-func TestAssembleNamespaceBoxplots_UnitConversion(t *testing.T) {
+func TestAssembleNamespacePercentileBands_UnitConversion(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -402,7 +402,7 @@ func TestAssembleNamespaceBoxplots_UnitConversion(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "short_term", key.OrgID)
+	plot, err := AssembleNamespacePercentileBands(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 	require.Equal(t, 1, plot.DataPoints)
@@ -413,7 +413,7 @@ func TestAssembleNamespaceBoxplots_UnitConversion(t *testing.T) {
 	}
 }
 
-func TestAssembleNamespaceBoxplots_PercentileOrdering(t *testing.T) {
+func TestAssembleNamespacePercentileBands_PercentileOrdering(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -441,7 +441,7 @@ func TestAssembleNamespaceBoxplots_PercentileOrdering(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	plot, err := AssembleNamespaceBoxplots(ctx, pool, key, "short_term", key.OrgID)
+	plot, err := AssembleNamespacePercentileBands(ctx, pool, key, "short_term", key.OrgID)
 	require.NoError(t, err)
 	require.NotNil(t, plot)
 
@@ -487,7 +487,7 @@ func TestNamespaceMonitoringEndTime_NoData(t *testing.T) {
 	assert.True(t, met.IsZero() || met.Year() == 1, "no data should return zero-equivalent time")
 }
 
-func TestAssembleAllTermBoxplotsBH_Populated(t *testing.T) {
+func TestAssembleAllTermPercentileBandsBH_Populated(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -506,7 +506,7 @@ func TestAssembleAllTermBoxplotsBH_Populated(t *testing.T) {
 		MemUsageP50KiB: 1024, MemUsageP95KiB: 1500, MemUsageP99KiB: 1800, MemUsageMaxKiB: 2048,
 	})
 
-	bhPlots, err := AssembleAllTermBoxplotsBH(ctx, pool, key, []string{"short_term"}, key.OrgID)
+	bhPlots, err := AssembleAllTermPercentileBandsBH(ctx, pool, key, []string{"short_term"}, key.OrgID)
 	require.NoError(t, err)
 	require.Contains(t, bhPlots, "short_term")
 	plot := bhPlots["short_term"]
@@ -522,7 +522,7 @@ func TestAssembleAllTermBoxplotsBH_Populated(t *testing.T) {
 	}
 }
 
-func TestAssembleAllTermBoxplotsBH_NilWhenNoData(t *testing.T) {
+func TestAssembleAllTermPercentileBandsBH_NilWhenNoData(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -541,13 +541,13 @@ func TestAssembleAllTermBoxplotsBH_NilWhenNoData(t *testing.T) {
 		MemUsageP50KiB: 1024, MemUsageP95KiB: 1500, MemUsageP99KiB: 1800, MemUsageMaxKiB: 2048,
 	})
 
-	bhPlots, err := AssembleAllTermBoxplotsBH(ctx, pool, key, []string{"short_term"}, key.OrgID)
+	bhPlots, err := AssembleAllTermPercentileBandsBH(ctx, pool, key, []string{"short_term"}, key.OrgID)
 	require.NoError(t, err)
 	plot := bhPlots["short_term"]
 	assert.Nil(t, plot, "should be nil when no business_hours data exists")
 }
 
-func TestAssembleAllTermNamespaceBoxplotsBH_Populated(t *testing.T) {
+func TestAssembleAllTermNamespacePercentileBandsBH_Populated(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -574,7 +574,7 @@ func TestAssembleAllTermNamespaceBoxplotsBH_Populated(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	bhPlots, err := AssembleAllTermNamespaceBoxplotsBH(ctx, pool, key, []string{"short_term"}, key.OrgID)
+	bhPlots, err := AssembleAllTermNamespacePercentileBandsBH(ctx, pool, key, []string{"short_term"}, key.OrgID)
 	require.NoError(t, err)
 	require.Contains(t, bhPlots, "short_term")
 	plot := bhPlots["short_term"]
@@ -591,7 +591,7 @@ func TestAssembleAllTermNamespaceBoxplotsBH_Populated(t *testing.T) {
 	}
 }
 
-func TestAssembleAllTermNamespaceBoxplotsBH_NilWhenNoData(t *testing.T) {
+func TestAssembleAllTermNamespacePercentileBandsBH_NilWhenNoData(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -618,7 +618,7 @@ func TestAssembleAllTermNamespaceBoxplotsBH_NilWhenNoData(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	bhPlots, err := AssembleAllTermNamespaceBoxplotsBH(ctx, pool, key, []string{"short_term"}, key.OrgID)
+	bhPlots, err := AssembleAllTermNamespacePercentileBandsBH(ctx, pool, key, []string{"short_term"}, key.OrgID)
 	require.NoError(t, err)
 	plot := bhPlots["short_term"]
 	assert.Nil(t, plot, "should be nil when only all_hours data exists")

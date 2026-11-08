@@ -540,7 +540,7 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 }
 
 // GetNativeRecommendationSet returns a single container's native recommendations by deterministic UUID.
-// The response is wrapped in the Kruize-compatible shape including boxplots and monitoring_end_time.
+// The response is wrapped in the Kruize-compatible shape including percentile bands and monitoring_end_time.
 func GetNativeRecommendationSet(c echo.Context) error {
 	xrhid, err := requireXRHID(c)
 	if err != nil {
@@ -912,7 +912,7 @@ func GetNamespaceRecommendationSetWithFallback(c echo.Context) error {
 	return GetNamespaceRecommendationSet(c)
 }
 
-// enrichNativeDetail fetches boxplots and monitoring_end_time for a native
+// enrichNativeDetail fetches percentile bands and monitoring_end_time for a native
 // recommendation and wraps it in the Kruize-compatible DetailResponse shape.
 func enrichNativeDetail(ctx context.Context, orgID string, result *model.NativeContainerResult, opts model.ListResponseOptions) *model.DetailResponse {
 	pool := db.GetPool()
@@ -938,15 +938,15 @@ func enrichNativeDetail(ctx context.Context, orgID string, result *model.NativeC
 			}
 			termNames = append(termNames, termKey)
 		}
-		batchPlots, err := model.AssembleAllTermBoxplots(ctx, pool, key, termNames, orgID)
+		batchPlots, err := model.AssembleAllTermPercentileBands(ctx, pool, key, termNames, orgID)
 		if err != nil {
-			log.Warnf("boxplot assembly failed for container %s/%s: %v", key.Namespace, key.ContainerName, err)
+			log.Warnf("percentile-band assembly failed for container %s/%s: %v", key.Namespace, key.ContainerName, err)
 		} else {
 			plots = batchPlots
 		}
-		batchBHPlots, err := model.AssembleAllTermBoxplotsBH(ctx, pool, key, termNames, orgID)
+		batchBHPlots, err := model.AssembleAllTermPercentileBandsBH(ctx, pool, key, termNames, orgID)
 		if err != nil {
-			log.Warnf("BH boxplot assembly failed for container %s/%s: %v", key.Namespace, key.ContainerName, err)
+			log.Warnf("BH percentile-band assembly failed for container %s/%s: %v", key.Namespace, key.ContainerName, err)
 		} else if len(batchBHPlots) > 0 {
 			bhPlots = batchBHPlots
 		}
@@ -1000,7 +1000,7 @@ func restoreGPUExplanations(result *model.NativeContainerResult, saved map[strin
 	}
 }
 
-// enrichNativeNamespaceDetail fetches boxplots and monitoring_end_time for a
+// enrichNativeNamespaceDetail fetches percentile bands and monitoring_end_time for a
 // native namespace recommendation and returns it in the Kruize-compatible
 // NamespaceDetailResponse shape.
 func enrichNativeNamespaceDetail(ctx context.Context, orgID string, result *model.NativeNamespaceResult, opts model.ListResponseOptions) *model.NamespaceDetailResponse {
@@ -1027,15 +1027,15 @@ func enrichNativeNamespaceDetail(ctx context.Context, orgID string, result *mode
 			}
 			termNames = append(termNames, termKey)
 		}
-		batchPlots, err := model.AssembleAllTermNamespaceBoxplots(ctx, pool, key, termNames, orgID)
+		batchPlots, err := model.AssembleAllTermNamespacePercentileBands(ctx, pool, key, termNames, orgID)
 		if err != nil {
-			log.Warnf("namespace boxplot assembly failed for %s/%s: %v", key.ClusterUUID, key.Namespace, err)
+			log.Warnf("namespace percentile-band assembly failed for %s/%s: %v", key.ClusterUUID, key.Namespace, err)
 		} else {
 			plots = batchPlots
 		}
-		batchBHPlots, err := model.AssembleAllTermNamespaceBoxplotsBH(ctx, pool, key, termNames, orgID)
+		batchBHPlots, err := model.AssembleAllTermNamespacePercentileBandsBH(ctx, pool, key, termNames, orgID)
 		if err != nil {
-			log.Warnf("namespace BH boxplot assembly failed for %s/%s: %v", key.ClusterUUID, key.Namespace, err)
+			log.Warnf("namespace BH percentile-band assembly failed for %s/%s: %v", key.ClusterUUID, key.Namespace, err)
 		} else if len(batchBHPlots) > 0 {
 			bhPlots = batchBHPlots
 		}
