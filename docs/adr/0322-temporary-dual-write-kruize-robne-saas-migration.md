@@ -21,7 +21,7 @@ controlled dual-write window with per-org routing.
 
 ### Why not offline comparison only?
 
-The offline `cmd/compare` CLI ([ADR-0140](0140-kruize-native-comparison-cli.md))
+The offline `cmd/compare` CLI ([ADR-0140](0140-kruize-vs-native-comparison-tool.md))
 validates recommendation math but cannot prove robne's operational behavior
 under real SaaS production load, with real customer data volumes, real Kafka
 traffic patterns, and real infrastructure constraints. Engineering needs to
@@ -217,7 +217,7 @@ No clear UX for mixed results. Rejected in ADR-0262 and still not viable.
 
 - [ADR-0001](0001-native-engine-over-kruize.md): Native engine over Kruize (unchanged).
 - [ADR-0104](0104-kruize-mutually-exclusive-native.md): Mutual exclusivity (temporarily superseded by this ADR).
-- [ADR-0140](0140-kruize-native-comparison-cli.md): Offline comparison CLI (remains available as fallback).
+- [ADR-0140](0140-kruize-vs-native-comparison-tool.md): Offline comparison CLI (remains available as fallback).
 - [ADR-0259](0259-synchronous-ingest-time-engine-replaces-kruize-experiment-lifecycle.md): Synchronous ingest engine (unchanged).
 - [ADR-0262](0262-shadow-mode-native-engine-explicitly-rejected.md): Shadow mode rejection (temporarily superseded by this ADR).
 

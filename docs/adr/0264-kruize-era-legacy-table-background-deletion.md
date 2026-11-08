@@ -10,7 +10,7 @@ Accepted
 
 ## Context
 
-After native engine replaced Kruize, legacy tables (`workload_metrics`, Kruize-specific columns) needed cleanup. Sources destroy events trigger org/cluster data deletion ([ADR-0156](0156-sources-destroy-event-cleanup.md)).
+After native engine replaced Kruize, legacy tables (`workload_metrics`, Kruize-specific columns) needed cleanup. Sources destroy events trigger org/cluster data deletion ([ADR-0156](0156-sources-destroy-events-cleanup.md)).
 
 CASCADE on large legacy tables blocks the Kafka consumer transaction for minutes, causing consumer lag and potential rebalance storms.
 
@@ -40,7 +40,7 @@ Unnecessary complexity; event-driven cleanup sufficient.
 
 ## Related Decisions
 
-- [ADR-0156](0156-sources-destroy-event-cleanup.md): Sources destroy cleanup.
+- [ADR-0156](0156-sources-destroy-events-cleanup.md): Sources destroy cleanup.
 - [ADR-0234](0234-no-soft-delete-cluster-state.md): No soft-delete cluster state.
 - [ADR-0132](0132-retention-policies-per-table.md): Retention policies.
 - [ADR-0263](0263-stop-writing-workload-metrics-in-native-mode.md): Stop workload_metrics writes.

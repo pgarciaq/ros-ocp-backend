@@ -42,7 +42,7 @@ Considered for MachineSet Tier-2 ([ADR-0278](0278-machineset-tier2-engine-deferr
 ## Related Decisions
 
 - [ADR-0045](0045-daily-digest-tables-not-raw-metrics.md): Daily digest tables.
-- [ADR-0170](0170-machineset-tier1-aggregation-over-node-recommendations.md): MachineSet Tier-1 aggregation.
+- [ADR-0170](0170-machineset-tier1-aggregation.md): MachineSet Tier-1 aggregation.
 - [ADR-0276](0276-hpa-vpa-recommendations-deferred-advisory-only.md): HPA/VPA deferral.
 - [ADR-0278](0278-machineset-tier2-engine-deferred-scope-criteria.md): MachineSet Tier-2 deferred.
 

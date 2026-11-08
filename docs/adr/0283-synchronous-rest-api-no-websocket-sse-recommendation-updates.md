@@ -44,7 +44,7 @@ Requires client-side server infrastructure.
 ## Related Decisions
 
 - [ADR-0082](0082-recalculate-savings-async-202.md): Async 202 recalc pattern.
-- [ADR-0185](0185-list-response-cache-headers.md): List response caching.
+- [ADR-0185](0185-fleet-savings-lru-cache-rbac-keys.md): List response caching.
 - [ADR-0270](0270-on-demand-api-time-recommendations-deferred.md): Realtime recs deferred.
 
 ## References

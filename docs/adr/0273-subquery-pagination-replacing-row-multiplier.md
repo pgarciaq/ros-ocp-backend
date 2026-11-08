@@ -32,11 +32,11 @@ Breaks with filters or future term count changes.
 
 - More complex SQL (subquery + join).
 - Correct pagination for all filter scenarios.
-- Later evolved into keyset pagination ([ADR-0188](0188-list-query-keyset-pagination-design.md)) in phases 8–9.
+- Later evolved into keyset pagination ([ADR-0188](0188-list-query-keys-pagination-refilter-detail.md)) in phases 8–9.
 
 ## Related Decisions
 
-- [ADR-0188](0188-list-query-keyset-pagination-design.md): Keyset pagination design.
+- [ADR-0188](0188-list-query-keys-pagination-refilter-detail.md): Keyset pagination design.
 - [ADR-0066](0066-keyset-after-cursor-pagination.md): Keyset after cursor.
 - [ADR-0250](0250-pagination-meta-contract.md): Pagination meta contract.
 

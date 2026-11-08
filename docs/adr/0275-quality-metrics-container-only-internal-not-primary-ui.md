@@ -36,8 +36,8 @@ Loses adoption detection capability.
 
 ## Related Decisions
 
-- [ADR-0179](0179-stability-score-formula.md): Stability score formula.
-- [ADR-0181](0181-adoption-detection-auto-marking.md): Adoption auto-detection.
+- [ADR-0179](0179-recommendation-quality-stability-formula.md): Stability score formula.
+- [ADR-0181](0181-adoption-detection-all-term-engine-rows.md): Adoption auto-detection.
 - [ADR-0271](0271-recommendation-history-boxplots-deferred-phase4-to-phase5.md): Phase 4–5 scope.
 
 ## References

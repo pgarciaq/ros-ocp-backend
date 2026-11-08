@@ -10,7 +10,7 @@ Accepted
 
 ## Context
 
-[ADR-0170](0170-machineset-tier1-aggregation-over-node-recommendations.md) ships Tier-1 MachineSet API (query-time aggregation over node recommendations). Tier-2 would add a dedicated engine computing MachineSet-level recommendations with cross-node correlation.
+[ADR-0170](0170-machineset-tier1-aggregation.md) ships Tier-1 MachineSet API (query-time aggregation over node recommendations). Tier-2 would add a dedicated engine computing MachineSet-level recommendations with cross-node correlation.
 
 Customer demand for Tier-2 is unvalidated; cross-node scheduling model is unddesigned.
 
@@ -36,8 +36,8 @@ Limits operator automation for fleet sizing at scale.
 
 ## Related Decisions
 
-- [ADR-0170](0170-machineset-tier1-aggregation-over-node-recommendations.md): MachineSet Tier-1 aggregation.
-- [ADR-0194](0194-machineset-consolidation-query-design.md): MachineSet consolidation query.
+- [ADR-0170](0170-machineset-tier1-aggregation.md): MachineSet Tier-1 aggregation.
+- [ADR-0194](0194-node-consolidation-precedence-pod-scheduling-gate.md): MachineSet consolidation query.
 - [ADR-0260](0260-per-container-recommendation-granularity-operator-csv-grain.md): Per-container granularity.
 
 ## References

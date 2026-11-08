@@ -16,7 +16,7 @@ Changing operator lookback changes recommendation quality without ROS code chang
 
 ## Decision
 
-ROS-OCP accepts the operator's lookback as a given integration boundary. Idle detection minimum observation days (14) aligns with operator default. Confidence ([ADR-0178](0178-confidence-score-linear-ramp.md)) ramps linearly over the data window. ROS does not request specific lookback from the operator.
+ROS-OCP accepts the operator's lookback as a given integration boundary. Idle detection minimum observation days (14) aligns with operator default. Confidence ([ADR-0178](0178-container-confidence-data-days-over-window.md)) ramps linearly over the data window. ROS does not request specific lookback from the operator.
 
 ## Alternatives Considered
 
@@ -37,7 +37,7 @@ Digests persist across uploads, but initial window still limited by operator loo
 ## Related Decisions
 
 - [ADR-0173](0173-tenant-configurable-idle-detection.md): Idle min observation days.
-- [ADR-0178](0178-confidence-score-linear-ramp.md): Confidence linear ramp.
+- [ADR-0178](0178-container-confidence-data-days-over-window.md): Confidence linear ramp.
 - [ADR-0265](0265-operator-csv-column-contract-optional-columns-partial-upgrade.md): Operator CSV contract.
 
 ## References

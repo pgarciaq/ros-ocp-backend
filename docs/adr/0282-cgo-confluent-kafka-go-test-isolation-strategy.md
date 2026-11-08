@@ -41,7 +41,7 @@ Deprecated; no longer maintained actively.
 
 ## Related Decisions
 
-- [ADR-0200](0200-kafka-consumer-session-tuning.md): Kafka session tuning.
+- [ADR-0200](0200-kafka-consumer-session-tuning-slow-csv-processing.md): Kafka session tuning.
 - [ADR-0089](0089-manual-kafka-commit-after-success.md): Manual Kafka commit.
 - [ADR-0266](0266-go-language-choice-inherited-kafka-integration-service.md): Go language choice.
 

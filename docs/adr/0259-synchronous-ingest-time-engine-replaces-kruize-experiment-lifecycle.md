@@ -39,12 +39,12 @@ Designed but explicitly rejected ([ADR-0262](0262-shadow-mode-native-engine-expl
 - Recommendations available immediately after ingest (seconds vs minutes).
 - No dependency on external Kruize container for recommendation generation.
 - Removes `rosocp.kruize.recommendations` topic from native architecture.
-- Kruize plugin retains legacy path ([ADR-0163](0163-kruize-deprecation-path.md)).
+- Kruize plugin retains legacy path ([ADR-0163](0163-deprecate-kruize-plugin.md)).
 
 ## Related Decisions
 
 - [ADR-0001](0001-native-engine-over-kruize.md): Native engine over Kruize.
-- [ADR-0163](0163-kruize-deprecation-path.md): Kruize deprecation path.
+- [ADR-0163](0163-deprecate-kruize-plugin.md): Kruize deprecation path.
 - [ADR-0088](0088-kafka-s3-pipeline-both-modes.md): Kafka + S3 pipeline.
 - [ADR-0262](0262-shadow-mode-native-engine-explicitly-rejected.md): Shadow mode rejected.
 

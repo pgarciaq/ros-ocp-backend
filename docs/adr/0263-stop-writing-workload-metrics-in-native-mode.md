@@ -39,7 +39,7 @@ Breaks Kruize rollback path.
 
 - [ADR-0001](0001-native-engine-over-kruize.md): Native engine over Kruize.
 - [ADR-0045](0045-daily-digest-tables-not-raw-metrics.md): Daily digest tables.
-- [ADR-0163](0163-kruize-deprecation-path.md): Kruize deprecation.
+- [ADR-0163](0163-deprecate-kruize-plugin.md): Kruize deprecation.
 - [ADR-0264](0264-kruize-era-legacy-table-background-deletion.md): Legacy table cleanup.
 
 ## References

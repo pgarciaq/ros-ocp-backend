@@ -37,7 +37,7 @@ Maintenance overhead without benefit.
 ## Related Decisions
 
 - [ADR-0051](0051-org-id-on-every-detail-lookup.md): org_id on every detail lookup.
-- [ADR-0188](0188-list-query-keyset-pagination-design.md): List query design.
+- [ADR-0188](0188-list-query-keys-pagination-refilter-detail.md): List query design.
 - [ADR-0052](0052-org-container-keys-denormalized-index.md): org_container_keys index.
 
 ## References

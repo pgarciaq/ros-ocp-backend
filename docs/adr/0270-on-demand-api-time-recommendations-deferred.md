@@ -34,7 +34,7 @@ Queue + polling UX; over-engineering for unvalidated demand.
 
 - API always returns pre-computed recommendations.
 - Custom windows require settings change + async recalc (seconds, not milliseconds).
-- Simpler caching model ([ADR-0185](0185-list-response-cache-headers.md)).
+- Simpler caching model ([ADR-0185](0185-fleet-savings-lru-cache-rbac-keys.md)).
 - `ROS_ENABLE_REALTIME_RECS` env var never added.
 
 ## Related Decisions

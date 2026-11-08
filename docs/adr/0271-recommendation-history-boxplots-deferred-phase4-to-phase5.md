@@ -38,7 +38,7 @@ Product requirement for trend visibility; rejected.
 
 - [ADR-0060](0060-separate-recommendation-history.md): Separate recommendation history.
 - [ADR-0055](0055-query-time-boxplots-from-samples.md): Query-time boxplots.
-- [ADR-0179](0179-stability-score-formula.md): Quality/stability scoring.
+- [ADR-0179](0179-recommendation-quality-stability-formula.md): Quality/stability scoring.
 
 ## References
 

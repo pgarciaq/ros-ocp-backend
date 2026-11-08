@@ -36,16 +36,16 @@ No framework dependency but significant boilerplate increase.
 
 ## Consequences
 
-- Route registration order matters ([ADR-0192](0192-route-registration-order-specific-before-catchall.md)).
+- Route registration order matters ([ADR-0192](0192-echo-route-registration-order-middleware-layering.md)).
 - Echo-specific middleware patterns throughout handlers.
 - `echo.Context` threading through all API handlers.
 - Upgrade to Echo v5 would require migration effort.
 
 ## Related Decisions
 
-- [ADR-0192](0192-route-registration-order-specific-before-catchall.md): Route registration order.
-- [ADR-0168](0168-disabled-plugin-route-guards-before-catchall.md): Catch-all guards.
-- [ADR-0207](0207-stdlib-json-encoding-over-echo-default.md): Stdlib JSON encoding.
+- [ADR-0192](0192-echo-route-registration-order-middleware-layering.md): Route registration order.
+- [ADR-0168](0168-disabled-plugin-route-guards.md): Catch-all guards.
+- [ADR-0207](0207-stdlib-json-encoding-api-responses.md): Stdlib JSON encoding.
 - [ADR-0244](0244-request-correlation-echo-request-id.md): Echo request_id correlation.
 
 ## References

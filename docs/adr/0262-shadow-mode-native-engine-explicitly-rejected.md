@@ -16,7 +16,7 @@ Gradual traffic shift between Kruize and native would require dual-read paths an
 
 ## Decision
 
-Reject shadow tables in favor of: (1) comparison CLI tool ([ADR-0140](0140-kruize-native-comparison-cli.md)) for offline validation, (2) plugin exclusivity ([ADR-0104](0104-kruize-mutually-exclusive-native.md)) for atomic switchover, (3) `ROS_ENABLED_PLUGINS` for per-deployment control.
+Reject shadow tables in favor of: (1) comparison CLI tool ([ADR-0140](0140-kruize-vs-native-comparison-tool.md)) for offline validation, (2) plugin exclusivity ([ADR-0104](0104-kruize-mutually-exclusive-native.md)) for atomic switchover, (3) `ROS_ENABLED_PLUGINS` for per-deployment control.
 
 No dual-write to production tables.
 
@@ -40,7 +40,7 @@ Still requires dual-write infrastructure without offline validation benefits.
 ## Related Decisions
 
 - [ADR-0104](0104-kruize-mutually-exclusive-native.md): Kruize mutually exclusive with native.
-- [ADR-0140](0140-kruize-native-comparison-cli.md): Comparison CLI tool.
+- [ADR-0140](0140-kruize-vs-native-comparison-tool.md): Comparison CLI tool.
 - [ADR-0001](0001-native-engine-over-kruize.md): Native engine over Kruize.
 - [ADR-0259](0259-synchronous-ingest-time-engine-replaces-kruize-experiment-lifecycle.md): Synchronous ingest engine.
 

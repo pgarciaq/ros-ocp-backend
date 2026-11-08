@@ -16,7 +16,7 @@ After validation period, maintaining Unleash dependency for a stable feature add
 
 ## Decision
 
-Initially gated behind Unleash flag (per-org enablement). After validation, removed flag and made default-on via plugin system ([ADR-0158](0158-plugin-toggles-over-unleash-for-plugins.md)). Transition: Unleash flag → `ROS_ENABLED_PLUGINS` includes namespace → default enabled.
+Initially gated behind Unleash flag (per-org enablement). After validation, removed flag and made default-on via plugin system ([ADR-0158](0158-enabled-or-disabled-plugins-env.md)). Transition: Unleash flag → `ROS_ENABLED_PLUGINS` includes namespace → default enabled.
 
 ## Alternatives Considered
 
@@ -36,7 +36,7 @@ Risky for new recommendation class without production validation.
 
 ## Related Decisions
 
-- [ADR-0158](0158-plugin-toggles-over-unleash-for-plugins.md): Plugin toggles over Unleash.
+- [ADR-0158](0158-enabled-or-disabled-plugins-env.md): Plugin toggles over Unleash.
 - [ADR-0239](0239-feature-toggles-vs-plugin-toggles.md): Feature vs plugin toggles.
 - [ADR-0014](0014-namespace-idle-after-container-gpu-priority-90.md): Namespace idle priority.
 
