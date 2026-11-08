@@ -5,6 +5,11 @@ Each record captures a significant architectural decision, its context, and cons
 
 Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions).
 
+Numbers are never reused. Nine numbers in the range are retired rather than
+missing — 0039, 0067, 0097, 0121, 0139, 0141, 0268, 0284 and 0286 — because ADR
+curation folded each into a surviving record, which names the former number
+(`incorporates former ADR-XXXX`).
+
 ## Index
 
 | Number | Title | Domain | Phase | Status |
@@ -62,7 +67,7 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0052](0052-org-container-keys-denormalized-index.md) | Use org_container_keys denormalized index for list pagination | Data Model | 6 | Accepted |
 | [0053](0053-split-list-query-keys-and-detail.md) | Split list query: keys table for identity, detail table for rec state | Data Model | 6 | Accepted |
 | [0054](0054-resolved-tags-jsonb-on-keys-table.md) | Store resolved_tags JSONB on keys table | Data Model | 11 | Accepted |
-| [0055](0055-query-time-boxplots-from-samples.md) | Use query-time boxplots from container_usage_samples | Data Model | 5 | Accepted |
+| [0055](0055-query-time-boxplots-from-samples.md) | Use query-time boxplots from container_usage_samples | Data Model | 5 | Superseded by [0292](0292-digest-based-plot-percentile-bands.md) |
 | [0056](0056-boxplot-6h-and-daily-buckets.md) | Use 6-hour buckets (short term) and daily buckets (medium/long) | Data Model | 5 | Accepted |
 | [0057](0057-allowlisted-bucket-sql-expressions.md) | Use allowlisted bucket SQL expressions (BucketGranularity) | Data Model | 5 | Accepted |
 | [0058](0058-partition-by-usage-start-month.md) | Partition usage/history/quality by usage_start / month | Data Model | 1 | Accepted |
@@ -76,7 +81,7 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0066](0066-keyset-after-cursor-pagination.md) | Use keyset (after cursor) pagination with base64url JSON cursors (incorporates former ADR-0067) | API Design | 8 | Accepted |
 | [0068](0068-filter-project-canonical-namespace-alias.md) | Use filter[project] as canonical namespace alias | API Design | 2 | Accepted |
 | [0069](0069-filter-term-normalized.md) | Use filter[term] normalized to short_term/medium_term/long_term | API Design | 2–3 | Accepted |
-| [0070](0070-engine-filter-dual-engine-resources-only.md) | Use filter[engine]=cost|performance only on dual-engine resources | API Design | Accepted |
+| [0070](0070-engine-filter-dual-engine-resources-only.md) | Use filter[engine]=cost\|performance only on dual-engine resources | API Design | — | Accepted |
 | [0071](0071-exclude-gpu-from-savings-summary.md) | Exclude GPU savings from savings-summary fleet total | API Design | 7 | Accepted |
 | [0072](0072-exclude-quota-from-fleet-savings.md) | Exclude quota/CRQ from fleet savings to avoid double-count | API Design | 6–7 | Accepted |
 | [0073](0073-dynamic-openapi-x-plugin-required.md) | Use dynamic OpenAPI filtered by x-plugin-required | API Design | 2–7 | Accepted |
@@ -131,7 +136,7 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0124](0124-koku-reship-ros-rebuild-bh.md) | Trigger Koku reship_ros to rebuild BH digests from S3 | Reship / Business Hours | 9 | Accepted |
 | [0125](0125-single-flight-trailing-reship.md) | Use single-flight lock + trailing reship on concurrent schedule edits | Reship / Business Hours | 9 | Accepted |
 | [0126](0126-forward-only-fallback-reship-failure.md) | Use forward-only fallback when reship fails after max retries | Reship / Business Hours | 9 | Accepted |
-| [0127](0127-dual-digest-schedule-type-column.md) | Store dual digest streams (schedule_type=all_hours|business_hours) | Reship / Business Hours | Accepted |
+| [0127](0127-dual-digest-schedule-type-column.md) | Store dual digest streams (schedule_type=all_hours\|business_hours) | Reship / Business Hours | — | Accepted |
 | [0128](0128-unify-gorm-pgxpool-stdlib.md) | Unify GORM and pgxpool via stdlib.OpenDBFromPool (incorporates former ADR-0268 phase-1 dual pool) | Deployment / Ops | 8 | Accepted |
 | [0129](0129-multi-mode-cobra-binary.md) | Use separate processes (api, processor, housekeeper, poller) from one binary | Deployment / Ops | Pre-0–1 | Accepted |
 | [0130](0130-shallow-readyz-default.md) | Use shallow /readyz by default; optional deep checks | Deployment / Ops | Pre-0–12 | Accepted |
@@ -245,7 +250,7 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0240](0240-connection-pool-timeout-tuning-surface.md) | Connection pool and timeout tuning surface | Deployment / Ops | 8 | Accepted |
 | [0241](0241-deprecated-alias-env-vars-backward-compat.md) | Deprecated alias env vars maintained for backward compatibility | Configuration | 1–12 | Accepted |
 | [0242](0242-rosocp-prometheus-metric-naming-convention.md) | rosocp_ Prometheus metric naming convention | Deployment / Ops | Pre-0–12 | Accepted |
-| [0243](0243-high-cardinality-analytics-incomplete-labels.md) | High-cardinality labels on analytics_incomplete metric | Deployment / Ops | 4–12 | Accepted |
+| [0243](0243-high-cardinality-analytics-incomplete-labels.md) | High-cardinality labels on analytics_incomplete metric | Deployment / Ops | 4–12 | Superseded by CHANGELOG (Unreleased) |
 | [0244](0244-request-correlation-echo-request-id.md) | Request correlation via Echo request_id (no OpenTelemetry) | Deployment / Ops | Pre-0–12 | Accepted |
 | [0245](0245-plugin-init-registration-order-undefined.md) | Plugin init() registration order intentionally undefined | Plugins | 1 | Accepted |
 | [0246](0246-boot-fatal-csv-type-collision.md) | Boot fatal on CSV type collision between plugins | Plugins | 1 | Accepted |
