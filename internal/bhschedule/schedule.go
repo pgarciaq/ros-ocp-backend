@@ -18,6 +18,12 @@ func AllHoursSchedule() Schedule {
 }
 
 // InBusinessHours reports whether intervalStart falls inside the schedule window.
+// DayAllowed reports whether the weekday is in the schedule's day list
+// (librobne wrapper; #760).
+func DayAllowed(weekday time.Weekday, days []string) bool {
+	return libbh.DayAllowed(weekday, days)
+}
+
 func InBusinessHours(intervalStart time.Time, schedule Schedule) bool {
 	return libbh.InBusinessHours(intervalStart, schedule)
 }

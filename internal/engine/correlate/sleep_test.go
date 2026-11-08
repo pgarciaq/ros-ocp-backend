@@ -27,14 +27,15 @@ const (
 	sMgmt1 = "cccccccc-1111-1111-1111-111111111111"
 )
 
-// sleepDay is one seeded (namespace, workload) day: BH-stream and
-// all-hours-stream CPU in mC. The outside-BH value is all - bh. bhAbsent
-// seeds NO business_hours row (the producer's normal night-only shape:
-// GroupCSVRowsForStream drops weight-≤0 rows when off_hours_weight=0).
+// sleepDay is one seeded (namespace, workload) day: the in-window (BH) and
+// off-window CPU p50 sums in mC — the #760 evidence legs, direct measures.
+// bhAbsent/offAbsent seed a NULL leg (the producer's normal shapes: a
+// night-only workload has no in-window samples, so no BH leg).
 type sleepDay struct {
-	bh       int64
-	all      int64
-	bhAbsent bool
+	bh        int64
+	off       int64
+	bhAbsent  bool
+	offAbsent bool
 }
 
 func sleepWindow() (start, end time.Time) {
@@ -43,16 +44,17 @@ func sleepWindow() (start, end time.Time) {
 }
 
 // bhSignatureHosted builds 14 days: one user workload following the
-// business-hours signature (busy in hours, idle outside — outside value
-// comes from the override) plus busy platform rows on both streams (prove
-// pipeline liveness + the shared platform exclusion).
+// business-hours signature (busy in hours, idle outside — the off leg is
+// the direct outside-BH measure) plus platform rows on both legs (prove
+// pipeline liveness + the shared platform exclusion). Distinct values so a
+// mis-mapped leg cannot pass by coincidence.
 func bhSignatureHosted(bh, outside int64) map[int]map[nswl]sleepDay {
 	spec := map[int]map[nswl]sleepDay{}
 	for i := 0; i < 14; i++ {
 		spec[i] = map[nswl]sleepDay{
-			{"demo-app", "web"}:                    {bh: bh, all: bh + outside},
-			{"kube-system", "coredns"}:             {bh: 2000, all: 2100},
-			{"koku-metrics-operator", "collector"}: {bh: 5000, all: 5200},
+			{"demo-app", "web"}:                    {bh: bh, off: outside},
+			{"kube-system", "coredns"}:             {bh: 2000, off: 100},
+			{"koku-metrics-operator", "collector"}: {bh: 5000, off: 200},
 		}
 	}
 	return spec
@@ -64,39 +66,36 @@ func idleAlwaysHosted() map[int]map[nswl]sleepDay {
 	return bhSignatureHosted(0, 0)
 }
 
-// seedSleepDigests writes both digest streams for the hosted cluster.
-// partialDay (if >= 0) seeds only the all-hours stream on that day
-// (partial BH coverage must read unknown, never zero-activity).
-func seedSleepDigests(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc string, spec map[int]map[nswl]sleepDay, partialDay int) {
+// seedSleepEvidence writes the #760 evidence legs for the hosted cluster.
+// partialDay (if >= 0) seeds NO rows on that day (partial coverage must
+// read unknown, never zero-activity).
+func seedSleepEvidence(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc string, spec map[int]map[nswl]sleepDay, partialDay int) {
 	t.Helper()
 	start, _ := sleepWindow()
-	months := map[string]time.Time{}
 	for i := 0; i < 14; i++ {
-		d := start.AddDate(0, 0, i)
-		ms := time.Date(d.Year(), d.Month(), 1, 0, 0, 0, 0, time.UTC)
-		months[ms.Format("200601")] = ms
-	}
-	for _, ms := range months {
-		require.NoError(t, ingestion.EnsureDigestPartitionMonth(ctx, pool, ms))
-	}
-	for i := 0; i < 14; i++ {
+		if i == partialDay {
+			continue
+		}
 		day := start.AddDate(0, 0, i).Format("2006-01-02")
 		for k, w := range spec[i] {
-			if i != partialDay && !w.bhAbsent {
-				_, err := pool.Exec(ctx, `
-					INSERT INTO daily_container_digests (
-						bucket_date, org_id, cluster_uuid, namespace, workload,
-						workload_type, container_name, cpu_usage_p95_mc, cpu_usage_p50_mc, schedule_type
-					) VALUES ($1,$2,$3,$4,$5,'Deployment','c0',$6,$6,'business_hours')
-					ON CONFLICT DO NOTHING`, day, orgID, hc, k.ns, k.wl, w.bh)
-				require.NoError(t, err)
+			var bh, off *int64
+			if !w.bhAbsent {
+				v := w.bh
+				bh = &v
+			}
+			if !w.offAbsent {
+				v := w.off
+				off = &v
 			}
 			_, err := pool.Exec(ctx, `
-				INSERT INTO daily_container_digests (
-					bucket_date, org_id, cluster_uuid, namespace, workload,
-					workload_type, container_name, cpu_usage_p95_mc, cpu_usage_p50_mc, schedule_type
-				) VALUES ($1,$2,$3,$4,$5,'Deployment','c0',$6,$6,'all_hours')
-				ON CONFLICT DO NOTHING`, day, orgID, hc, k.ns, k.wl, w.all)
+				INSERT INTO hcp_sleep_evidence (
+					org_id, cluster_uuid, namespace, workload, workload_type,
+					container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc
+				) VALUES ($1,$2,$3,$4,'Deployment','c0',$5,$6,$7)
+				ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
+				DO UPDATE SET bh_cpu_p50_mc = EXCLUDED.bh_cpu_p50_mc,
+					off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc`,
+				orgID, hc, k.ns, k.wl, day, bh, off)
 			require.NoError(t, err)
 		}
 	}
@@ -148,13 +147,14 @@ func sleepFixture(t *testing.T, orgID, hc, tier string, hosted map[int]map[nswl]
 	t.Helper()
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
-	seedSleepDigests(t, ctx, pool, orgID, hc, hosted, partialDay)
+	seedSleepEvidence(t, ctx, pool, orgID, hc, hosted, partialDay)
 	seedSleepSnapshot(t, ctx, pool, orgID, sMgmt1, hc, tier, time.Now().UTC().Add(-time.Hour))
 	if withSchedule {
 		seedSleepSchedule(t, ctx, pool, orgID, hc, "")
 	}
 	seedNodepoolRollup(t, ctx, pool, orgID, hc, 2)
 	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM hcp_sleep_evidence WHERE org_id = $1`, orgID)
 		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
 		_, _ = pool.Exec(ctx, `DELETE FROM manifest_hcp_snapshots WHERE org_id = $1`, orgID)
 		_, _ = pool.Exec(ctx, `DELETE FROM hcp_correlation_advisories WHERE org_id = $1`, orgID)
@@ -248,6 +248,10 @@ func TestSleepCandidate_ZombiePartition_IdleAlwaysRoutesToZombie(t *testing.T) {
 	for i := 0; i < 14; i++ {
 		seedZombieDigestDay(t, ctx, pool, org, sMgmt1, zStart.AddDate(0, 0, i).Format("2006-01-02"),
 			map[nswl]zombieWorkloadDay{{"clusters-s9", "kube-apiserver"}: {usage: 50, req: 500}})
+		// The zombie idle leg reads hosted-cluster digests: the idle-always
+		// user workload (the sleep fixture seeds only evidence rows now).
+		seedZombieDigestDay(t, ctx, pool, org, sHC4, zStart.AddDate(0, 0, i).Format("2006-01-02"),
+			map[nswl]zombieWorkloadDay{{"demo-app", "web"}: {usage: 0, req: -1}})
 	}
 	zFired, err := RunZombieCycle(ctx, pool)
 	require.NoError(t, err)
@@ -287,30 +291,30 @@ func TestSleepCandidate_UnknownDaysSilent(t *testing.T) {
 func TestSleepCandidate_NonDefaultFloors(t *testing.T) {
 	_, end := sleepWindow()
 	start := end.AddDate(0, 0, -2)
-	mkDays := func(bh, all int64) map[string]map[sleepKey]*sleepWorkloadDay {
+	mkDays := func(bh, off int64) map[string]map[sleepKey]*sleepWorkloadDay {
 		return map[string]map[sleepKey]*sleepWorkloadDay{
 			start.Format("2006-01-02"): {
-				{"demo-app", "web"}: {bhCPU: bh, allCPU: all, bhMeasured: true, allMeasured: true},
+				{"demo-app", "web"}: {bhCPU: bh, offCPU: off, bhMeasured: true, offMeasured: true},
 			},
 			start.AddDate(0, 0, 1).Format("2006-01-02"): {
-				{"demo-app", "web"}: {bhCPU: bh, allCPU: all, bhMeasured: true, allMeasured: true},
+				{"demo-app", "web"}: {bhCPU: bh, offCPU: off, bhMeasured: true, offMeasured: true},
 			},
 		}
 	}
-	days := mkDays(300, 350)
+	days := mkDays(300, 50)
 
 	// Default-order floors: BH-active (300 >= 10) but outside 50 >= 10 breaks.
-	_, _, match, known := evalSleepSignature(days, start, end, 10, 10, nil, nil)
+	_, _, match, known := evalSleepSignature(days, start, end, 10, 10, nil, nil, nil)
 	assert.True(t, known)
 	assert.False(t, match, "outside 50 must break the signature at floor 10")
 
 	// Non-default outside floor 100: outside 50 < 100, BH 300 >= 10 → match.
-	_, _, match, known = evalSleepSignature(days, start, end, 10, 100, nil, nil)
+	_, _, match, known = evalSleepSignature(days, start, end, 10, 100, nil, nil, nil)
 	assert.True(t, known)
 	assert.True(t, match, "non-default outside floor must admit outside 50")
 
 	// Non-default BH floor 500: 300 < 500 → not active in hours.
-	_, _, match, known = evalSleepSignature(days, start, end, 500, 100, nil, nil)
+	_, _, match, known = evalSleepSignature(days, start, end, 500, 100, nil, nil, nil)
 	assert.True(t, known)
 	assert.False(t, match, "non-default BH floor must reject activity 300")
 }
@@ -395,7 +399,7 @@ func TestSleepCandidate_OrgDefaultScheduleQualifies(t *testing.T) {
 func nightOnlyHosted() map[int]map[nswl]sleepDay {
 	spec := bhSignatureHosted(300, 0)
 	for i := 0; i < 14; i++ {
-		spec[i][nswl{"batch-jobs", "night-cron"}] = sleepDay{bh: 0, all: 2000, bhAbsent: true}
+		spec[i][nswl{"batch-jobs", "night-cron"}] = sleepDay{off: 2000, bhAbsent: true}
 	}
 	return spec
 }
@@ -429,8 +433,8 @@ func TestSleepCandidate_NightOnlyAloneIsSilent(t *testing.T) {
 	spec := map[int]map[nswl]sleepDay{}
 	for i := 0; i < 14; i++ {
 		spec[i] = map[nswl]sleepDay{
-			{"batch-jobs", "night-cron"}: {bh: 0, all: 2000, bhAbsent: true},
-			{"kube-system", "coredns"}:   {bh: 2000, all: 2100},
+			{"batch-jobs", "night-cron"}: {off: 2000, bhAbsent: true},
+			{"kube-system", "coredns"}:   {bh: 2000, off: 100},
 		}
 	}
 	pool := sleepFixture(t, org, sHC6, hcTierNonProd, spec, -1, true)
@@ -449,7 +453,7 @@ func TestSleepCandidate_SystemMissingBHRowStillFires(t *testing.T) {
 	org := testutil.TestOrgID + "-s-761-sys"
 	spec := bhSignatureHosted(300, 0)
 	for i := 0; i < 14; i++ {
-		spec[i][nswl{"kube-system", "coredns"}] = sleepDay{bh: 0, all: 2100, bhAbsent: true}
+		spec[i][nswl{"kube-system", "coredns"}] = sleepDay{off: 2100, bhAbsent: true}
 	}
 	pool := sleepFixture(t, org, sHC7, hcTierNonProd, spec, -1, true)
 	ctx := context.Background()
@@ -467,18 +471,92 @@ func TestSleepCandidate_BHOnlyUserWorkloadIsUnknown(t *testing.T) {
 	org := testutil.TestOrgID + "-s-761-bhonly"
 	spec := bhSignatureHosted(300, 0)
 	for i := 0; i < 14; i++ {
-		spec[i][nswl{"demo-app", "bh-only"}] = sleepDay{bh: 250, all: 0}
+		spec[i][nswl{"demo-app", "bh-only"}] = sleepDay{bh: 250, offAbsent: true}
 	}
-	// The seeder has no allAbsent flag; delete the all-hours rows for the
-	// bh-only workload post-seed to build the reverse shape.
 	pool := sleepFixture(t, org, sHC8, hcTierNonProd, spec, -1, true)
 	ctx := context.Background()
-	_, err := pool.Exec(ctx, `DELETE FROM daily_container_digests
-		WHERE org_id = $1 AND namespace = 'demo-app' AND workload = 'bh-only' AND schedule_type = 'all_hours'`, org)
-	require.NoError(t, err)
 	fired, err := RunSleepCandidateCycle(ctx, pool)
 	require.NoError(t, err)
 	assert.Equal(t, 0, fired,
 		"a user workload with a BH row and no all-hours row must read unknown (#761)")
+	assert.Empty(t, sleepAdvisories(t, ctx, pool, org))
+}
+
+// TestSleepCandidate_ConstantUsageIsNotOutsideQuiet is #760's (V15-10)
+// server repro: a workload using 300m CONSTANTLY — all-hours p50=300 and BH
+// p50=300, exactly what the canonical digest builders yield for constant
+// hourly samples including every night — must not receive safe-sleep
+// advice. The baseline subtracted the percentiles: outside = 300 - 300 = 0,
+// and high-confidence schedule_nonprod_sleep fired for a cluster that
+// never sleeps.
+func TestSleepCandidate_ConstantUsageIsNotOutsideQuiet(t *testing.T) {
+	org := testutil.TestOrgID + "-s-760"
+	// Constant 300m usage: BOTH legs are 300 (the canonical builders' p50s
+	// of constant hourly samples) — the shape the subtraction model could
+	// not express (it read outside = 300 - 300 = 0).
+	pool := sleepFixture(t, org, sHC4, hcTierNonProd, bhSignatureHosted(300, 300), -1, true)
+	ctx := context.Background()
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fired,
+		"a constant 300m workload runs all night — the all-minus-bh percentile subtraction read outside=0 (#760)")
+	assert.Empty(t, sleepAdvisories(t, ctx, pool, org),
+		"safe-sleep advice must not fire while the workload's off-hours p50 is 300m (#760)")
+}
+
+// weekdayProducerHosted builds 14 days under a Mon-Fri schedule with the
+// PRODUCER's true shape: weekdays carry both evidence legs; weekends have
+// no in-window hours, so the producer emits no BH evidence — off legs only
+// (#760: the seeder previously wrote weekend BH rows the producer would
+// never emit, masking that weekday schedules could never fire).
+func weekdayProducerHosted(bh, off int64) map[int]map[nswl]sleepDay {
+	start, _ := sleepWindow()
+	spec := map[int]map[nswl]sleepDay{}
+	for i := 0; i < 14; i++ {
+		d := start.AddDate(0, 0, i)
+		weekend := d.UTC().Weekday() == time.Saturday || d.UTC().Weekday() == time.Sunday
+		web := sleepDay{bh: bh, off: off}
+		sys := sleepDay{bh: 2000, off: 100}
+		if weekend {
+			web = sleepDay{off: off, bhAbsent: true}
+			sys = sleepDay{off: 100, bhAbsent: true}
+		}
+		spec[i] = map[nswl]sleepDay{
+			{"demo-app", "web"}:        web,
+			{"kube-system", "coredns"}: sys,
+		}
+	}
+	return spec
+}
+
+// TestSleepCandidate_WeekdayScheduleWeekendProducerShape (#760): a Mon-Fri
+// schedule's weekends have no in-window hours — the producer emits no BH
+// evidence those days. The BH-activity requirement is vacuous on weekends
+// (no business hours to be active in); the off leg still gates safety. The
+// baseline (and the pre-#760 digest model) read those days as unknown and
+// the sleep rule never fired for weekday schedules at all.
+func TestSleepCandidate_WeekdayScheduleWeekendProducerShape(t *testing.T) {
+	org := testutil.TestOrgID + "-s-760-wkday"
+	pool := sleepFixture(t, org, sHC1, hcTierNonProd, weekdayProducerHosted(300, 0), -1, true)
+	ctx := context.Background()
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 1, fired,
+		"a weekday schedule with weekend off-only evidence must still fire — weekends have no business hours (#760)")
+	advs := sleepAdvisories(t, ctx, pool, org)
+	require.Len(t, advs, 1)
+	assert.Equal(t, "high", advs[0]["confidence"])
+}
+
+// Control: weekend off-window activity still vetoes — the advice sleeps
+// those hours, so the off leg gates them (#760).
+func TestSleepCandidate_WeekendActivityVetoes(t *testing.T) {
+	org := testutil.TestOrgID + "-s-760-wkend"
+	pool := sleepFixture(t, org, sHC2, hcTierNonProd, weekdayProducerHosted(300, 200), -1, true)
+	ctx := context.Background()
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fired,
+		"weekend off-window activity must veto — the advice sleeps those hours (#760)")
 	assert.Empty(t, sleepAdvisories(t, ctx, pool, org))
 }

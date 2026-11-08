@@ -161,6 +161,14 @@ func ScheduleWeightForStream(intervalStart time.Time, schedule Schedule, allHour
 	return ScheduleWeight(intervalStart, schedule)
 }
 
+// DayAllowed reports whether the weekday is in the schedule's day list —
+// whether the schedule's business-hours window applies to that day at all
+// (#760: a weekday schedule's weekends have no in-window hours; the sleep
+// predicate gates them on the off leg alone).
+func DayAllowed(weekday time.Weekday, days []string) bool {
+	return dayAllowed(weekday, days)
+}
+
 func dayAllowed(weekday time.Weekday, days []string) bool {
 	if len(days) == 0 {
 		return false

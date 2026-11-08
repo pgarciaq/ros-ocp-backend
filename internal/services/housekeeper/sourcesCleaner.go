@@ -76,6 +76,8 @@ func cleanupClusterAnalytics(db *gorm.DB, orgID, clusterUUID string) error {
 		args   []any
 	}{
 		{"daily_container_digests", "daily_container_digests", []string{"org_id", "cluster_uuid", "namespace", "workload", "container_name", "bucket_date"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
+		// #760 sleep evidence: same cluster-scoped cleanup as the digests.
+		{"hcp_sleep_evidence", "hcp_sleep_evidence", []string{"org_id", "cluster_uuid", "namespace", "workload", "workload_type", "container_name", "bucket_date"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
 		{"daily_namespace_digests", "daily_namespace_digests", []string{"org_id", "cluster_uuid", "namespace", "bucket_date"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
 		{"daily_pvc_digests", "daily_pvc_digests", []string{"id", "bucket_date"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
 		{"daily_node_digests", "daily_node_digests", []string{"org_id", "cluster_uuid", "node", "bucket_date", "schedule_type"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},

@@ -25,13 +25,13 @@ func testSchedule() bhschedule.Schedule {
 	}
 }
 
-// bhFixture builds per-day digest rows: one user workload (busy in hours,
-// idle outside via outsideMC), plus busy platform rows on both streams
-// (liveness + the shared exclusion proof).
-func bhFixture(now time.Time, bh, outside int64, days int) ([]types.KeyedDigest, []types.KeyedDigest) {
+// bhFixture builds per-day evidence legs (#760): one user workload (busy
+// in hours, idle outside — the off leg is the direct outside-BH measure)
+// plus platform rows on both legs. Distinct values so a mis-mapped leg
+// cannot pass by coincidence.
+func bhFixture(now time.Time, bh, outside int64, days int) (bhRows, offRows []types.KeyedDigest) {
 	end := now.UTC().Truncate(24 * time.Hour)
 	start := end.AddDate(0, 0, -days)
-	var all, bhRows []types.KeyedDigest
 	mk := func(day time.Time, ns, wl string, usage int64, isBH bool) {
 		kd := types.KeyedDigest{
 			Key: types.ContainerKey{Namespace: ns, Workload: wl, WorkloadType: "Deployment", ContainerName: "c0"},
@@ -40,22 +40,22 @@ func bhFixture(now time.Time, bh, outside int64, days int) ([]types.KeyedDigest,
 		if isBH {
 			bhRows = append(bhRows, kd)
 		} else {
-			all = append(all, kd)
+			offRows = append(offRows, kd)
 		}
 	}
 	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
 		mk(d, "demo-app", "web", bh, true)
-		mk(d, "demo-app", "web", bh+outside, false)
+		mk(d, "demo-app", "web", outside, false)
 		mk(d, "kube-system", "coredns", 2000, true)
-		mk(d, "kube-system", "coredns", 2100, false)
+		mk(d, "kube-system", "coredns", 100, false)
 	}
-	return all, bhRows
+	return bhRows, offRows
 }
 
 func TestSleepCandidate_DeclaredAndBHSignatureFires(t *testing.T) {
 	now := time.Now()
-	all, bh := bhFixture(now, 300, 0, 14)
-	sums := DaySums(all, bh)
+	bh, off := bhFixture(now, 300, 0, 14)
+	sums := SleepSums(bh, off)
 	got := SleepCandidate("hc-a", TierNonProd, sums, testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
 	require.NotNil(t, got)
 	assert.Equal(t, SleepVerdict, got.Verdict)
@@ -71,32 +71,26 @@ func TestSleepCandidate_DeclaredAndBHSignatureFires(t *testing.T) {
 
 func TestSleepCandidate_DeclaredOvernightActiveIsSilent(t *testing.T) {
 	now := time.Now()
-	all, bh := bhFixture(now, 300, 200, 14)
-	got := SleepCandidate("hc-b", TierNonProd, DaySums(all, bh), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	bh, off := bhFixture(now, 300, 200, 14)
+	got := SleepCandidate("hc-b", TierNonProd, SleepSums(bh, off), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
 	assert.Nil(t, got, "overnight activity must break the signature — the trap fixture")
 }
 
 func TestSleepCandidate_UnlabeledIsSilent(t *testing.T) {
 	now := time.Now()
-	all, bh := bhFixture(now, 300, 0, 14)
-	got := SleepCandidate("hc-c", "", DaySums(all, bh), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	bh, off := bhFixture(now, 300, 0, 14)
+	got := SleepCandidate("hc-c", "", SleepSums(bh, off), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
 	assert.Nil(t, got, "declared-only in v1")
-	got = SleepCandidate("hc-c", "prod", DaySums(all, bh), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	got = SleepCandidate("hc-c", "prod", SleepSums(bh, off), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
 	assert.Nil(t, got, "non-prod is the only qualifying tier")
 }
 
 func TestSleepCandidate_UnknownDaysSilent(t *testing.T) {
 	now := time.Now()
-	// 13 days of both streams + 1 all-hours-only day: partial BH coverage
-	// reads unknown, never zero-activity.
-	all, bh := bhFixture(now, 300, 0, 13)
-	end := now.UTC().Truncate(24 * time.Hour)
-	day13 := end.AddDate(0, 0, -1)
-	all = append(all, types.KeyedDigest{
-		Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
-		Row: types.DigestRow{BucketDate: day13, CPUUsageP50MC: 300},
-	})
-	got := SleepCandidate("hc-d", TierNonProd, DaySums(all, bh), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	// 13 days of evidence inside the 14-day window: the absent day reads
+	// unknown, never zero-activity.
+	bh, off := bhFixture(now, 300, 0, 13)
+	got := SleepCandidate("hc-d", TierNonProd, SleepSums(bh, off), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
 	assert.Nil(t, got)
 }
 
@@ -105,15 +99,15 @@ func TestSleepCandidate_IdleAlwaysIsSilent(t *testing.T) {
 	// Zero-activity user workload on both streams: no BH activity — the
 	// predicate partition routes idle-always to the zombie rule (#722),
 	// never to sleep.
-	all, bh := bhFixture(now, 0, 0, 14)
-	got := SleepCandidate("hc-e", TierNonProd, DaySums(all, bh), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	bh, off := bhFixture(now, 0, 0, 14)
+	got := SleepCandidate("hc-e", TierNonProd, SleepSums(bh, off), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
 	assert.Nil(t, got)
 }
 
 func TestSleepCandidate_NonDefaultFloors(t *testing.T) {
 	now := time.Now()
-	all, bh := bhFixture(now, 300, 50, 2)
-	sums := DaySums(all, bh)
+	bh, off := bhFixture(now, 300, 50, 2)
+	sums := SleepSums(bh, off)
 	pol := DefaultSleepPolicy()
 	pol.WindowDays = 2 // match the 2-day fixture (also pins the window knob)
 
@@ -136,8 +130,8 @@ func TestSleepCandidate_SyncedExclusionsShared(t *testing.T) {
 	// All user workloads in the synced set: nothing counts as user
 	// activity → no BH-active day → silent (the synced set widens
 	// exclusion exactly like the server's zombie rule).
-	all, bh := bhFixture(now, 300, 0, 14)
-	got := SleepCandidate("hc-g", TierNonProd, DaySums(all, bh), testSchedule(), DefaultSleepPolicy(), 2,
+	bh, off := bhFixture(now, 300, 0, 14)
+	got := SleepCandidate("hc-g", TierNonProd, SleepSums(bh, off), testSchedule(), DefaultSleepPolicy(), 2,
 		map[string]bool{"demo-app": true}, nil, now)
 	assert.Nil(t, got)
 }
@@ -152,14 +146,13 @@ func TestWeeklyOutsideHours_MidnightCrossing(t *testing.T) {
 }
 
 // nightOnlyFixture is #761's (V15-11) offline repro shape: the BH-signature
-// web workload plus an exclusively overnight CronJob that appears ONLY in
-// the all-hours stream — the producer's normal shape (GroupCSVRowsForStream
-// drops weight-≤0 rows when off_hours_weight=0). Distinct values so a
-// mis-attributed day cannot pass by coincidence.
-func nightOnlyFixture(now time.Time, bh, outside int64, days int) ([]types.KeyedDigest, []types.KeyedDigest) {
+// web workload plus an exclusively overnight CronJob with ONLY an off-window
+// leg — the producer's normal shape (a workload with no in-window samples
+// has no BH leg). Distinct values so a mis-attributed day cannot pass by
+// coincidence.
+func nightOnlyFixture(now time.Time, bh, outside int64, days int) (bhRows, offRows []types.KeyedDigest) {
 	end := now.UTC().Truncate(24 * time.Hour)
 	start := end.AddDate(0, 0, -days)
-	var all, bhRows []types.KeyedDigest
 	mk := func(day time.Time, ns, wl string, usage int64, isBH bool) {
 		kd := types.KeyedDigest{
 			Key: types.ContainerKey{Namespace: ns, Workload: wl, WorkloadType: "Deployment", ContainerName: "c0"},
@@ -168,18 +161,18 @@ func nightOnlyFixture(now time.Time, bh, outside int64, days int) ([]types.Keyed
 		if isBH {
 			bhRows = append(bhRows, kd)
 		} else {
-			all = append(all, kd)
+			offRows = append(offRows, kd)
 		}
 	}
 	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
 		mk(d, "demo-app", "web", bh, true)
-		mk(d, "demo-app", "web", bh+outside, false)
+		mk(d, "demo-app", "web", outside, false)
 		mk(d, "kube-system", "coredns", 2000, true)
-		mk(d, "kube-system", "coredns", 2100, false)
-		// The night-only CronJob: all-hours 2000m, NO BH row.
+		mk(d, "kube-system", "coredns", 100, false)
+		// The night-only CronJob: off leg 2000m, NO BH leg.
 		mk(d, "batch-jobs", "night-cron", 2000, false)
 	}
-	return all, bhRows
+	return bhRows, offRows
 }
 
 // TestSleepCandidate_NightOnlyNoBHRowIsSilent is #761's offline repro: a
@@ -189,8 +182,8 @@ func nightOnlyFixture(now time.Time, bh, outside int64, days int) ([]types.Keyed
 // whose night job runs exactly in the hours the advisory would sleep away.
 func TestSleepCandidate_NightOnlyNoBHRowIsSilent(t *testing.T) {
 	now := time.Now()
-	all, bh := nightOnlyFixture(now, 300, 0, 14)
-	got := SleepCandidate("hc-761", TierNonProd, DaySums(all, bh), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	bh, off := nightOnlyFixture(now, 300, 0, 14)
+	got := SleepCandidate("hc-761", TierNonProd, SleepSums(bh, off), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
 	assert.Nil(t, got,
 		"a night-only user workload with no BH row must make the day unknown (#761)")
 }
@@ -201,7 +194,7 @@ func TestSleepCandidate_SystemMissingBHRowStillFires(t *testing.T) {
 	now := time.Now()
 	end := now.UTC().Truncate(24 * time.Hour)
 	start := end.AddDate(0, 0, -14)
-	var all, bhRows []types.KeyedDigest
+	var bhRows, offRows []types.KeyedDigest
 	mk := func(day time.Time, ns, wl string, usage int64, isBH bool) {
 		kd := types.KeyedDigest{
 			Key: types.ContainerKey{Namespace: ns, Workload: wl, WorkloadType: "Deployment", ContainerName: "c0"},
@@ -210,16 +203,16 @@ func TestSleepCandidate_SystemMissingBHRowStillFires(t *testing.T) {
 		if isBH {
 			bhRows = append(bhRows, kd)
 		} else {
-			all = append(all, kd)
+			offRows = append(offRows, kd)
 		}
 	}
 	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
 		mk(d, "demo-app", "web", 300, true)
-		mk(d, "demo-app", "web", 300, false)
-		// System workload: all-hours only.
+		mk(d, "demo-app", "web", 0, false)
+		// System workload: off leg only (no BH leg).
 		mk(d, "kube-system", "coredns", 2100, false)
 	}
-	got := SleepCandidate("hc-761-sys", TierNonProd, DaySums(all, bhRows), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	got := SleepCandidate("hc-761-sys", TierNonProd, SleepSums(bhRows, offRows), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
 	require.NotNil(t, got, "a system workload's stream shape is irrelevant — the exclusion is preserved (#761)")
 	assert.Equal(t, SleepVerdict, got.Verdict)
 }
@@ -228,12 +221,12 @@ func TestSleepCandidate_SystemMissingBHRowStillFires(t *testing.T) {
 // all-hours row — also reads unknown after the fix.
 func TestSleepCandidate_BHOnlyUserWorkloadIsSilent(t *testing.T) {
 	now := time.Now()
-	all, bh := nightOnlyFixture(now, 300, 0, 14)
-	// Drop the night-cron rows from `all`, then add the BH-ONLY user
-	// workload to the BH stream (the reverse shape: BHMeasured=true,
-	// AllMeasured=false).
+	bh, off := nightOnlyFixture(now, 300, 0, 14)
+	// Drop the night-cron rows from the off legs, then add the BH-ONLY
+	// user workload to the BH legs (the reverse shape: BHMeasured=true,
+	// OffMeasured=false).
 	var filtered []types.KeyedDigest
-	for _, kd := range all {
+	for _, kd := range off {
 		if kd.Key.Namespace == "batch-jobs" {
 			continue
 		}
@@ -247,7 +240,71 @@ func TestSleepCandidate_BHOnlyUserWorkloadIsSilent(t *testing.T) {
 			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 250},
 		})
 	}
-	got := SleepCandidate("hc-761-bhonly", TierNonProd, DaySums(filtered, bh), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	got := SleepCandidate("hc-761-bhonly", TierNonProd, SleepSums(bh, filtered), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
 	assert.Nil(t, got,
-		"a user workload with a BH row and no all-hours row must read unknown (#761)")
+		"a user workload with a BH leg and no off leg must read unknown (#761)")
+}
+
+// TestSleepCandidate_ConstantUsageIsSilent is #760's (V15-10) offline repro:
+// constant 300m usage — the in-window p50 AND the off-window p50 are both
+// 300 — the baseline's percentile subtraction read outside=0 and fired; the
+// off-window p50 IS 300 and must veto.
+func TestSleepCandidate_ConstantUsageIsSilent(t *testing.T) {
+	now := time.Now()
+	bh, off := bhFixture(now, 300, 300, 14)
+	got := SleepCandidate("hc-760", TierNonProd, SleepSums(bh, off), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"constant 300m usage runs all night — the off-window leg is the direct outside-BH measure, never a subtraction (#760)")
+}
+
+// weekdayProducerLegs builds 14 days under a Mon-Fri schedule with the
+// PRODUCER's true shape: weekdays carry both legs; weekends have no
+// in-window hours, so no BH leg exists (#760).
+func weekdayProducerLegs(bh, off int64) (bhRows, offRows []types.KeyedDigest) {
+	end := time.Now().UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	mk := func(day time.Time, ns, wl string, usage int64, isBH bool) {
+		kd := types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: ns, Workload: wl, WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: day, CPUUsageP50MC: usage},
+		}
+		if isBH {
+			bhRows = append(bhRows, kd)
+		} else {
+			offRows = append(offRows, kd)
+		}
+	}
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		weekend := d.UTC().Weekday() == time.Saturday || d.UTC().Weekday() == time.Sunday
+		if !weekend {
+			mk(d, "demo-app", "web", bh, true)
+			mk(d, "kube-system", "coredns", 2000, true)
+		}
+		mk(d, "demo-app", "web", off, false)
+		mk(d, "kube-system", "coredns", 100, false)
+	}
+	return bhRows, offRows
+}
+
+// TestSleepCandidate_WeekdayScheduleWeekendProducerShape (#760): a Mon-Fri
+// schedule's weekends carry no BH leg (no in-window hours exist) — the
+// BH-activity requirement is vacuous there; the off leg still gates. The
+// digest-stream model read those days as unknown and the rule never fired
+// for weekday schedules at all.
+func TestSleepCandidate_WeekdayScheduleWeekendProducerShape(t *testing.T) {
+	now := time.Now()
+	bh, off := weekdayProducerLegs(300, 0)
+	got := SleepCandidate("hc-760-wk", TierNonProd, SleepSums(bh, off), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	require.NotNil(t, got,
+		"a weekday schedule with weekend off-only evidence must still fire — weekends have no business hours (#760)")
+	assert.Equal(t, SleepVerdict, got.Verdict)
+}
+
+// Control: weekend off-window activity still vetoes (#760).
+func TestSleepCandidate_WeekendActivityVetoes(t *testing.T) {
+	now := time.Now()
+	bh, off := weekdayProducerLegs(300, 200)
+	got := SleepCandidate("hc-760-wkend", TierNonProd, SleepSums(bh, off), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"weekend off-window activity must veto — the advice sleeps those hours (#760)")
 }

@@ -95,6 +95,18 @@ func setupAnalyticsCleanupPG(t *testing.T) (*gorm.DB, func()) {
 			container_name TEXT NOT NULL,
 			PRIMARY KEY (id, interval_start)
 		)`,
+		`CREATE TABLE hcp_sleep_evidence (
+			bucket_date DATE NOT NULL,
+			org_id TEXT NOT NULL,
+			cluster_uuid UUID NOT NULL,
+			namespace TEXT NOT NULL,
+			workload TEXT NOT NULL,
+			workload_type TEXT NOT NULL DEFAULT 'Deployment',
+			container_name TEXT NOT NULL,
+			bh_cpu_p50_mc BIGINT,
+			off_cpu_p50_mc BIGINT,
+			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
+		)`,
 		`CREATE TABLE recommendation_quality (
 			measured_at TIMESTAMPTZ NOT NULL,
 			org_id TEXT NOT NULL,
@@ -240,6 +252,7 @@ func TestCleanupClusterAnalytics_DeletesAllExpectedTables(t *testing.T) {
 	exec(`INSERT INTO daily_pvc_digests (bucket_date, org_id, cluster_uuid, namespace, persistentvolumeclaim) VALUES (?::date, ?, ?::uuid, 'ns', 'pvc')`, testDigestDay, org, cluster)
 	exec(`INSERT INTO daily_node_digests (bucket_date, org_id, cluster_uuid, node) VALUES (?::date, ?, ?::uuid, 'node1')`, testDigestDay, org, cluster)
 	exec(`INSERT INTO gpu_container_digests (interval_start, org_id, cluster_uuid, namespace, workload, container_name) VALUES (?::timestamp, ?, ?::uuid, 'ns', 'wl', 'ctr')`, testDigestDay+" 00:00:00", org, cluster)
+	exec(`INSERT INTO hcp_sleep_evidence (bucket_date, org_id, cluster_uuid, namespace, workload, workload_type, container_name, bh_cpu_p50_mc, off_cpu_p50_mc) VALUES (?::date, ?, ?::uuid, 'ns', 'wl', 'Deployment', 'ctr', 300, 0)`, testDigestDay, org, cluster)
 	exec(`INSERT INTO recommendation_quality (measured_at, org_id, cluster_uuid, namespace, workload, workload_type, container_name) VALUES (?::timestamptz, ?, ?::uuid, 'ns', 'wl', 'Deployment', 'ctr')`, testDigestDay+" 00:00:00Z", org, cluster)
 	exec(`INSERT INTO recommendation_history (recorded_at, org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine) VALUES (?::timestamptz, ?, ?::uuid, 'ns', 'wl', 'Deployment', 'ctr', 'short', 'cost')`, testDigestDay+" 00:00:00Z", org, cluster)
 	exec(`INSERT INTO pvc_recommendation_sets (org_id, cluster_uuid) VALUES (?, ?::uuid)`, org, cluster)
@@ -256,6 +269,7 @@ func TestCleanupClusterAnalytics_DeletesAllExpectedTables(t *testing.T) {
 	require.NoError(t, cleanupClusterAnalytics(gdb, org, cluster))
 
 	assert.Equal(t, int64(0), countRows(t, gdb, "daily_container_digests", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
+	assert.Equal(t, int64(0), countRows(t, gdb, "hcp_sleep_evidence", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "daily_namespace_digests", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "daily_pvc_digests", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "daily_node_digests", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))

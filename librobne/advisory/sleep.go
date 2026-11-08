@@ -47,20 +47,24 @@ type DayKey struct {
 	WL string
 }
 
-// DaySum is one (day, namespace, workload) pair across the two digest
-// streams. A day counts as covered only when BOTH streams are measured —
-// partial business-hours coverage reads unknown, never zero-activity
-// (ADR-0348 §5).
+// DaySum is one (day, namespace, workload) pair across the two evidence
+// legs (#760): the in-window and off-window p50 sums, direct measures of
+// each side of the schedule — never a subtraction. A day counts as covered
+// only when BOTH legs are measured — partial business-hours coverage reads
+// unknown, never zero-activity (ADR-0348 §5, amended #760).
 type DaySum struct {
 	BH          int64
-	All         int64
+	Off         int64
 	BHMeasured  bool
-	AllMeasured bool
+	OffMeasured bool
 }
 
-// DaySums groups the two digest streams into per-(day, ns, workload) CPU
-// sums (millicores, the p50 column — the server's signature input).
-func DaySums(all, bh []types.KeyedDigest) map[string]map[DayKey]DaySum {
+// SleepSums groups the two evidence-leg digest sets into per-(day, ns,
+// workload) CPU sums (millicores, the p50 column — the server's evidence
+// input shape). bh carries in-window p50s, off carries off-window p50s —
+// each computed through the canonical weighted digest machinery with a
+// pure 0/1 window filter (exact complements).
+func SleepSums(bh, off []types.KeyedDigest) map[string]map[DayKey]DaySum {
 	out := map[string]map[DayKey]DaySum{}
 	add := func(rows []types.KeyedDigest, isBH bool) {
 		for _, kd := range rows {
@@ -74,14 +78,14 @@ func DaySums(all, bh []types.KeyedDigest) map[string]map[DayKey]DaySum {
 				d.BH += kd.Row.CPUUsageP50MC
 				d.BHMeasured = true
 			} else {
-				d.All += kd.Row.CPUUsageP50MC
-				d.AllMeasured = true
+				d.Off += kd.Row.CPUUsageP50MC
+				d.OffMeasured = true
 			}
 			out[day][k] = d
 		}
 	}
-	add(all, false)
 	add(bh, true)
+	add(off, false)
 	return out
 }
 
@@ -150,10 +154,19 @@ func SleepCandidate(hcID, tier string, sums map[string]map[DayKey]DaySum, sched 
 		if !ok {
 			return nil // unknown day — never idle-by-absence
 		}
+		// #760: a weekday schedule's weekends are entirely outside the
+		// window — no in-window hours exist, so the producer emits no BH
+		// evidence and the BH-activity requirement is vacuous; the off leg
+		// still gates safety (the advice sleeps those hours).
+		dayApplicable := bhschedule.DayAllowed(d.UTC().Weekday(), sched.Days)
 		covered := false
 		dayBHActive := false
 		for k, r := range rows {
-			if !r.BHMeasured || !r.AllMeasured {
+			missingBH := !r.BHMeasured
+			if !dayApplicable {
+				missingBH = false
+			}
+			if missingBH || !r.OffMeasured {
 				// #761 (V15-11): a USER workload with exactly one stream
 				// measured makes the day unknown — never silently skipped
 				// while a sibling covers the day. Absence of a BH row does
@@ -170,7 +183,11 @@ func SleepCandidate(hcID, tier string, sums map[string]map[DayKey]DaySum, sched 
 			if !isUserNamespace(k.NS, exact, prefixes) {
 				continue
 			}
-			outside := r.All - r.BH
+			// #760 (V15-10): the off-window p50 sum is the direct
+			// outside-BH measure — never all-minus-bh percentile
+			// subtraction (a constant workload reads outside=0 that way
+			// while running all night).
+			outside := r.Off
 			if r.BH > ev.BHActivePeakMC {
 				ev.BHActivePeakMC = r.BH
 			}
@@ -187,7 +204,7 @@ func SleepCandidate(hcID, tier string, sums map[string]map[DayKey]DaySum, sched 
 		if !covered {
 			return nil
 		}
-		if !dayBHActive {
+		if dayApplicable && !dayBHActive {
 			return nil // idle-always routes to the zombie rule, never here
 		}
 	}

@@ -141,20 +141,20 @@ func appendUniqueString(dst []string, v string) []string {
 }
 
 // computeSleepAdvisory runs the W8 sleep-candidate evaluation over the
-// primary's dual digests and the loaded context facts (#721). Silence on
-// any missing input mirrors the server's never-fail-on-evidence posture:
-// no schedule, no context facts, or no business-hours digests means no
-// advisory row — never an error.
+// primary's evidence legs and the loaded context facts (#721, #760). Silence
+// on any missing input mirrors the server's never-fail-on-evidence posture:
+// no schedule, no context facts, or no evidence legs means no advisory row —
+// never an error.
 func computeSleepAdvisory(fl fileLoad) []advisory.Advisory {
 	if !fl.bhEnabled || !fl.hcContextLoaded || fl.hcTier == "" {
 		return nil
 	}
-	if len(fl.containerBHDigests) == 0 || len(fl.containerDigests) == 0 {
+	if len(fl.sleepBHLegs) == 0 || len(fl.sleepOffLegs) == 0 {
 		return nil
 	}
 	pol := sleepPolicyFromYAML(fl.cfg.SleepAdvisory)
 	syncedExact, syncedPrefixes := platformExclusionsFromYAML(fl.cfg.SleepAdvisory)
-	sums := advisory.DaySums(fl.containerDigests, fl.containerBHDigests)
+	sums := advisory.SleepSums(fl.sleepBHLegs, fl.sleepOffLegs)
 	got := advisory.SleepCandidate(
 		fl.clusterID, fl.hcTier, sums, fl.bhSchedule, pol,
 		fl.hcWorkerNodes, syncedExact, syncedPrefixes, fl.now)

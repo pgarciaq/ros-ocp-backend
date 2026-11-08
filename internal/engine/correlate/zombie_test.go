@@ -47,6 +47,12 @@ func zombieWindow() (start, end time.Time) {
 
 func seedZombieDigestDay(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, cluster, day string, rows map[nswl]zombieWorkloadDay) {
 	t.Helper()
+	// Self-sufficient seeding: ensure the day's month partition (windows
+	// near month start reach into the prior month, whose migration-time
+	// pre-creation may not cover it).
+	dayTime, err := time.Parse("2006-01-02", day)
+	require.NoError(t, err)
+	require.NoError(t, ingestion.EnsureDigestPartitionMonth(ctx, pool, dayTime))
 	for k, w := range rows {
 		var req any
 		req = w.req

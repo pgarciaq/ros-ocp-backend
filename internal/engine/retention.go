@@ -92,6 +92,10 @@ var dateRetainedTables = []RetentionTable{
 	{"node_recommendations", "updated_at", true},
 	{"namespace_recommendation_sets", "updated_at", true},
 	{"pvc_recommendation_sets", "updated_at", true},
+	// #760 sleep evidence: unpartitioned per-container-day legs — date-based
+	// DELETE keeps the migration's "bounded" claim true (the sleep window is
+	// 14d; the digest-month cutoff is the bound).
+	{"hcp_sleep_evidence", "bucket_date", false},
 }
 
 // RunRetentionSweep drops monthly partitions older than retentionMonths for

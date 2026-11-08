@@ -73,6 +73,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Sleep advice no longer subtracts percentiles to guess overnight activity ([#760](https://github.com/pgarciaq/ros-ocp-backend/issues/760)):**
+  the non-prod sleep predicate computed outside-BH CPU as all-hours p50
+  minus business-hours p50 — but percentiles are not additive, and the
+  complement of a percentile is not the difference of percentiles. A
+  workload using 300m constantly read outside=0 and received
+  high-confidence `schedule_nonprod_sleep` while running all night. The
+  off-hours signal is now measured and stored directly: a thin
+  `hcp_sleep_evidence` table carries each container-day's in-window and
+  off-window p50s (exact complements, through the canonical digest
+  machinery), and the predicate reads the off-window sum with no
+  subtraction — which also eliminates the container-grain masking
+  instance of the same defect. Days the schedule does not apply to (a
+  weekday schedule's weekends) gate on the off-window leg alone — the
+  BH-activity requirement is vacuous there, and weekend activity still
+  vetoes; without this, weekend days read unknown and the rule never
+  fired for weekday schedules at all. The evidence is split at the
+  cluster schedule (a wider namespace override cannot swallow off-window
+  activity), swept by date retention, and cleaned with its source. Sleep
+  advisories are silent until post-deploy evidence accumulates (up to
+  the 14-day window; a `reship_ros` rebuild closes it per scope).
+  ADR-0348 §5 amended.
 - **A night-only workload can no longer hide from the sleep-safety test ([#761](https://github.com/pgarciaq/ros-ocp-backend/issues/761)):**
   the non-prod sleep predicate skipped any workload missing one of its two
   digest streams, and a workload that runs only outside business hours

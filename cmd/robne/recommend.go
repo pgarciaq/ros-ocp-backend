@@ -546,6 +546,20 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 				return out, err
 			}
 			fl.containerBHDigests = bhDigests
+			// #760: the sleep evidence legs live in their own table —
+			// persisted alongside the digests above, then read back so the
+			// DB-output path exercises the same read the server performs.
+			if len(fl.sleepBHLegs) > 0 || len(fl.sleepOffLegs) > 0 {
+				if err := pgdigest.WriteSleepEvidence(ctx, pool, fl.orgID, fl.clusterID, fl.sleepBHLegs, fl.sleepOffLegs); err != nil {
+					return out, err
+				}
+			}
+			bhLegs, offLegs, err := pgdigest.ReadSleepEvidence(ctx, pool, fl.orgID, fl.clusterID, start, end)
+			if err != nil {
+				return out, err
+			}
+			fl.sleepBHLegs = bhLegs
+			fl.sleepOffLegs = offLegs
 		}
 	} else {
 		out.ClusterID = fl.clusterID
@@ -836,10 +850,15 @@ type fileLoad struct {
 	// SLO + api-tax rows (#722 API context, #723 H leg, #724): primary
 	// payload rows plus context rows, identity-joined inside the
 	// advisories. Advisory inputs are plugin-independent (#721 lesson).
-	sloRows               []csv.SLORow
-	apiTaxRows            []csv.APITaxRow
-	containerDigests      []types.KeyedDigest
-	containerBHDigests    []types.KeyedDigest
+	sloRows            []csv.SLORow
+	apiTaxRows         []csv.APITaxRow
+	containerDigests   []types.KeyedDigest
+	containerBHDigests []types.KeyedDigest
+	// #760 sleep evidence legs: in-window and off-window p50s (exact
+	// complements, 0/1 window filters — never the fractional
+	// ScheduleWeight blend).
+	sleepBHLegs           []types.KeyedDigest
+	sleepOffLegs          []types.KeyedDigest
 	containerMeta         map[types.ContainerKey]csv.RowMeta
 	namespaceGrouped      map[namespace.NamespaceKey][]types.DigestRow
 	namespaceBHGrouped    map[namespace.NamespaceKey][]types.DigestRow
@@ -1056,6 +1075,34 @@ func loadBusinessHoursDigests(fl *fileLoad, csvLoaded csv.LoadResult) error {
 	weightFn := func(t time.Time) float64 {
 		return bhschedule.ScheduleWeight(t, s)
 	}
+	// #760 sleep evidence legs: pure 0/1 window filters — exact complements
+	// through the canonical weighted machinery (weight <= 0 skips the
+	// sample), matching the server's hcp_sleep_evidence semantics. NOT
+	// gated on the hcp plugin: the sleep advisory is independent of the
+	// HCP capacity plugin (the plugin list prunes hcp when the payload
+	// lacks capacity rows — the advisory must still evaluate).
+	inWindow := func(t time.Time) float64 {
+		if bhschedule.InBusinessHours(t, s) {
+			return 1
+		}
+		return 0
+	}
+	offWindow := func(t time.Time) float64 {
+		if bhschedule.InBusinessHours(t, s) {
+			return 0
+		}
+		return 1
+	}
+	bhLegs, _, err := csv.DailyDigestsWeighted(csvLoaded.Rows, inWindow)
+	if err != nil {
+		return err
+	}
+	offLegs, _, err := csv.DailyDigestsWeighted(csvLoaded.Rows, offWindow)
+	if err != nil {
+		return err
+	}
+	fl.sleepBHLegs = bhLegs
+	fl.sleepOffLegs = offLegs
 	if pluginEnabled(fl.plugins, "container") || pluginEnabled(fl.plugins, "quota") || pluginEnabled(fl.plugins, "cluster-quota") {
 		digests, _, err := csv.DailyDigestsWeighted(csvLoaded.Rows, weightFn)
 		if err != nil {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
@@ -111,98 +112,124 @@ type sleepKey struct {
 }
 
 // sleepWorkloadDay is one (day, namespace, workload) pair across the two
-// digest streams.
+// evidence legs (#760): the in-window p50 sum and the off-window p50 sum —
+// direct measures, never a subtraction.
 type sleepWorkloadDay struct {
 	bhCPU       int64
-	allCPU      int64
+	offCPU      int64
 	bhMeasured  bool
-	allMeasured bool
+	offMeasured bool
 }
 
-// loadSleepSignature loads per (day, namespace, workload) CPU for both
-// streams on the hosted cluster (N-leg convention: cluster_uuid is the HC's
-// own ID). All namespaces load; the platform split happens in Go, shared
-// with the zombie rule (including the synced cost-groups set).
-func loadSleepSignature(ctx context.Context, pool *pgxpool.Pool, orgID, hcID string, start, end time.Time) (map[string]map[sleepKey]*sleepWorkloadDay, error) {
+// loadSleepEvidence loads per (day, namespace, workload) CPU for both
+// evidence legs from hcp_sleep_evidence (#760): the in-window and
+// off-window p50 sums, direct measures of each side of the schedule — the
+// complement of a percentile is not the difference of percentiles, so the
+// off-hours signal is stored, not derived. NULL legs (a workload with no
+// samples in one window) leave the flag false — the #761 coverage shape.
+// N-leg convention: cluster_uuid is the HC's own ID. All namespaces load;
+// the platform split happens in Go, shared with the zombie rule (including
+// the synced cost-groups set).
+func loadSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, hcID string, start, end time.Time) (map[string]map[sleepKey]*sleepWorkloadDay, error) {
 	rows, err := pool.Query(ctx, `
-		SELECT bucket_date::text, namespace, workload, schedule_type,
-			SUM(cpu_usage_p50_mc), COUNT(cpu_usage_p50_mc)
-		FROM daily_container_digests
+		SELECT bucket_date::text, namespace, workload,
+			SUM(bh_cpu_p50_mc), COUNT(bh_cpu_p50_mc),
+			SUM(off_cpu_p50_mc), COUNT(off_cpu_p50_mc)
+		FROM hcp_sleep_evidence
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date < $4
-		GROUP BY 1, 2, 3, 4`,
+		GROUP BY 1, 2, 3`,
 		orgID, hcID, start.Format("2006-01-02"), end.Format("2006-01-02"))
 	if err != nil {
-		return nil, fmt.Errorf("load sleep signature: %w", err)
+		return nil, fmt.Errorf("load sleep evidence: %w", err)
 	}
 	defer rows.Close()
 	out := map[string]map[sleepKey]*sleepWorkloadDay{}
 	for rows.Next() {
-		var day, ns, wl, sched string
-		var total *int64
-		var nmeas int64
-		if err := rows.Scan(&day, &ns, &wl, &sched, &total, &nmeas); err != nil {
-			return nil, fmt.Errorf("scan sleep signature: %w", err)
+		var day, ns, wl string
+		var bhTotal, offTotal *int64
+		var bhN, offN int64
+		if err := rows.Scan(&day, &ns, &wl, &bhTotal, &bhN, &offTotal, &offN); err != nil {
+			return nil, fmt.Errorf("scan sleep evidence: %w", err)
 		}
 		if out[day] == nil {
 			out[day] = map[sleepKey]*sleepWorkloadDay{}
 		}
 		k := sleepKey{ns: ns, wl: wl}
-		if out[day][k] == nil {
-			out[day][k] = &sleepWorkloadDay{}
-		}
 		d := out[day][k]
-		if total != nil {
-			if sched == "business_hours" {
-				d.bhCPU = *total
-				if nmeas > 0 {
-					d.bhMeasured = true
-				}
-			} else {
-				d.allCPU = *total
-				if nmeas > 0 {
-					d.allMeasured = true
-				}
+		if d == nil {
+			d = &sleepWorkloadDay{}
+			out[day][k] = d
+		}
+		if bhTotal != nil {
+			d.bhCPU = *bhTotal
+			if bhN > 0 {
+				d.bhMeasured = true
+			}
+		}
+		if offTotal != nil {
+			d.offCPU = *offTotal
+			if offN > 0 {
+				d.offMeasured = true
 			}
 		}
 	}
 	return out, rows.Err()
 }
 
-// evalSleepSignature applies the ADR-0348 §5 predicate: every covered day
-// (BOTH streams measured — partial BH coverage reads unknown, never
-// zero-activity) has at least one user workload at/above the BH activity
-// floor (active in hours) and no user workload whose outside-BH CPU is
-// at/above the outside floor (idle outside). Partition with the zombie rule
-// holds by construction: idle-always matches zombie, never this.
-func evalSleepSignature(days map[string]map[sleepKey]*sleepWorkloadDay, windowStart, windowEnd time.Time, bhFloor, outsideFloor int64, syncedExact map[string]bool, syncedPrefixes []string) (bhPeak, outsidePeak int64, match, known bool) {
+// evalSleepSignature applies the ADR-0348 §5 predicate (amended #760,
+// #761): every covered day has at least one user workload at/above the BH
+// activity floor (active in hours) and no user workload whose off-window
+// CPU is at/above the outside floor (idle outside). A day is covered when
+// its evidence legs are measured — partial coverage reads unknown, never
+// zero-activity (#761, workload grain). Days the schedule does not apply to
+// (a weekday schedule's weekends: no in-window hours exist, so the producer
+// emits no BH evidence — the whole day is outside the window the advice
+// would sleep) gate on the off leg alone: the BH-activity requirement is
+// vacuous there, and off-window activity still vetoes. Partition with the
+// zombie rule holds by construction: idle-always matches zombie, never
+// this.
+func evalSleepSignature(days map[string]map[sleepKey]*sleepWorkloadDay, windowStart, windowEnd time.Time, bhFloor, outsideFloor int64, sched *sleepSchedule, syncedExact map[string]bool, syncedPrefixes []string) (bhPeak, outsidePeak int64, match, known bool) {
 	for d := windowStart; d.Before(windowEnd); d = d.AddDate(0, 0, 1) {
 		key := d.UTC().Format("2006-01-02")
 		rows, ok := days[key]
 		if !ok {
 			return 0, 0, false, false
 		}
+		// #760: a weekday schedule's weekends are entirely outside the
+		// window — the BH-activity requirement does not apply (there are
+		// no business hours to be active in), but the off leg still gates
+		// safety: the advice sleeps those hours.
+		dayApplicable := sched == nil || bhschedule.DayAllowed(d.UTC().Weekday(), sched.Days)
 		covered := false
 		dayBHActive := false
 		for k, r := range rows {
-			if !r.bhMeasured || !r.allMeasured {
-				// #761 (V15-11): a USER workload with exactly one stream
-				// measured makes the day unknown — never silently skipped
-				// while a sibling covers the day. Absence of a BH row does
-				// not prove zero off-hours usage: the producer omits
+			missingBH := !r.bhMeasured
+			if !dayApplicable {
+				missingBH = false // no in-window hours exist that day
+			}
+			if missingBH || !r.offMeasured {
+				// #761 (V15-11): a USER workload with an unmeasured leg
+				// makes the day unknown — never silently skipped while a
+				// sibling covers the day. Absence of a BH leg does not
+				// prove zero off-hours usage: the producer omits
 				// all-zero-BH groups by design (the normal night-only
 				// shape), so the off-hours split is unknowable — unknown,
 				// never zero-activity (ADR-0348 §5, workload grain).
 				if isZombieUserNamespace(k.ns, syncedExact, syncedPrefixes) {
 					return 0, 0, false, false
 				}
-				continue // system workload: stream shape irrelevant
+				continue // system workload: leg shape irrelevant
 			}
 			covered = true
 			if !isZombieUserNamespace(k.ns, syncedExact, syncedPrefixes) {
 				continue
 			}
-			outside := r.allCPU - r.bhCPU
+			// #760 (V15-10): the off-window p50 sum is the direct
+			// outside-BH measure — never all-minus-bh percentile
+			// subtraction (a constant workload reads outside=0 that way
+			// while running all night).
+			outside := r.offCPU
 			if r.bhCPU > bhPeak {
 				bhPeak = r.bhCPU
 			}
@@ -219,7 +246,7 @@ func evalSleepSignature(days map[string]map[sleepKey]*sleepWorkloadDay, windowSt
 		if !covered {
 			return 0, 0, false, false
 		}
-		if !dayBHActive {
+		if dayApplicable && !dayBHActive {
 			return 0, 0, false, true
 		}
 	}
@@ -292,13 +319,13 @@ func evaluateSleepForHC(ctx context.Context, pool *pgxpool.Pool, c zombieCandida
 	if err != nil || sched == nil {
 		return false, err
 	}
-	signature, err := loadSleepSignature(ctx, pool, c.orgID, c.hcID, windowStart, windowEnd)
+	signature, err := loadSleepEvidence(ctx, pool, c.orgID, c.hcID, windowStart, windowEnd)
 	if err != nil {
 		return false, err
 	}
 	syncedExact, syncedPrefixes := loadSyncedPlatformSet(ctx, pool, c.orgID)
 	bhPeak, outsidePeak, match, known := evalSleepSignature(signature, windowStart, windowEnd,
-		int64(p.SleepBHActivityFloorMC), int64(p.SleepOutsideBHIdleFloorMC), syncedExact, syncedPrefixes)
+		int64(p.SleepBHActivityFloorMC), int64(p.SleepOutsideBHIdleFloorMC), sched, syncedExact, syncedPrefixes)
 	if !known || !match {
 		return false, nil
 	}

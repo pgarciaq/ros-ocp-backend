@@ -15,6 +15,13 @@ func PruneClusterBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool, o
 		orgID, clusterUUID); err != nil {
 		return fmt.Errorf("prune container business_hours digests: %w", err)
 	}
+	// #760: the sleep evidence rows derive from the same schedules.
+	if _, err := pool.Exec(ctx, `
+		DELETE FROM hcp_sleep_evidence
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid`,
+		orgID, clusterUUID); err != nil {
+		return fmt.Errorf("prune cluster sleep evidence: %w", err)
+	}
 	if _, err := pool.Exec(ctx, `
 		DELETE FROM daily_namespace_digests
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND schedule_type = 'business_hours'`,
@@ -63,6 +70,13 @@ func PruneNamespaceBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool,
 		orgID, clusterUUID, namespace); err != nil {
 		return fmt.Errorf("prune container business_hours digests for namespace: %w", err)
 	}
+	// #760: the sleep evidence rows derive from the same schedules.
+	if _, err := pool.Exec(ctx, `
+		DELETE FROM hcp_sleep_evidence
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND namespace = $3`,
+		orgID, clusterUUID, namespace); err != nil {
+		return fmt.Errorf("prune namespace sleep evidence: %w", err)
+	}
 	if _, err := pool.Exec(ctx, `
 		DELETE FROM daily_namespace_digests
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND namespace = $3 AND schedule_type = 'business_hours'`,
@@ -90,6 +104,12 @@ func PruneOrgBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool, orgID
 		DELETE FROM daily_container_digests
 		WHERE org_id = $1 AND schedule_type = 'business_hours'`, orgID); err != nil {
 		return fmt.Errorf("prune org container business_hours digests: %w", err)
+	}
+	// #760: the sleep evidence rows derive from the same schedules.
+	if _, err := pool.Exec(ctx, `
+		DELETE FROM hcp_sleep_evidence
+		WHERE org_id = $1`, orgID); err != nil {
+		return fmt.Errorf("prune org sleep evidence: %w", err)
 	}
 	if _, err := pool.Exec(ctx, `
 		DELETE FROM daily_namespace_digests

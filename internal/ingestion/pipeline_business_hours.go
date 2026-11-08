@@ -127,7 +127,13 @@ func upsertContainerDigestsOnSender(
 			Digest:       keyedDigestFromComputed(d),
 		})
 	}
-	return pgdigest.WriteRowsOnSender(ctx, sender, rows)
+	if err := pgdigest.WriteRowsOnSender(ctx, sender, rows); err != nil {
+		return err
+	}
+	// #760: the off-hours evidence for the W8 sleep predicate rides the
+	// same sender — one hook covers every ingest path that computes
+	// digests (pipeline, single-tx, staged-chunk).
+	return upsertSleepEvidenceOnSender(ctx, sender, grouped, scheduleCache)
 }
 
 func keyedDigestFromComputed(d ContainerDigestResult) types.KeyedDigest {

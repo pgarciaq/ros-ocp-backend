@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
@@ -504,4 +505,305 @@ func TestMain(m *testing.M) {
 		goleak.IgnoreTopFunction("github.com/testcontainers/testcontainers-go.(*Reaper).connect.func1"),
 		goleak.IgnoreTopFunction("github.com/hashicorp/golang-lru/v2/expirable.NewLRU[...].func1"),
 	)
+}
+
+// seedEvidenceTestSchedule writes a cluster-wide Mon-Fri 09:00-17:00 UTC
+// schedule (the #760 repro window — UTC keeps edge classification obvious).
+func seedEvidenceTestSchedule(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID string) {
+	t.Helper()
+	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
+		OrgID: orgID, ClusterUUID: testutil.TestClusterUUID, Namespace: "",
+		Timezone: "UTC", Days: []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "09:00", EndTime: "17:00", OffHoursWeight: 0.0, Enabled: true,
+	}))
+}
+
+// TestSleepEvidence_RealHourlySamples is #760's raw-producer proof: real
+// hourly rows through the canonical ingestion path must land as per-leg
+// p50s in hcp_sleep_evidence — DISTINCT in-window/off-window values (100 /
+// 900) so a filter inversion cannot pass by coincidence, and window-edge
+// samples (08:59 in, 09:00 out ... 16:59 in, 17:00 out) pin the boundary.
+func TestSleepEvidence_RealHourlySamples(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	enableBusinessHoursForTest(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-sl-evidence-" + t.Name()
+	cluster := testutil.TestClusterUUID
+
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM hcp_sleep_evidence WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM business_hours_schedules WHERE org_id = $1`, orgID)
+	})
+	seedEvidenceTestSchedule(t, ctx, pool, orgID)
+
+	// Tuesday 2026-01-06: BH window 09:00-17:00 UTC. In-window hours carry
+	// 100m; off-window hours carry 900m. Edge hours: 08:59 off, 09:00 in,
+	// 16:59 in, 17:00 off.
+	day := time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC)
+	var b strings.Builder
+	b.WriteString(csvHeader + "\n")
+	rowAt := func(ts time.Time, cpu string) {
+		b.WriteString(csvRow(
+			ts.Format("2006-01-02 15:04:05 +0000 UTC"), ts.Add(time.Hour).Format("2006-01-02 15:04:05 +0000 UTC"),
+			"demo-app", "pod-1", "web", "main",
+			cpu, cpu, cpu, "134217728", "134217728", "104857600", "100000000"))
+		b.WriteString("\n")
+	}
+	rowAt(day.Add(8*time.Hour+59*time.Minute), "0.9") // 08:59 — off-window edge
+	for h := 9; h < 17; h++ {
+		rowAt(day.Add(time.Duration(h)*time.Hour), "0.1") // 09:00..16:59 in-window
+	}
+	rowAt(day.Add(17*time.Hour), "0.9") // 17:00 — off-window edge
+	for _, h := range []int{18, 20, 22, 2, 4, 6} {
+		rowAt(day.Add(time.Duration(h)*time.Hour), "0.9") // more off-window mass
+	}
+
+	_, err := ParseAndDigestCSV(ctx, pool, strings.NewReader(b.String()), orgID, cluster)
+	require.NoError(t, err)
+
+	var bhP50, offP50 *int64
+	err = pool.QueryRow(ctx,
+		`SELECT bh_cpu_p50_mc, off_cpu_p50_mc FROM hcp_sleep_evidence
+		 WHERE org_id = $1 AND namespace = 'demo-app'`, orgID).Scan(&bhP50, &offP50)
+	require.NoError(t, err)
+	require.NotNil(t, bhP50, "in-window samples exist — the BH leg must be measured")
+	require.NotNil(t, offP50, "off-window samples exist — the off leg must be measured")
+	assert.Equal(t, int64(100), *bhP50,
+		"the BH leg is the in-window p50 (distinct from off — a filter inversion fails here)")
+	assert.Equal(t, int64(900), *offP50,
+		"the off leg is the off-window p50 — the direct #760 evidence, never a subtraction")
+}
+
+// TestSleepEvidence_NightOnlyContainer: a container whose every sample is
+// off-window gets ONLY the off leg (bh NULL) — the #761 coverage shape at
+// evidence grain.
+func TestSleepEvidence_NightOnlyContainer(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	enableBusinessHoursForTest(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-sl-night-" + t.Name()
+	cluster := testutil.TestClusterUUID
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM hcp_sleep_evidence WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM business_hours_schedules WHERE org_id = $1`, orgID)
+	})
+	seedEvidenceTestSchedule(t, ctx, pool, orgID)
+
+	day := time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC)
+	var b strings.Builder
+	b.WriteString(csvHeader + "\n")
+	for _, h := range []int{0, 1, 2, 3, 4, 5, 22, 23} {
+		ts := day.Add(time.Duration(h) * time.Hour)
+		b.WriteString(csvRow(
+			ts.Format("2006-01-02 15:04:05 +0000 UTC"), ts.Add(time.Hour).Format("2006-01-02 15:04:05 +0000 UTC"),
+			"batch-jobs", "pod-9", "night-cron", "main",
+			"0.9", "0.9", "0.9", "134217728", "134217728", "104857600", "100000000"))
+		b.WriteString("\n")
+	}
+	_, err := ParseAndDigestCSV(ctx, pool, strings.NewReader(b.String()), orgID, cluster)
+	require.NoError(t, err)
+
+	var bhP50, offP50 *int64
+	err = pool.QueryRow(ctx,
+		`SELECT bh_cpu_p50_mc, off_cpu_p50_mc FROM hcp_sleep_evidence
+		 WHERE org_id = $1 AND namespace = 'batch-jobs'`, orgID).Scan(&bhP50, &offP50)
+	require.NoError(t, err)
+	assert.Nil(t, bhP50, "no in-window samples — the BH leg stays NULL (#761 shape)")
+	require.NotNil(t, offP50)
+	assert.Equal(t, int64(900), *offP50)
+}
+
+// TestSleepEvidence_IdempotentReplay: re-ingesting the same rows converges
+// to the same evidence (replacement upserts, never incremental sums).
+func TestSleepEvidence_IdempotentReplay(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	enableBusinessHoursForTest(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-sl-replay-" + t.Name()
+	cluster := testutil.TestClusterUUID
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM hcp_sleep_evidence WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM business_hours_schedules WHERE org_id = $1`, orgID)
+	})
+	seedEvidenceTestSchedule(t, ctx, pool, orgID)
+
+	day := time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC)
+	var b strings.Builder
+	b.WriteString(csvHeader + "\n")
+	for _, spec := range []struct {
+		h   int
+		cpu string
+	}{{10, "0.1"}, {12, "0.1"}, {14, "0.3"}, {20, "0.9"}, {22, "0.9"}} {
+		ts := day.Add(time.Duration(spec.h) * time.Hour)
+		b.WriteString(csvRow(
+			ts.Format("2006-01-02 15:04:05 +0000 UTC"), ts.Add(time.Hour).Format("2006-01-02 15:04:05 +0000 UTC"),
+			"demo-app", "pod-1", "web", "main",
+			spec.cpu, spec.cpu, spec.cpu, "134217728", "134217728", "104857600", "100000000"))
+		b.WriteString("\n")
+	}
+	for i := 0; i < 2; i++ {
+		_, err := ParseAndDigestCSV(ctx, pool, strings.NewReader(b.String()), orgID, cluster)
+		require.NoError(t, err)
+	}
+	var bhP50, offP50 int64
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT COALESCE(bh_cpu_p50_mc, -1), COALESCE(off_cpu_p50_mc, -1)
+		 FROM hcp_sleep_evidence WHERE org_id = $1`, orgID).Scan(&bhP50, &offP50))
+	assert.Equal(t, int64(100), bhP50, "replay converges (replacement, not increment)")
+	assert.Equal(t, int64(900), offP50, "replay converges (replacement, not increment)")
+}
+
+// TestSleepEvidence_NoScheduleNoRows: without an enabled schedule the
+// evidence writer stays silent (the BH-stream enablement condition).
+func TestSleepEvidence_NoScheduleNoRows(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	enableBusinessHoursForTest(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-sl-nosched-" + t.Name()
+	cluster := testutil.TestClusterUUID
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM hcp_sleep_evidence WHERE org_id = $1`, orgID)
+	})
+	day := time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC)
+	var b strings.Builder
+	b.WriteString(csvHeader + "\n")
+	ts := day.Add(12 * time.Hour)
+	b.WriteString(csvRow(
+		ts.Format("2006-01-02 15:04:05 +0000 UTC"), ts.Add(time.Hour).Format("2006-01-02 15:04:05 +0000 UTC"),
+		"demo-app", "pod-1", "web", "main",
+		"0.1", "0.1", "0.1", "134217728", "134217728", "104857600", "100000000"))
+	b.WriteString("\n")
+	_, err := ParseAndDigestCSV(ctx, pool, strings.NewReader(b.String()), orgID, cluster)
+	require.NoError(t, err)
+	var n int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM hcp_sleep_evidence WHERE org_id = $1`, orgID).Scan(&n))
+	assert.Equal(t, 0, n, "no enabled schedule — no evidence rows (the BH-stream condition)")
+}
+
+// TestSleepEvidence_WindowEdges pins the boundary classification exactly:
+// a misclassified edge hour flips which leg is NULL (a p50 would not move
+// for a single edge sample — the NULL side is the sharp instrument).
+// 09:00 and 16:59 are in-window; 08:59 and 17:00 are off-window.
+func TestSleepEvidence_WindowEdges(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	enableBusinessHoursForTest(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-sl-edges-" + t.Name()
+	cluster := testutil.TestClusterUUID
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM hcp_sleep_evidence WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM business_hours_schedules WHERE org_id = $1`, orgID)
+	})
+	seedEvidenceTestSchedule(t, ctx, pool, orgID)
+
+	day := time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC)
+	var b strings.Builder
+	b.WriteString(csvHeader + "\n")
+	mk := func(ns, pod string, ts time.Time) {
+		b.WriteString(csvRow(
+			ts.Format("2006-01-02 15:04:05 +0000 UTC"), ts.Add(time.Minute).Format("2006-01-02 15:04:05 +0000 UTC"),
+			ns, pod, ns+"-wl", "main",
+			"0.5", "0.5", "0.5", "134217728", "134217728", "104857600", "100000000"))
+		b.WriteString("\n")
+	}
+	// In-window-only container: 09:00 (start, inclusive) and 16:59 (end,
+	// exclusive).
+	mk("edge-in", "p1", day.Add(9*time.Hour))
+	mk("edge-in", "p1", day.Add(16*time.Hour+59*time.Minute))
+	// Off-window-only container: 08:59 (before start) and 17:00 (the end
+	// itself — exclusive).
+	mk("edge-off", "p2", day.Add(8*time.Hour+59*time.Minute))
+	mk("edge-off", "p2", day.Add(17*time.Hour))
+
+	_, err := ParseAndDigestCSV(ctx, pool, strings.NewReader(b.String()), orgID, cluster)
+	require.NoError(t, err)
+
+	var inBH, inOff, offBH, offOff *int64
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT bh_cpu_p50_mc, off_cpu_p50_mc FROM hcp_sleep_evidence
+		 WHERE org_id = $1 AND namespace = 'edge-in'`, orgID).Scan(&inBH, &inOff))
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT bh_cpu_p50_mc, off_cpu_p50_mc FROM hcp_sleep_evidence
+		 WHERE org_id = $1 AND namespace = 'edge-off'`, orgID).Scan(&offBH, &offOff))
+	require.NotNil(t, inBH, "09:00 and 16:59 are in-window — the BH leg is measured")
+	assert.Nil(t, inOff, "the in-window-only container has no off leg")
+	assert.Nil(t, offBH, "08:59 and 17:00 are off-window — the BH leg is NULL")
+	require.NotNil(t, offOff, "the off-window-only container's off leg is measured")
+}
+
+// TestSleepEvidence_ClusterSplitNotNamespace (#760 review F1): a namespace
+// schedule override WIDER than the cluster schedule must not swallow
+// off-window activity — the evidence answers the sleep predicate's
+// cluster-window question (resolveSleepSchedule is cluster-scoped). A
+// 19:00 sample is outside the cluster's 09:00-17:00 window even though the
+// namespace override runs to 21:00: the off leg must carry it.
+func TestSleepEvidence_ClusterSplitNotNamespace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	enableBusinessHoursForTest(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-sl-cluster-" + t.Name()
+	cluster := testutil.TestClusterUUID
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM hcp_sleep_evidence WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM business_hours_schedules WHERE org_id = $1`, orgID)
+	})
+	seedEvidenceTestSchedule(t, ctx, pool, orgID)
+	// The namespace override: 09:00-21:00 — WIDER than the cluster window.
+	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
+		OrgID: orgID, ClusterUUID: cluster, Namespace: "wide-ns",
+		Timezone: "UTC", Days: []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "09:00", EndTime: "21:00", OffHoursWeight: 0.0, Enabled: true,
+	}))
+
+	day := time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC)
+	var b strings.Builder
+	b.WriteString(csvHeader + "\n")
+	mk := func(ts time.Time, cpu string) {
+		b.WriteString(csvRow(
+			ts.Format("2006-01-02 15:04:05 +0000 UTC"), ts.Add(time.Hour).Format("2006-01-02 15:04:05 +0000 UTC"),
+			"wide-ns", "pod-1", "web", "main",
+			cpu, cpu, cpu, "134217728", "134217728", "104857600", "100000000"))
+		b.WriteString("\n")
+	}
+	mk(day.Add(12*time.Hour), "0.1") // 12:00 — inside BOTH windows
+	mk(day.Add(19*time.Hour), "0.9") // 19:00 — outside the CLUSTER window, inside the namespace override
+
+	_, err := ParseAndDigestCSV(ctx, pool, strings.NewReader(b.String()), orgID, cluster)
+	require.NoError(t, err)
+
+	var bhP50, offP50 *int64
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT bh_cpu_p50_mc, off_cpu_p50_mc FROM hcp_sleep_evidence
+		 WHERE org_id = $1 AND namespace = 'wide-ns'`, orgID).Scan(&bhP50, &offP50))
+	require.NotNil(t, bhP50)
+	assert.Equal(t, int64(100), *bhP50, "12:00 is in the cluster window — the BH leg carries it")
+	require.NotNil(t, offP50,
+		"19:00 is outside the CLUSTER window — the off leg must carry it even though the namespace override runs to 21:00 (#760 review F1)")
+	assert.Equal(t, int64(900), *offP50,
+		"a wider namespace override must not swallow off-window activity the advice would sleep away")
 }
