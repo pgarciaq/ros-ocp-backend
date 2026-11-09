@@ -73,6 +73,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Tag warnings no longer reveal inaccessible clusters' tag-key existence ([#828](https://github.com/pgarciaq/ros-ocp-backend/issues/828)):**
+  the "known tag key" catalog behind empty-result warnings had two sources,
+  and only one was scoped. The enabled-key catalog (org configuration)
+  correctly stays org-wide — the same distinction Koku's own tag-key
+  validation draws — but the data-derived catalog (keys observed in
+  `resolved_tags`) ran org-wide on five route groups (node utilization, GPU
+  MIG, history, container lists, namespace lists), and a nil-vs-empty
+  conflation let denied identities (settings-only roles, empty grants) read
+  as unrestricted even on the already-scoped PVC path. A cluster-restricted
+  caller could therefore distinguish a key observed only on an inaccessible
+  cluster from a nonexistent one through warning differentials. The
+  data-derived catalog now scopes to the caller's server-owned cluster set
+  on every warning route — resolved lazily, so the happy path pays no extra
+  query — with unresolvable scopes suppressing warnings entirely and client
+  cluster filters never widening the scope.
 - **Sleep advice no longer subtracts percentiles to guess overnight activity ([#760](https://github.com/pgarciaq/ros-ocp-backend/issues/760)):**
   the non-prod sleep predicate computed outside-BH CPU as all-hours p50
   minus business-hours p50 — but percentiles are not additive, and the
