@@ -105,7 +105,13 @@ func TestSleepCandidate_IdleAlwaysIsSilent(t *testing.T) {
 }
 
 func TestSleepCandidate_NonDefaultFloors(t *testing.T) {
-	now := time.Now()
+	// #779 class (calendar-dependent fixture, surfaced by #760's
+	// day-applicability change): a 2-day window anchored at time.Now() is
+	// Sat+Sun once a week, when every day is schedule-non-applicable and the
+	// BH floor is vacuous — the third assertion fails. Pin the anchor to a
+	// Wednesday UTC so the window is Monday+Tuesday: both applicable days,
+	// the floors actually gate.
+	now := time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)
 	bh, off := bhFixture(now, 300, 50, 2)
 	sums := SleepSums(bh, off)
 	pol := DefaultSleepPolicy()
