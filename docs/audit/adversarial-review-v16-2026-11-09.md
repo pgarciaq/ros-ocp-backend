@@ -6,7 +6,9 @@
 **Findings:** 6 P2, 1 P3; no P1 demonstrated in this pass.  
 **State of every finding:** **verified mechanism; no fix applied.**
 
-No GitHub findings were filed, no commits or pushes made, and no cluster mutation performed. This report is the deliverable. Reproduction programs below are defect-observation probes: their passing assertions mean the documented defective behavior was observed, **not** that the product is fixed.
+During audit execution, no GitHub findings were filed, no commits or pushes made, and no cluster mutation performed. Reproduction programs below are defect-observation probes: their passing assertions mean the documented defective behavior was observed, **not** that the product is fixed.
+
+**Owner-authorized publication:** the initial report was committed as `ce4b25a1648104adeaf3f187cd558c84ed0ea6ac`, then seven issues were filed under [V16 tracker #833](https://github.com/pgarciaq/ros-ocp-backend/issues/833). The links below record that subsequent publication; the reviewed source commits and audit observations are unchanged. All seven issues remain open, with no fixes applied. V16-04 / #831 is a risk-reassessment question, not a newly discovered boundary or an approved redesign. The completed V15 tracker #780 remains closed.
 
 ## 1. Scope and exact revisions
 
@@ -43,6 +45,8 @@ The supplied `ACCESS.md` and on-prem operations guidance were read without print
 
 ### V16-01 — Node-utilization warnings still reveal another cluster's tag-key existence
 
+**Tracking issue:** [#828](https://github.com/pgarciaq/ros-ocp-backend/issues/828).
+
 **Repository / severity:** ROS / **P2**, limited same-org confidentiality oracle.  
 **State:** verified mechanism; no fix applied.  
 **Provenance:** incomplete caller coverage in the #752 tag-warning scoping remediation; fresh endpoint reproduction at the V16 HEAD.
@@ -66,6 +70,8 @@ This demonstrates key-existence inference within one org, not cross-org access, 
 **Constraints:** no expanded permission policy, no broad route rewrite, no claims of customer exploitation. Record a new reproduction if reopening #752; do not treat its closed status as evidence this route is safe.
 
 ### V16-02 — Direct off-hours medians still authorize sleep during measured overnight work
+
+**Tracking issue:** [#826](https://github.com/pgarciaq/ros-ocp-backend/issues/826).
 
 **Repository / severity:** ROS server + librobne / **P2**, incorrect high-confidence advice.  
 **State:** verified mechanism; no fix applied.  
@@ -94,6 +100,8 @@ The raw-CSV server probe exercises `ParseAndDigestCSV` → `hcp_sleep_evidence` 
 
 ### V16-03 — Two observed hours per day count as complete sleep evidence
 
+**Tracking issue:** [#827](https://github.com/pgarciaq/ros-ocp-backend/issues/827).
+
 **Repository / severity:** ROS server + librobne / **P2**, unsupported confidence on partial data.  
 **State:** verified mechanism; no fix applied.  
 **Provenance:** coverage behavior of the newly introduced #760 evidence schema and the carried #761 gate.
@@ -119,6 +127,8 @@ No activity during the unobserved 22 hours is asserted: the defect is presenting
 
 ### V16-04 — New sleep advice can be written under a schedule that did not produce its evidence
 
+**Risk-reassessment issue:** [#831](https://github.com/pgarciaq/ros-ocp-backend/issues/831), retaining the explicit prior-disposition context from #760.
+
 **Repository / severity:** ROS / **P2**, wrong-window sleep advice.  
 **State:** verified mechanism; no fix applied.  
 **Provenance:** concrete unsafe result for the schedule-change boundary acknowledged, but not executed, in #760's completion record.
@@ -143,6 +153,8 @@ This is not the separately recorded lifecycle limitation where an already-issued
 
 ### V16-05 — KMO recovery deletes legitimate split parts 10 and above
 
+**Tracking issue:** [#829](https://github.com/pgarciaq/ros-ocp-backend/issues/829).
+
 **Repository / severity:** koku-metrics-operator / **P2**, irreversible report loss with successful packaging.  
 **State:** verified mechanism; no fix applied.  
 **Provenance:** new ambiguity in the #766 staged-recovery supersession code.
@@ -165,6 +177,8 @@ This is not the separately recorded lifecycle limitation where an already-issued
 
 ### V16-06 — Namespace-qualified pod lookup still returns another namespace's same-named PVC
 
+**Tracking issue:** [#830](https://github.com/pgarciaq/ros-ocp-backend/issues/830).
+
 **Repository / severity:** Nise / **P2**, fixture identity/VM disk attribution corruption.  
 **State:** verified mechanism; no fix applied.  
 **Provenance:** incomplete downstream identity qualification in #775's PVC lookup change.
@@ -185,6 +199,8 @@ This is not the separately recorded lifecycle limitation where an already-issued
 **Constraints:** generated test-data corruption is demonstrated, not cross-tenant production data access. No general generator rewrite or unrelated identity expansion is proposed.
 
 ### V16-07 — Nise's new insecure-mode warning contradicts the actual Requests TLS setting
+
+**Tracking issue:** [#832](https://github.com/pgarciaq/ros-ocp-backend/issues/832).
 
 **Repository / severity:** Nise / **P3**, false diagnostic and ineffective documented lab override.  
 **State:** verified mechanism; no fix applied.  
@@ -524,12 +540,12 @@ print("DEFECT OBSERVED: warning says verification DISABLED, transport still rece
 
 ## Final findings summary
 
-| Finding | Repository | Severity | Verified state |
-|---|---|---|---|
-| V16-01 — node-utilization tag-warning existence oracle | ros-ocp-backend | P2 | Endpoint reproduced; no fix applied |
-| V16-02 — direct off-hours medians hide nightly/alternating activity | ros-ocp-backend / librobne | P2 | Raw server pipeline and offline read-back reproduced; no fix applied |
-| V16-03 — sparse observations treated as complete sleep coverage | ros-ocp-backend / librobne | P2 | 28-observation/14-day case reproduced both paths; no fix applied |
-| V16-04 — changed schedule consumes old-split sleep evidence | ros-ocp-backend / librobne | P2 | New advisory after window change reproduced; no fix applied |
-| V16-05 — recovery deletes double-digit split parts | koku-metrics-operator | P2 | 16 real parts become nine, success returned; no fix applied |
-| V16-06 — same-named PVC returns another namespace's claim | nise | P2 | Real generator and disk consumer, both declaration orders reproduced; no fix applied |
-| V16-07 — TLS override warning contradicts effective verification | nise | P3 | Actual uploader/Requests adapter option reproduced; no fix applied |
+| Finding | Repository | Severity | Verified state | GitHub issue |
+|---|---|---|---|---|
+| V16-01 — node-utilization tag-warning existence oracle | ros-ocp-backend | P2 | Endpoint reproduced; no fix applied | [#828](https://github.com/pgarciaq/ros-ocp-backend/issues/828) |
+| V16-02 — direct off-hours medians hide nightly/alternating activity | ros-ocp-backend / librobne | P2 | Raw server pipeline and offline read-back reproduced; no fix applied | [#826](https://github.com/pgarciaq/ros-ocp-backend/issues/826) |
+| V16-03 — sparse observations treated as complete sleep coverage | ros-ocp-backend / librobne | P2 | 28-observation/14-day case reproduced both paths; no fix applied | [#827](https://github.com/pgarciaq/ros-ocp-backend/issues/827) |
+| V16-04 — changed schedule consumes old-split sleep evidence | ros-ocp-backend / librobne | P2 | New advisory after window change reproduced; no fix applied; prior risk disposition under reassessment | [#831](https://github.com/pgarciaq/ros-ocp-backend/issues/831) |
+| V16-05 — recovery deletes double-digit split parts | koku-metrics-operator | P2 | 16 real parts become nine, success returned; no fix applied | [#829](https://github.com/pgarciaq/ros-ocp-backend/issues/829) |
+| V16-06 — same-named PVC returns another namespace's claim | nise | P2 | Real generator and disk consumer, both declaration orders reproduced; no fix applied | [#830](https://github.com/pgarciaq/ros-ocp-backend/issues/830) |
+| V16-07 — TLS override warning contradicts effective verification | nise | P3 | Actual uploader/Requests adapter option reproduced; no fix applied | [#832](https://github.com/pgarciaq/ros-ocp-backend/issues/832) |
