@@ -209,7 +209,10 @@ func GetRecommendationHistory(c echo.Context) error {
 	default:
 		response := CollectionResponse(rows, c.Request(), count, opts.Limit, opts.Offset)
 		response.Meta.Currency = displayCurrency
-		attachTagWarningsToCollection(response, c, orgID, len(rows), nil)
+		// #828 (V16-01): scope the data-derived tag-key catalog to the
+		// caller's cluster set — resolved lazily, so the happy path (rows
+		// present or no tag filters) pays no cluster query.
+		attachTagWarningsToCollection(response, c, orgID, len(rows), requestTagWarningScope(c, orgID))
 		return c.JSON(http.StatusOK, response)
 	}
 }

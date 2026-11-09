@@ -548,7 +548,11 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	if deprecated {
 		resp.Meta.Warnings = append([]string{nodeUtilizationDeprecationMsg}, resp.Meta.Warnings...)
 	}
-	attachTagWarningsToNodeUtil(&resp, c, orgID, len(pagedRecs), nil)
+	// #828 (V16-01): the data-derived tag-key catalog scopes to the caller's
+	// server-owned cluster set — the list is already in hand from the data
+	// query, so this adds no query.
+	attachTagWarningsToNodeUtil(&resp, c, orgID, len(pagedRecs),
+		staticTagWarningScope(fleetSummaryNeedsClusterFilter(userPerms), allowedClusters))
 	resp.Warnings = resp.Meta.Warnings
 
 	setRecommendationNoStore(c)

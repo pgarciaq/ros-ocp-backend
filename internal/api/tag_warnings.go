@@ -20,9 +20,63 @@ const (
 	tagSyncStaleAfter = 6 * time.Hour
 )
 
+// tagWarningScopeResolver lazily resolves the caller's server-owned cluster
+// scope for the data-derived tag-key catalog (#828). Contract:
+//   - (nil, nil)            = unscoped: the org-wide data-derived catalog
+//     applies (RBAC disabled, wildcard, or unrestricted cluster access).
+//   - (non-nil slice, nil)  = scoped to EXACTLY those clusters — including an
+//     EMPTY slice, which scopes the catalog to nothing (denied identities:
+//     settings-only, explicitly-empty grants). The empty set must never read
+//     as unscoped.
+//   - (_, err)              = scope unresolvable: buildTagWarnings suppresses
+//     warnings entirely — no existence-revealing diagnostic fires when the
+//     scope cannot be established (fail-silent in the safe direction).
+//
+// The resolver runs lazily, only after buildTagWarnings' early-outs, so
+// callers without a materialized cluster list pay no query on the happy path.
+type tagWarningScopeResolver func(ctx context.Context) ([]string, error)
+
+// staticTagWarningScope wraps an already-resolved scope (callers that hold
+// the RBAC-filtered cluster list from their own data query). scoped=false
+// means unscoped; a scoped nil list is materialized as empty — the denied
+// case #828 fixed (filterClustersByRBAC returns nil for denied identities,
+// which the catalog query must not read as org-wide).
+func staticTagWarningScope(scoped bool, allowedClusters []string) tagWarningScopeResolver {
+	return func(context.Context) ([]string, error) {
+		if !scoped {
+			return nil, nil
+		}
+		if allowedClusters == nil {
+			return []string{}, nil
+		}
+		return allowedClusters, nil
+	}
+}
+
+// requestTagWarningScope resolves the caller's scope from the request on
+// demand (#828): unscoped identities short-circuit without a query; scoped
+// identities resolve the org's clusters and RBAC-filter them once, lazily.
+func requestTagWarningScope(c echo.Context, orgID string) tagWarningScopeResolver {
+	userPerms := get_user_permissions(c)
+	if !fleetSummaryNeedsClusterFilter(userPerms) {
+		return func(context.Context) ([]string, error) { return nil, nil }
+	}
+	return func(ctx context.Context) ([]string, error) {
+		all, err := getClustersForOrg(ctx, orgID)
+		if err != nil {
+			return nil, err
+		}
+		allowed := filterClustersByRBAC(all, userPerms)
+		if allowed == nil {
+			allowed = []string{}
+		}
+		return allowed, nil
+	}
+}
+
 // buildTagWarnings returns meta.warnings when tag filtering is active, results are empty,
 // and the catalog or sync state suggests the filter may be ineffective.
-func buildTagWarnings(ctx context.Context, orgID string, requestedTagKeys []string, resultCount int, allowedClusters []string) []string {
+func buildTagWarnings(ctx context.Context, orgID string, requestedTagKeys []string, resultCount int, scope tagWarningScopeResolver) []string {
 	if resultCount > 0 || len(requestedTagKeys) == 0 || !config.TagsFeatureEnabled() {
 		return nil
 	}
@@ -30,6 +84,18 @@ func buildTagWarnings(ctx context.Context, orgID string, requestedTagKeys []stri
 	pool := db.GetPool()
 	if pool == nil {
 		return nil
+	}
+
+	// #828: resolve the scope only now (past the early-outs) so unscoped
+	// happy paths never pay the cluster query; an unresolvable scope
+	// suppresses warnings rather than falling back to org-wide.
+	var allowedClusters []string
+	if scope != nil {
+		var scopeErr error
+		allowedClusters, scopeErr = scope(ctx)
+		if scopeErr != nil {
+			return nil
+		}
 	}
 
 	known, err := knownTagKeysForOrg(ctx, pool, orgID, allowedClusters)
@@ -144,36 +210,36 @@ func requestedTagKeysFromContext(c echo.Context) []string {
 	return keys
 }
 
-func attachTagWarningsToCollection[T any](resp *Collection[T], c echo.Context, orgID string, resultCount int, allowedClusters []string) {
+func attachTagWarningsToCollection[T any](resp *Collection[T], c echo.Context, orgID string, resultCount int, scope tagWarningScopeResolver) {
 	if resp == nil {
 		return
 	}
-	resp.Meta.Warnings = buildTagWarnings(c.Request().Context(), orgID, requestedTagKeysFromContext(c), resultCount, allowedClusters)
+	resp.Meta.Warnings = buildTagWarnings(c.Request().Context(), orgID, requestedTagKeysFromContext(c), resultCount, scope)
 }
 
-func attachTagWarningsToPVC(resp *PVCRecommendationListResponse, c echo.Context, orgID string, resultCount int, allowedClusters []string) {
+func attachTagWarningsToPVC(resp *PVCRecommendationListResponse, c echo.Context, orgID string, resultCount int, scope tagWarningScopeResolver) {
 	if resp == nil {
 		return
 	}
-	resp.Meta.Warnings = buildTagWarnings(c.Request().Context(), orgID, requestedTagKeysFromContext(c), resultCount, allowedClusters)
+	resp.Meta.Warnings = buildTagWarnings(c.Request().Context(), orgID, requestedTagKeysFromContext(c), resultCount, scope)
 }
 
-func attachTagWarningsToNodeUtil(resp *model.NodeUtilizationListResponse, c echo.Context, orgID string, resultCount int, allowedClusters []string) {
+func attachTagWarningsToNodeUtil(resp *model.NodeUtilizationListResponse, c echo.Context, orgID string, resultCount int, scope tagWarningScopeResolver) {
 	if resp == nil {
 		return
 	}
-	tagWarnings := buildTagWarnings(c.Request().Context(), orgID, requestedTagKeysFromContext(c), resultCount, allowedClusters)
+	tagWarnings := buildTagWarnings(c.Request().Context(), orgID, requestedTagKeysFromContext(c), resultCount, scope)
 	if len(tagWarnings) == 0 {
 		return
 	}
 	resp.Meta.Warnings = append(resp.Meta.Warnings, tagWarnings...)
 }
 
-func attachTagWarningsToGPUMIG(resp *model.GPUMIGListResponse, c echo.Context, orgID string, resultCount int, allowedClusters []string) {
+func attachTagWarningsToGPUMIG(resp *model.GPUMIGListResponse, c echo.Context, orgID string, resultCount int, scope tagWarningScopeResolver) {
 	if resp == nil {
 		return
 	}
-	tagWarnings := buildTagWarnings(c.Request().Context(), orgID, requestedTagKeysFromContext(c), resultCount, allowedClusters)
+	tagWarnings := buildTagWarnings(c.Request().Context(), orgID, requestedTagKeysFromContext(c), resultCount, scope)
 	if len(tagWarnings) == 0 {
 		return
 	}

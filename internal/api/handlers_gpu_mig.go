@@ -53,6 +53,11 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		})
 	}
 	clusterUUIDs = filterClustersByRBAC(clusterUUIDs, userPerms)
+	// #828 (V16-01): the warning scope is the RBAC set BEFORE the client
+	// cluster filter composes — a client filter narrows data, never the
+	// tag-key catalog's scope.
+	rbacAllowedClusters := clusterUUIDs
+	warningScope := staticTagWarningScope(fleetSummaryNeedsClusterFilter(userPerms), rbacAllowedClusters)
 
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
 	clusterUUIDs, clusterFilterMiss := restrictClustersToQueryFilter(clusterUUIDs, clusterFilter)
@@ -191,7 +196,7 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		},
 		Data: entries,
 	}
-	attachTagWarningsToGPUMIG(&gpuResp, c, orgIDStr, len(entries), nil)
+	attachTagWarningsToGPUMIG(&gpuResp, c, orgIDStr, len(entries), warningScope)
 	gpuResp.Warnings = gpuResp.Meta.Warnings
 	if opts.Format == listoptions.ResponseFormatCSV {
 		return streamCSV(c, csvFilename("gpu-mig-recommendations"), func(ctx context.Context, w io.Writer) error {
@@ -212,7 +217,9 @@ func emptyGPUMIGResponse(c echo.Context, orgID string, opts listoptions.ListOpti
 		},
 		Data: []model.GPUMIGRecommendationEntry{},
 	}
-	attachTagWarningsToGPUMIG(&gpuResp, c, orgID, 0, nil)
+	// #828: denied/filter-miss identities resolve their scope lazily — the
+	// resolver only runs when a warning would actually fire.
+	attachTagWarningsToGPUMIG(&gpuResp, c, orgID, 0, requestTagWarningScope(c, orgID))
 	gpuResp.Warnings = gpuResp.Meta.Warnings
 	if opts.Format == listoptions.ResponseFormatCSV {
 		return streamCSV(c, csvFilename("gpu-mig-recommendations"), func(ctx context.Context, w io.Writer) error {

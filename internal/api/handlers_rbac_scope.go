@@ -47,15 +47,3 @@ func readerClusterAllowed(c echo.Context, cluster string) bool {
 	}
 	return len(filterClustersByRBAC([]string{cluster}, userPerms)) > 0
 }
-
-// tagWarningScope converts a dataClusterScope result into the argument for
-// the tag-warning catalog: nil (unscoped) when no filtering applies, the
-// allowed set otherwise — including an EMPTY set, which scopes the
-// data-derived tag-key catalog to nothing (#752 review: a scoped empty
-// response must not reveal tag keys that exist elsewhere in the org).
-func tagWarningScope(scoped bool, allowedClusters []string) []string {
-	if !scoped {
-		return nil
-	}
-	return allowedClusters
-}

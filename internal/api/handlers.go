@@ -533,7 +533,9 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		}
 		response.Meta.MinDataDays = engine.MinDataDaysForTerm(terms, termFilter)
 
-		attachTagWarningsToCollection(response, c, OrgID, len(results), nil)
+		// #828 (V16-01): scope the data-derived tag-key catalog to the
+		// caller's cluster set (lazily resolved — see requestTagWarningScope).
+		attachTagWarningsToCollection(response, c, OrgID, len(results), requestTagWarningScope(c, OrgID))
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
 	}
@@ -704,7 +706,9 @@ func serveNativeList(c echo.Context, page model.NativeListPage, opts listoptions
 		response.Meta.MinDataDays = engine.MinDataDaysForTerm(terms, termFilter)
 
 		if orgID != "" {
-			attachTagWarningsToCollection(response, c, orgID, len(results), nil)
+			// #828 (V16-01): scope the data-derived tag-key catalog to the
+			// caller's cluster set (lazily resolved — see requestTagWarningScope).
+			attachTagWarningsToCollection(response, c, orgID, len(results), requestTagWarningScope(c, orgID))
 		}
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
@@ -855,7 +859,9 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 			response.Data = listData
 			response.Meta.MinDataDays = nsMinDataDays
 			if orgID != "" {
-				attachTagWarningsToCollection(response, c, orgID, len(results), nil)
+				// #828 (V16-01): scope the data-derived tag-key catalog to the
+				// caller's cluster set (lazily resolved — see requestTagWarningScope).
+				attachTagWarningsToCollection(response, c, orgID, len(results), requestTagWarningScope(c, orgID))
 			}
 			setRecommendationNoStore(c)
 			return c.JSON(http.StatusOK, response)
@@ -870,7 +876,9 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 		response.Data = listData
 		response.Meta.MinDataDays = nsMinDataDays
 		if orgID != "" {
-			attachTagWarningsToCollection(response, c, orgID, len(results), nil)
+			// #828 (V16-01): scope the data-derived tag-key catalog to the
+			// caller's cluster set (lazily resolved — see requestTagWarningScope).
+			attachTagWarningsToCollection(response, c, orgID, len(results), requestTagWarningScope(c, orgID))
 		}
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
