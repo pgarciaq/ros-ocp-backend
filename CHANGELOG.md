@@ -73,6 +73,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Sustained overnight work can no longer hide behind the off-hours median ([#826](https://github.com/pgarciaq/ros-ocp-backend/issues/826)):**
+  the sleep advisory's off-window evidence leg stored a p50 per
+  container-day — but a median reads zero when activity occupies a
+  minority of the window. A workload running 2000m from 00:00–06:00 (6 of
+  16 off-hours) and two containers alternating across the night (workload
+  active 14 of 16 hours, each container's median zero) both produced
+  high-confidence `schedule_nonprod_sleep` with outside=0. The off leg now
+  stores and gates on the **p95** (migration 000220) — the house
+  convention for CPU-usage activity evidence, the same p50→p95 migration
+  the zombie rule made in #747 for the same reason. The BH-activity leg
+  keeps its p50 (its failure direction suppresses advice, which is safe);
+  no threshold changed — the veto is strictly more sensitive against the
+  same floor. The p95 catches sustained per-container activity (≥2 of 16
+  hourly samples); a one-hour-per-container rotation fleet evades it — a
+  known residual tracked separately (#835). Partially-migrated rows (some
+  containers with p95, some without) read unmeasured, so a migrated quiet
+  sibling cannot mask a legacy row's activity. Existing rows read
+  off-unmeasured until re-ingested (the reship-bounded cold start, as
+  before), in both the server and the robne DB mode. ADR-0348 §5 amended.
 - **Tag warnings no longer reveal inaccessible clusters' tag-key existence ([#828](https://github.com/pgarciaq/ros-ocp-backend/issues/828)):**
   the "known tag key" catalog behind empty-result warnings had two sources,
   and only one was scoped. The enabled-key catalog (org configuration)
