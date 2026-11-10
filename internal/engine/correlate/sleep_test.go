@@ -2,6 +2,8 @@ package correlate
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -9,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
@@ -36,6 +39,10 @@ type sleepDay struct {
 	off       int64
 	bhAbsent  bool
 	offAbsent bool
+	// offP95 seeds a DISTINCT off-window p95 (#826): nil mirrors `off`
+	// (the historical fixtures' semantics); set explicitly when the test
+	// pins that the predicate consumes the p95 column, not the p50.
+	offP95 *int64
 }
 
 func sleepWindow() (start, end time.Time) {
@@ -78,7 +85,7 @@ func seedSleepEvidence(t *testing.T, ctx context.Context, pool *pgxpool.Pool, or
 		}
 		day := start.AddDate(0, 0, i).Format("2006-01-02")
 		for k, w := range spec[i] {
-			var bh, off *int64
+			var bh, off, off95 *int64
 			if !w.bhAbsent {
 				v := w.bh
 				bh = &v
@@ -86,16 +93,23 @@ func seedSleepEvidence(t *testing.T, ctx context.Context, pool *pgxpool.Pool, or
 			if !w.offAbsent {
 				v := w.off
 				off = &v
+				// #826: the p95 column mirrors the fixture's off value
+				// unless the test pins a distinct one (the predicate grain).
+				off95 = &v
+				if w.offP95 != nil {
+					off95 = w.offP95
+				}
 			}
 			_, err := pool.Exec(ctx, `
 				INSERT INTO hcp_sleep_evidence (
 					org_id, cluster_uuid, namespace, workload, workload_type,
-					container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc
-				) VALUES ($1,$2,$3,$4,'Deployment','c0',$5,$6,$7)
+					container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc
+				) VALUES ($1,$2,$3,$4,'Deployment','c0',$5,$6,$7,$8)
 				ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
 				DO UPDATE SET bh_cpu_p50_mc = EXCLUDED.bh_cpu_p50_mc,
-					off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc`,
-				orgID, hc, k.ns, k.wl, day, bh, off)
+					off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc,
+					off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc`,
+				orgID, hc, k.ns, k.wl, day, bh, off, off95)
 			require.NoError(t, err)
 		}
 	}
@@ -103,7 +117,7 @@ func seedSleepEvidence(t *testing.T, ctx context.Context, pool *pgxpool.Pool, or
 
 // seedSleepSnapshot writes a fresh complete association snapshot with the
 // given tier (the #715 operator emission shape; latest-wins on read).
-func seedSleepSnapshot(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, mgmt, hc, tier string, observed time.Time) {
+func seedSleepSnapshot(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc, tier string, observed time.Time) {
 	t.Helper()
 	_, err := pool.Exec(ctx, `
 		INSERT INTO manifest_hcp_snapshots (
@@ -111,7 +125,7 @@ func seedSleepSnapshot(t *testing.T, ctx context.Context, pool *pgxpool.Pool, or
 			hosted_cluster_id, observed_at, complete, hc_tier
 		) VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7)
 		ON CONFLICT (manifest_id, hcp_namespace) DO UPDATE SET hc_tier = EXCLUDED.hc_tier`,
-		"sleep-manifest-"+t.Name()+"-"+tier, orgID, mgmt, "clusters-s9", hc, observed.UTC(), tier)
+		"sleep-manifest-"+t.Name()+"-"+tier, orgID, sMgmt1, "clusters-s9", hc, observed.UTC(), tier)
 	require.NoError(t, err)
 }
 
@@ -128,7 +142,7 @@ func seedSleepSchedule(t *testing.T, ctx context.Context, pool *pgxpool.Pool, or
 	require.NoError(t, err)
 }
 
-func seedNodepoolRollup(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc string, replicas int64) {
+func seedNodepoolRollup(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc string) {
 	t.Helper()
 	ms := time.Now().UTC()
 	monthStart := time.Date(ms.Year(), ms.Month(), 1, 0, 0, 0, 0, time.UTC)
@@ -137,8 +151,8 @@ func seedNodepoolRollup(t *testing.T, ctx context.Context, pool *pgxpool.Pool, o
 		INSERT INTO hosted_nodepool_rollups (
 			window_start, window_end, org_id, cluster_uuid, hc_cluster_id,
 			pool_name, spec_replicas, status_replicas, collected_at
-		) VALUES (now() - interval '1 hour', now(), $1, $2::uuid, $3, 'workers', $4, $4, now())`,
-		orgID, sMgmt1, hc, replicas)
+		) VALUES (now() - interval '1 hour', now(), $1, $2::uuid, $3, 'workers', 2, 2, now())`,
+		orgID, sMgmt1, hc)
 	require.NoError(t, err)
 }
 
@@ -148,11 +162,11 @@ func sleepFixture(t *testing.T, orgID, hc, tier string, hosted map[int]map[nswl]
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	seedSleepEvidence(t, ctx, pool, orgID, hc, hosted, partialDay)
-	seedSleepSnapshot(t, ctx, pool, orgID, sMgmt1, hc, tier, time.Now().UTC().Add(-time.Hour))
+	seedSleepSnapshot(t, ctx, pool, orgID, hc, tier, time.Now().UTC().Add(-time.Hour))
 	if withSchedule {
 		seedSleepSchedule(t, ctx, pool, orgID, hc, "")
 	}
-	seedNodepoolRollup(t, ctx, pool, orgID, hc, 2)
+	seedNodepoolRollup(t, ctx, pool, orgID, hc)
 	t.Cleanup(func() {
 		_, _ = pool.Exec(ctx, `DELETE FROM hcp_sleep_evidence WHERE org_id = $1`, orgID)
 		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
@@ -340,7 +354,7 @@ func TestSleepCandidate_LabelChangeLatestWins_ReloadTakesEffect(t *testing.T) {
 	org := testutil.TestOrgID + "-s-lw-on"
 	pool := sleepFixture(t, org, sHC8, "", bhSignatureHosted(300, 0), -1, true)
 	ctx := context.Background()
-	seedSleepSnapshot(t, ctx, pool, org, sMgmt1, sHC8, hcTierNonProd, time.Now().UTC().Add(-30*time.Minute))
+	seedSleepSnapshot(t, ctx, pool, org, sHC8, hcTierNonProd, time.Now().UTC().Add(-30*time.Minute))
 	fired, err := RunSleepCandidateCycle(ctx, pool)
 	require.NoError(t, err)
 	assert.Equal(t, 1, fired, "newest row carries non-prod — latest-wins fires")
@@ -352,7 +366,7 @@ func TestSleepCandidate_LabelChangeLatestWins_RemovalStops(t *testing.T) {
 	org := testutil.TestOrgID + "-s-lw-off"
 	pool := sleepFixture(t, org, sHC1, hcTierNonProd, bhSignatureHosted(300, 0), -1, true)
 	ctx := context.Background()
-	seedSleepSnapshot(t, ctx, pool, org, sMgmt1, sHC1, "", time.Now().UTC().Add(-30*time.Minute))
+	seedSleepSnapshot(t, ctx, pool, org, sHC1, "", time.Now().UTC().Add(-30*time.Minute))
 	fired, err := RunSleepCandidateCycle(ctx, pool)
 	require.NoError(t, err)
 	assert.Equal(t, 0, fired, "newest row carries no declaration — latest-wins silences")
@@ -559,4 +573,241 @@ func TestSleepCandidate_WeekendActivityVetoes(t *testing.T) {
 	assert.Equal(t, 0, fired,
 		"weekend off-window activity must veto — the advice sleeps those hours (#760)")
 	assert.Empty(t, sleepAdvisories(t, ctx, pool, org))
+}
+
+// v16NightBurstCSV builds 14 days of hourly container rows: 300m during
+// 09:00-17:00 and 2000m from 00:00-06:00 — #826's night-burst shape. The
+// off-window p50 is 0 (10 of 16 off-hours idle) while the p95 is 2000.
+func v16NightBurstCSV(start time.Time) string {
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,namespace,pod,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count\n")
+	for day := start; day.Before(start.AddDate(0, 0, 14)); day = day.AddDate(0, 0, 1) {
+		for h := 0; h < 24; h++ {
+			cpu := 0.0
+			if h >= 9 && h < 17 {
+				cpu = 0.3
+			}
+			if h < 6 {
+				cpu = 2
+			}
+			ts := day.Add(time.Duration(h) * time.Hour)
+			fmt.Fprintf(&b, "%s,%s,user-app,pod,web,Deployment,c0,0.3,3,%.3f,0,1048576,1048576,1048576,1048576,0\n",
+				ts.Format("2006-01-02 15:04:05 +0000 UTC"), ts.Add(time.Hour).Format("2006-01-02 15:04:05 +0000 UTC"), cpu)
+		}
+	}
+	return b.String()
+}
+
+// v16AlternatingCSV builds 14 days with TWO containers of one workload,
+// each active (2000m) for a different 7 of the 16 off-hours: the workload
+// is active 14/16 off-hours while each container's off-p50 is 0.
+func v16AlternatingCSV(start time.Time) string {
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,namespace,pod,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count\n")
+	for day := start; day.Before(start.AddDate(0, 0, 14)); day = day.AddDate(0, 0, 1) {
+		for h := 0; h < 24; h++ {
+			for c := 0; c < 2; c++ {
+				cpu := 0.0
+				if h >= 9 && h < 17 {
+					cpu = 0.3
+				} else {
+					offIndex := h
+					if h >= 17 {
+						offIndex = h - 8
+					}
+					if (c == 0 && offIndex < 7) || (c == 1 && offIndex >= 7 && offIndex < 14) {
+						cpu = 2
+					}
+				}
+				ts := day.Add(time.Duration(h) * time.Hour)
+				fmt.Fprintf(&b, "%s,%s,user-app,pod,web,Deployment,c%d,0.3,3,%.3f,0,1048576,1048576,1048576,1048576,0\n",
+					ts.Format("2006-01-02 15:04:05 +0000 UTC"), ts.Add(time.Hour).Format("2006-01-02 15:04:05 +0000 UTC"), c, cpu)
+			}
+		}
+	}
+	return b.String()
+}
+
+// v16RunRawSleepCycle ingests the CSV through the canonical path and runs
+// the sleep cycle for one declared non-prod HC on a Mon-Sun schedule.
+func v16RunRawSleepCycle(t *testing.T, csvText string) []map[string]any {
+	t.Helper()
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	start, _ := sleepWindow()
+	org := "v16-raw-" + t.Name()
+	require.NoError(t, ingestion.EnsureSLOPartitionsForMonth(ctx, pool, start))
+	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
+		OrgID: org, ClusterUUID: sHC1, Timezone: "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
+		StartTime: "09:00", EndTime: "17:00", Enabled: true,
+	}))
+	_, err := ingestion.ParseAndDigestCSV(ctx, pool, strings.NewReader(csvText), org, sHC1)
+	require.NoError(t, err)
+	seedSleepSnapshot(t, ctx, pool, org, sHC1, hcTierNonProd, time.Now().UTC().Add(-time.Hour))
+	seedNodepoolRollup(t, ctx, pool, org, sHC1)
+	_, err = RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	return sleepAdvisories(t, ctx, pool, org)
+}
+
+// TestSleepCandidate_NightBurstIsVetoed is #826's end-to-end repro: a
+// workload running 2000m from 00:00-06:00 every night must NOT receive
+// sleep advice. Baseline: the off-leg p50 is 0 (10 of 16 off-hours idle),
+// the summed evidence reads outside=0, and high-confidence advice fired.
+func TestSleepCandidate_NightBurstIsVetoed(t *testing.T) {
+	start, _ := sleepWindow()
+	advs := v16RunRawSleepCycle(t, v16NightBurstCSV(start))
+	assert.Empty(t, advs,
+		"sustained nightly activity (2000m for 6 of 16 off-hours) must veto — the off-leg p50 hid it (#826)")
+}
+
+// TestSleepCandidate_AlternatingContainersAreVetoed is #826's second
+// repro: two containers alternating across the off-window leave the
+// workload active 14/16 off-hours while each container's off-p50 is 0.
+func TestSleepCandidate_AlternatingContainersAreVetoed(t *testing.T) {
+	start, _ := sleepWindow()
+	advs := v16RunRawSleepCycle(t, v16AlternatingCSV(start))
+	assert.Empty(t, advs,
+		"alternating-container off-window activity must veto — per-container p50s summed to zero (#826)")
+}
+
+// TestSleepCandidate_PredicateReadsOffP95 pins the predicate grain with
+// DISTINCT values: an off leg seeded p50=0 / p95=200 must veto — a
+// same-value fixture could not detect the predicate reading the p50 column.
+func TestSleepCandidate_PredicateReadsOffP95(t *testing.T) {
+	org := testutil.TestOrgID + "-s-826-p95"
+	p95 := int64(200)
+	spec := bhSignatureHosted(300, 0)
+	for i := 0; i < 14; i++ {
+		day := spec[i][nswl{"demo-app", "web"}]
+		day.offP95 = &p95
+		spec[i][nswl{"demo-app", "web"}] = day
+	}
+	pool := sleepFixture(t, org, sHC1, hcTierNonProd, spec, -1, true)
+	ctx := context.Background()
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fired,
+		"the off-leg p95 (200m) must drive the veto — a predicate reading off_cpu_p50_mc (0) fires instead (#826)")
+	assert.Empty(t, sleepAdvisories(t, ctx, pool, org))
+}
+
+// TestSleepCandidate_PartialMigrationReadsUnknown (#826 review F1): a
+// workload-day whose containers are SPLIT between migrated rows (p95 set,
+// quiet) and legacy rows (p95 NULL, off-p50 carrying the activity) must
+// read UNMEASURED — the #761 gate — never let the quiet sibling mask the
+// legacy row's hidden activity. Seeded directly: c0 migrated (p95=0),
+// c1 legacy (p50=2000, p95 NULL).
+func TestSleepCandidate_PartialMigrationReadsUnknown(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	org := testutil.TestOrgID + "-s-826-partial"
+	start, _ := sleepWindow()
+	seedSleepScheduleRow(t, ctx, pool, org, sHC1)
+	seedSleepSnapshot(t, ctx, pool, org, sHC1, hcTierNonProd, time.Now().UTC().Add(-time.Hour))
+	seedNodepoolRollup(t, ctx, pool, org, sHC1)
+	for i := 0; i < 14; i++ {
+		day := start.AddDate(0, 0, i).Format("2006-01-02")
+		// The quiet BH-active web workload (both legs measured).
+		seedEvidenceRow(t, ctx, pool, org, day, "web", "c0", ptr(int64(300)), ptr(int64(0)), ptr(int64(0)))
+		// The split workload: c0 migrated and quiet, c1 legacy with its
+		// activity living only in the pre-#826 p50 column.
+		seedEvidenceRow(t, ctx, pool, org, day, "rotator", "c0", ptr(int64(50)), ptr(int64(0)), ptr(int64(0)))
+		seedEvidenceRow(t, ctx, pool, org, day, "rotator", "c1", ptr(int64(50)), ptr(int64(2000)), nil)
+	}
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fired,
+		"a partially-migrated workload-day must read unmeasured (#761 gate) — the quiet migrated container must not mask the legacy row's activity (#826)")
+	assert.Empty(t, sleepAdvisories(t, ctx, pool, org))
+}
+
+// TestSleepCandidate_LegacyRowsReadUnknown (#826 review, cold start): a
+// fully legacy evidence set (no p95 anywhere) reads unknown — silence, the
+// #760-accepted cold start — never zero-activity.
+func TestSleepCandidate_LegacyRowsReadUnknown(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	org := testutil.TestOrgID + "-s-826-legacy"
+	start, _ := sleepWindow()
+	seedSleepScheduleRow(t, ctx, pool, org, sHC1)
+	seedSleepSnapshot(t, ctx, pool, org, sHC1, hcTierNonProd, time.Now().UTC().Add(-time.Hour))
+	seedNodepoolRollup(t, ctx, pool, org, sHC1)
+	for i := 0; i < 14; i++ {
+		day := start.AddDate(0, 0, i).Format("2006-01-02")
+		seedEvidenceRow(t, ctx, pool, org, day, "web", "c0", ptr(int64(300)), ptr(int64(0)), nil)
+	}
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fired, "legacy rows (no p95) must read unknown — cold-start silence, never zero-activity")
+	assert.Empty(t, sleepAdvisories(t, ctx, pool, org))
+}
+
+func ptr(v int64) *int64 { return &v }
+
+func seedSleepScheduleRow(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, cluster string) {
+	t.Helper()
+	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
+		OrgID: orgID, ClusterUUID: cluster, Timezone: "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
+		StartTime: "09:00", EndTime: "17:00", Enabled: true,
+	}))
+}
+
+func seedEvidenceRow(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, day, wl, cn string, bhP50, offP50, offP95 *int64) {
+	t.Helper()
+	_, err := pool.Exec(ctx, `
+		INSERT INTO hcp_sleep_evidence (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc
+		) VALUES ($1,$2,$3,$4,'Deployment',$5,$6,$7,$8,$9)
+		ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
+		DO UPDATE SET bh_cpu_p50_mc = EXCLUDED.bh_cpu_p50_mc,
+			off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc,
+			off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc`,
+		orgID, sHC1, "demo-app", wl, cn, day, bhP50, offP50, offP95)
+	require.NoError(t, err)
+}
+
+// TestSleepCandidate_RawCSVQuietFires (#826 review F5): the quiet
+// positive control through the canonical raw-CSV path — the seeded controls
+// express levels; this proves the computed p95. 300m in BH, 0 outside →
+// off-p95 = 0 → fires. (Split from the constant control: SetupTestDB's
+// shared-pool mutex is held per test, so one test cannot run two cycles.)
+func TestSleepCandidate_RawCSVQuietFires(t *testing.T) {
+	start, _ := sleepWindow()
+	quiet := rawSleepCSV(start, func(h int) float64 {
+		if h >= 9 && h < 17 {
+			return 0.3
+		}
+		return 0
+	})
+	advs := v16RunRawSleepCycle(t, quiet)
+	require.Len(t, advs, 1, "the quiet raw-CSV control must still fire (off-p95=0)")
+	assert.Equal(t, "high", advs[0]["confidence"])
+}
+
+// TestSleepCandidate_RawCSVConstantVetoed: constant 300m activity —
+// off-p95 = 300 ≥ floor → vetoed, through the canonical raw-CSV path.
+func TestSleepCandidate_RawCSVConstantVetoed(t *testing.T) {
+	start, _ := sleepWindow()
+	constant := rawSleepCSV(start, func(h int) float64 { return 0.3 })
+	advs := v16RunRawSleepCycle(t, constant)
+	assert.Empty(t, advs, "constant 300m activity must stay vetoed (off-p95=300 ≥ floor)")
+}
+
+// rawSleepCSV builds 14 days of single-container hourly rows from a usage
+// function of the hour.
+func rawSleepCSV(start time.Time, usage func(h int) float64) string {
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,namespace,pod,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count\n")
+	for day := start; day.Before(start.AddDate(0, 0, 14)); day = day.AddDate(0, 0, 1) {
+		for h := 0; h < 24; h++ {
+			ts := day.Add(time.Duration(h) * time.Hour)
+			fmt.Fprintf(&b, "%s,%s,user-app,pod,web,Deployment,c0,0.3,3,%.3f,0,1048576,1048576,1048576,1048576,0\n",
+				ts.Format("2006-01-02 15:04:05 +0000 UTC"), ts.Add(time.Hour).Format("2006-01-02 15:04:05 +0000 UTC"), usage(h))
+		}
+	}
+	return b.String()
 }

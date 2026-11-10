@@ -22,6 +22,7 @@ func WriteSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, clusterU
 		ns, wl, wt, cn string
 		day            time.Time
 		bhP50, offP50  *int64
+		offP95         *int64
 	}
 	rows := map[[5]string]*row{}
 	add := func(legs []types.KeyedDigest, isBH bool) {
@@ -37,6 +38,9 @@ func WriteSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, clusterU
 				r.bhP50 = &v
 			} else {
 				r.offP50 = &v
+				// #826: the off leg's p95 — the veto statistic.
+				v95 := kd.Row.CPUUsageP95MC
+				r.offP95 = &v95
 			}
 		}
 	}
@@ -71,12 +75,13 @@ func WriteSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, clusterU
 		batch.Queue(`
 			INSERT INTO hcp_sleep_evidence (
 				org_id, cluster_uuid, namespace, workload, workload_type,
-				container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc
-			) VALUES ($1,$2::uuid,$3,$4,$5,$6,$7,$8,$9)
+				container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc
+			) VALUES ($1,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10)
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
 			DO UPDATE SET bh_cpu_p50_mc = EXCLUDED.bh_cpu_p50_mc,
-				off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc`,
-			orgID, clusterUUID, r.ns, r.wl, r.wt, r.cn, r.day, r.bhP50, r.offP50)
+				off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc,
+				off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc`,
+			orgID, clusterUUID, r.ns, r.wl, r.wt, r.cn, r.day, r.bhP50, r.offP50, r.offP95)
 		queued++
 		if queued >= 2000 {
 			if err := flushEvidenceBatch(ctx, pool, batch, queued); err != nil {

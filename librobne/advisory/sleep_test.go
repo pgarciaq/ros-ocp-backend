@@ -35,7 +35,9 @@ func bhFixture(now time.Time, bh, outside int64, days int) (bhRows, offRows []ty
 	mk := func(day time.Time, ns, wl string, usage int64, isBH bool) {
 		kd := types.KeyedDigest{
 			Key: types.ContainerKey{Namespace: ns, Workload: wl, WorkloadType: "Deployment", ContainerName: "c0"},
-			Row: types.DigestRow{BucketDate: day, CPUUsageP50MC: usage},
+			// #826: the usage level rides both percentiles — off rows keep
+			// their veto semantics now that SleepSums consumes the p95.
+			Row: types.DigestRow{BucketDate: day, CPUUsageP50MC: usage, CPUUsageP95MC: usage},
 		}
 		if isBH {
 			bhRows = append(bhRows, kd)
@@ -162,7 +164,9 @@ func nightOnlyFixture(now time.Time, bh, outside int64, days int) (bhRows, offRo
 	mk := func(day time.Time, ns, wl string, usage int64, isBH bool) {
 		kd := types.KeyedDigest{
 			Key: types.ContainerKey{Namespace: ns, Workload: wl, WorkloadType: "Deployment", ContainerName: "c0"},
-			Row: types.DigestRow{BucketDate: day, CPUUsageP50MC: usage},
+			// #826: the usage level rides both percentiles — off rows keep
+			// their veto semantics now that SleepSums consumes the p95.
+			Row: types.DigestRow{BucketDate: day, CPUUsageP50MC: usage, CPUUsageP95MC: usage},
 		}
 		if isBH {
 			bhRows = append(bhRows, kd)
@@ -204,7 +208,9 @@ func TestSleepCandidate_SystemMissingBHRowStillFires(t *testing.T) {
 	mk := func(day time.Time, ns, wl string, usage int64, isBH bool) {
 		kd := types.KeyedDigest{
 			Key: types.ContainerKey{Namespace: ns, Workload: wl, WorkloadType: "Deployment", ContainerName: "c0"},
-			Row: types.DigestRow{BucketDate: day, CPUUsageP50MC: usage},
+			// #826: the usage level rides both percentiles — off rows keep
+			// their veto semantics now that SleepSums consumes the p95.
+			Row: types.DigestRow{BucketDate: day, CPUUsageP50MC: usage, CPUUsageP95MC: usage},
 		}
 		if isBH {
 			bhRows = append(bhRows, kd)
@@ -272,7 +278,9 @@ func weekdayProducerLegs(bh, off int64) (bhRows, offRows []types.KeyedDigest) {
 	mk := func(day time.Time, ns, wl string, usage int64, isBH bool) {
 		kd := types.KeyedDigest{
 			Key: types.ContainerKey{Namespace: ns, Workload: wl, WorkloadType: "Deployment", ContainerName: "c0"},
-			Row: types.DigestRow{BucketDate: day, CPUUsageP50MC: usage},
+			// #826: the usage level rides both percentiles — off rows keep
+			// their veto semantics now that SleepSums consumes the p95.
+			Row: types.DigestRow{BucketDate: day, CPUUsageP50MC: usage, CPUUsageP95MC: usage},
 		}
 		if isBH {
 			bhRows = append(bhRows, kd)
@@ -313,4 +321,90 @@ func TestSleepCandidate_WeekendActivityVetoes(t *testing.T) {
 	got := SleepCandidate("hc-760-wkend", TierNonProd, SleepSums(bh, off), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
 	assert.Nil(t, got,
 		"weekend off-window activity must veto — the advice sleeps those hours (#760)")
+}
+
+// TestSleepCandidate_OffLegConsumesP95 is #826's offline repro: off legs
+// carrying P50=0 / P95=2000 must veto. Baseline: SleepSums consumed the
+// P50 for both legs, the summed evidence read 0, and the advisory fired.
+func TestSleepCandidate_OffLegConsumesP95(t *testing.T) {
+	now := time.Now()
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	var bhRows, offRows []types.KeyedDigest
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		bhRows = append(bhRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 300},
+		})
+		// Off leg: p50 0 (the median hides the nightly burst), p95 2000.
+		offRows = append(offRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 0, CPUUsageP95MC: 2000},
+		})
+	}
+	got := SleepCandidate("hc-826", TierNonProd, SleepSums(bhRows, offRows), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"the off leg's p95 (2000m nightly burst) must drive the veto — SleepSums consuming the p50 read 0 (#826)")
+}
+
+// TestSleepCandidate_LegacyOffRowsReadUnknown (#826 review F2): a legacy
+// night-only workload (off rows with p50 but NO p95 — pre-#826 DB rows)
+// must NOT vanish behind a re-ingested quiet sibling: SleepSumsAll routes
+// the legacy rows through the #761 unknown gate.
+func TestSleepCandidate_LegacyOffRowsReadUnknown(t *testing.T) {
+	now := time.Now()
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	var bhRows, offRows, legacyRows []types.KeyedDigest
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		// Quiet sibling: fully migrated, BH-active, off-p95 = 0.
+		bhRows = append(bhRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 300},
+		})
+		offRows = append(offRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 0, CPUUsageP95MC: 0},
+		})
+		// The legacy night-only workload: off p50 (activity) with NO p95.
+		legacyRows = append(legacyRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "batch-jobs", Workload: "night-cron", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 2000},
+		})
+	}
+	// Baseline hazard: SleepSums (without legacy) drops the night-cron
+	// workload entirely and the quiet sibling covers every day.
+	got := SleepCandidate("hc-826-legacy", TierNonProd, SleepSumsAll(bhRows, offRows, legacyRows), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"a legacy (pre-p95) night-only workload must read unknown — never vanish behind a re-ingested quiet sibling (#826)")
+}
+
+// TestSleepCandidate_PartialMigrationReadsUnknown (#826 review F1,
+// offline): a workload-day split between measured and legacy off rows
+// reads unmeasured — the #761 gate — matching the server's
+// COUNT(p95) = COUNT(*) rule.
+func TestSleepCandidate_PartialMigrationReadsUnknown(t *testing.T) {
+	now := time.Now()
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	var bhRows, offRows, legacyRows []types.KeyedDigest
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		bhRows = append(bhRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 300},
+		})
+		// The split workload: c0 measured and quiet...
+		offRows = append(offRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "rotator", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 0, CPUUsageP95MC: 0},
+		})
+		// ...c1 legacy with its activity in the p50.
+		legacyRows = append(legacyRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "rotator", WorkloadType: "Deployment", ContainerName: "c1"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 2000},
+		})
+	}
+	got := SleepCandidate("hc-826-partial", TierNonProd, SleepSumsAll(bhRows, offRows, legacyRows), testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"a partially-migrated workload must read unmeasured — the quiet measured container must not mask the legacy row's activity (#826)")
 }

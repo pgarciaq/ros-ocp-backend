@@ -27,6 +27,11 @@ type sleepEvidenceRow struct {
 	BucketDate    time.Time
 	BHCPUP50MC    *int64
 	OffCPUP50MC   *int64
+	// OffCPUP95MC is the off-window p95 (#826): the veto statistic. A
+	// median hides minority-of-window activity (6-of-16-hours nightly
+	// work reads p50=0); the house convention for CPU-usage activity
+	// evidence is p95 (#747's identical zombie-rule migration).
+	OffCPUP95MC *int64
 }
 
 // buildSleepEvidenceRows computes per-container-day in-window and off-window
@@ -80,6 +85,8 @@ func buildSleepEvidenceRows(grouped map[DigestKey][]metricSample, cache *bhsched
 		if len(offWindow) > 0 {
 			v := cpuUsageP50MC(offWindow)
 			row.OffCPUP50MC = &v
+			v95 := cpuUsageP95MC(offWindow)
+			row.OffCPUP95MC = &v95
 		}
 		if row.BHCPUP50MC == nil && row.OffCPUP50MC == nil {
 			continue
@@ -111,6 +118,16 @@ func buildSleepEvidenceRows(grouped map[DigestKey][]metricSample, cache *bhsched
 	return out
 }
 
+// cpuUsageP95MC is the CPU-usage p95 through the same percentile core —
+// the #826 off-leg statistic (the veto gate; see sleepEvidenceRow).
+func cpuUsageP95MC(samples []metricSample) int64 {
+	values := make([]int64, len(samples))
+	for i, s := range samples {
+		values[i] = s.CPUUsageMC
+	}
+	return ComputeDigest(values).P95
+}
+
 // cpuUsageP50MC is the CPU-usage p50 through the digest machinery's own
 // percentile core (ComputeDigest) — the same math the full digest uses for
 // that exact column, one field instead of six (the evidence needs no other
@@ -139,13 +156,14 @@ func upsertSleepEvidenceOnSender(ctx context.Context, sender pgxBatchSender, gro
 		batch.Queue(`
 			INSERT INTO hcp_sleep_evidence (
 				org_id, cluster_uuid, namespace, workload, workload_type,
-				container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc
-			) VALUES ($1,$2::uuid,$3,$4,$5,$6,$7,$8,$9)
+				container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc
+			) VALUES ($1,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10)
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
 			DO UPDATE SET bh_cpu_p50_mc = EXCLUDED.bh_cpu_p50_mc,
-				off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc`,
+				off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc,
+				off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc`,
 			r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType,
-			r.ContainerName, r.BucketDate, r.BHCPUP50MC, r.OffCPUP50MC)
+			r.ContainerName, r.BucketDate, r.BHCPUP50MC, r.OffCPUP50MC, r.OffCPUP95MC)
 		queued++
 		if queued >= maxSleepEvidenceBatch {
 			if err := flushQueuedBatch(ctx, sender, batch, queued); err != nil {

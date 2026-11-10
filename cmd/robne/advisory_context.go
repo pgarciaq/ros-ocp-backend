@@ -154,7 +154,7 @@ func computeSleepAdvisory(fl fileLoad) []advisory.Advisory {
 	}
 	pol := sleepPolicyFromYAML(fl.cfg.SleepAdvisory)
 	syncedExact, syncedPrefixes := platformExclusionsFromYAML(fl.cfg.SleepAdvisory)
-	sums := advisory.SleepSums(fl.sleepBHLegs, fl.sleepOffLegs)
+	sums := advisory.SleepSumsAll(fl.sleepBHLegs, fl.sleepOffLegs, fl.sleepOffLegacyLegs)
 	got := advisory.SleepCandidate(
 		fl.clusterID, fl.hcTier, sums, fl.bhSchedule, pol,
 		fl.hcWorkerNodes, syncedExact, syncedPrefixes, fl.now)

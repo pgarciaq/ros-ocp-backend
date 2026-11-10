@@ -122,11 +122,17 @@ type sleepWorkloadDay struct {
 }
 
 // loadSleepEvidence loads per (day, namespace, workload) CPU for both
-// evidence legs from hcp_sleep_evidence (#760): the in-window and
-// off-window p50 sums, direct measures of each side of the schedule — the
-// complement of a percentile is not the difference of percentiles, so the
-// off-hours signal is stored, not derived. NULL legs (a workload with no
-// samples in one window) leave the flag false — the #761 coverage shape.
+// evidence legs from hcp_sleep_evidence (#760, #826): the in-window p50 sum
+// and the off-window p95 sum — direct measures of each side of the
+// schedule, never a subtraction. The off leg's statistic is p95 (#826): a
+// median hides minority-of-window activity, and the house convention for
+// CPU-usage activity evidence is p95 (#747's zombie-rule precedent); the
+// BH-activity leg keeps p50 — its failure direction (underestimating
+// activity) suppresses advice, which is safe. The workload-grain SUM of
+// per-container p95s is a conservative upper bound for the veto direction.
+// NULL legs (a workload with no samples in one window, or pre-#826 rows
+// carrying no p95) leave the flag false — the #761 coverage shape; the
+// cold start re-reads unknown until re-ingestion.
 // N-leg convention: cluster_uuid is the HC's own ID. All namespaces load;
 // the platform split happens in Go, shared with the zombie rule (including
 // the synced cost-groups set).
@@ -134,7 +140,7 @@ func loadSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, hcID stri
 	rows, err := pool.Query(ctx, `
 		SELECT bucket_date::text, namespace, workload,
 			SUM(bh_cpu_p50_mc), COUNT(bh_cpu_p50_mc),
-			SUM(off_cpu_p50_mc), COUNT(off_cpu_p50_mc)
+			SUM(off_cpu_p95_mc), COUNT(off_cpu_p95_mc), COUNT(*)
 		FROM hcp_sleep_evidence
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date < $4
@@ -148,8 +154,8 @@ func loadSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, hcID stri
 	for rows.Next() {
 		var day, ns, wl string
 		var bhTotal, offTotal *int64
-		var bhN, offN int64
-		if err := rows.Scan(&day, &ns, &wl, &bhTotal, &bhN, &offTotal, &offN); err != nil {
+		var bhN, offN, totalN int64
+		if err := rows.Scan(&day, &ns, &wl, &bhTotal, &bhN, &offTotal, &offN, &totalN); err != nil {
 			return nil, fmt.Errorf("scan sleep evidence: %w", err)
 		}
 		if out[day] == nil {
@@ -169,7 +175,12 @@ func loadSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, hcID stri
 		}
 		if offTotal != nil {
 			d.offCPU = *offTotal
-			if offN > 0 {
+			// #826 review (partial migration): the leg is measured only
+			// when EVERY container row of the workload-day carries a p95 —
+			// a migrated quiet sibling must not mask a legacy row's
+			// hidden activity (COUNT(p95) < COUNT(*) reads unmeasured →
+			// the #761 gate → unknown day).
+			if offN > 0 && offN == totalN {
 				d.offMeasured = true
 			}
 		}
@@ -225,10 +236,11 @@ func evalSleepSignature(days map[string]map[sleepKey]*sleepWorkloadDay, windowSt
 			if !isZombieUserNamespace(k.ns, syncedExact, syncedPrefixes) {
 				continue
 			}
-			// #760 (V15-10): the off-window p50 sum is the direct
-			// outside-BH measure — never all-minus-bh percentile
+			// #760 (V15-10) + #826 (V16-02): the off-window p95 sum is the
+			// direct outside-BH measure — never all-minus-bh percentile
 			// subtraction (a constant workload reads outside=0 that way
-			// while running all night).
+			// while running all night), and never a median (a p50 hides
+			// minority-of-window nightly activity — the #747 lesson).
 			outside := r.offCPU
 			if r.bhCPU > bhPeak {
 				bhPeak = r.bhCPU

@@ -554,12 +554,13 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 					return out, err
 				}
 			}
-			bhLegs, offLegs, err := pgdigest.ReadSleepEvidence(ctx, pool, fl.orgID, fl.clusterID, start, end)
+			bhLegs, offLegs, offLegacyLegs, err := pgdigest.ReadSleepEvidence(ctx, pool, fl.orgID, fl.clusterID, start, end)
 			if err != nil {
 				return out, err
 			}
 			fl.sleepBHLegs = bhLegs
 			fl.sleepOffLegs = offLegs
+			fl.sleepOffLegacyLegs = offLegacyLegs
 		}
 	} else {
 		out.ClusterID = fl.clusterID
@@ -859,6 +860,7 @@ type fileLoad struct {
 	// ScheduleWeight blend).
 	sleepBHLegs           []types.KeyedDigest
 	sleepOffLegs          []types.KeyedDigest
+	sleepOffLegacyLegs    []types.KeyedDigest
 	containerMeta         map[types.ContainerKey]csv.RowMeta
 	namespaceGrouped      map[namespace.NamespaceKey][]types.DigestRow
 	namespaceBHGrouped    map[namespace.NamespaceKey][]types.DigestRow

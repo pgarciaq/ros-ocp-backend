@@ -1,0 +1,22 @@
+-- #826 (V16-02): the off-window evidence statistic rises p50 → p95.
+-- A median hides minority-of-window activity: a workload running 2000m
+-- for 6 of 16 off-hours has off-p50 = 0, and two containers alternating
+-- across the off-window leave the workload active 14/16 hours while each
+-- container's p50 is 0 — both read as silence and produced high-confidence
+-- sleep advice. The house convention for CPU-usage activity evidence is
+-- p95 (the zombie rule made the identical p50 → p95 migration for the
+-- identical reason in #747: "the p50 reads partial-day activity as idle";
+-- the C-leg and the container sizing engine all gate on p95); p99 is
+-- reserved for latency SLIs.
+--
+-- The BH-activity leg keeps its p50: its failure direction (underestimating
+-- activity) suppresses advice, which is safe. The workload-grain SUM of
+-- per-container p95s is a conservative upper bound for the veto direction.
+-- No threshold change: p95 >= p50 always, so the veto is strictly more
+-- sensitive against the same SleepOutsideBHIdleFloorMC.
+--
+-- NULL = unknown (cold-start round 2, the #760-accepted trade): existing
+-- rows have no p95, read off-unmeasured, and the #761 workload gate makes
+-- those days unknown — silence until re-ingestion (closable per scope by
+-- the reship_ros rebuild).
+ALTER TABLE hcp_sleep_evidence ADD COLUMN off_cpu_p95_mc BIGINT;

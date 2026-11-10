@@ -48,10 +48,13 @@ type DayKey struct {
 }
 
 // DaySum is one (day, namespace, workload) pair across the two evidence
-// legs (#760): the in-window and off-window p50 sums, direct measures of
-// each side of the schedule — never a subtraction. A day counts as covered
-// only when BOTH legs are measured — partial business-hours coverage reads
-// unknown, never zero-activity (ADR-0348 §5, amended #760).
+// legs (#760, #826): the in-window p50 sum and the off-window p95 sum —
+// direct measures of each side of the schedule, never a subtraction. The
+// off leg's statistic is p95 (#826): a median hides minority-of-window
+// activity; the house convention for CPU-usage activity evidence is p95
+// (#747's zombie-rule precedent). A day counts as covered only when BOTH
+// legs are measured — partial business-hours coverage reads unknown, never
+// zero-activity (ADR-0348 §5, amended #760).
 type DaySum struct {
 	BH          int64
 	Off         int64
@@ -60,11 +63,21 @@ type DaySum struct {
 }
 
 // SleepSums groups the two evidence-leg digest sets into per-(day, ns,
-// workload) CPU sums (millicores, the p50 column — the server's evidence
-// input shape). bh carries in-window p50s, off carries off-window p50s —
-// each computed through the canonical weighted digest machinery with a
-// pure 0/1 window filter (exact complements).
+// workload) CPU sums (millicores — the server's evidence input shape). bh
+// carries in-window p50s; off carries off-window p95s (#826) — each
+// computed through the canonical weighted digest machinery with a pure 0/1
+// window filter (exact complements).
 func SleepSums(bh, off []types.KeyedDigest) map[string]map[DayKey]DaySum {
+	return SleepSumsAll(bh, off, nil)
+}
+
+// SleepSumsAll extends SleepSums with the legacy off legs (pre-#826 rows:
+// off-p50 set, p95 NULL — see pgdigest.ReadSleepEvidence). A legacy row
+// marks its workload-day's off leg PRESENT-but-UNMEASURED: OffMeasured is
+// forced false, routing the workload through the #761 unknown gate — and a
+// partially-migrated workload (some containers measured, some legacy) reads
+// unmeasured too, matching the server's COUNT(p95) = COUNT(*) rule.
+func SleepSumsAll(bh, off, offLegacy []types.KeyedDigest) map[string]map[DayKey]DaySum {
 	out := map[string]map[DayKey]DaySum{}
 	add := func(rows []types.KeyedDigest, isBH bool) {
 		for _, kd := range rows {
@@ -78,7 +91,7 @@ func SleepSums(bh, off []types.KeyedDigest) map[string]map[DayKey]DaySum {
 				d.BH += kd.Row.CPUUsageP50MC
 				d.BHMeasured = true
 			} else {
-				d.Off += kd.Row.CPUUsageP50MC
+				d.Off += kd.Row.CPUUsageP95MC
 				d.OffMeasured = true
 			}
 			out[day][k] = d
@@ -86,6 +99,16 @@ func SleepSums(bh, off []types.KeyedDigest) map[string]map[DayKey]DaySum {
 	}
 	add(bh, true)
 	add(off, false)
+	for _, kd := range offLegacy {
+		day := kd.Row.BucketDate.UTC().Format("2006-01-02")
+		if out[day] == nil {
+			out[day] = map[DayKey]DaySum{}
+		}
+		k := DayKey{NS: kd.Key.Namespace, WL: kd.Key.Workload}
+		d := out[day][k]
+		d.OffMeasured = false
+		out[day][k] = d
+	}
 	return out
 }
 
@@ -183,10 +206,11 @@ func SleepCandidate(hcID, tier string, sums map[string]map[DayKey]DaySum, sched 
 			if !isUserNamespace(k.NS, exact, prefixes) {
 				continue
 			}
-			// #760 (V15-10): the off-window p50 sum is the direct
-			// outside-BH measure — never all-minus-bh percentile
+			// #760 (V15-10) + #826 (V16-02): the off-window p95 sum is the
+			// direct outside-BH measure — never all-minus-bh percentile
 			// subtraction (a constant workload reads outside=0 that way
-			// while running all night).
+			// while running all night), and never a median (a p50 hides
+			// minority-of-window nightly activity — the #747 lesson).
 			outside := r.Off
 			if r.BH > ev.BHActivePeakMC {
 				ev.BHActivePeakMC = r.BH
