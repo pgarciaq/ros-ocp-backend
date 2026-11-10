@@ -73,6 +73,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Sparse observation can no longer pass as complete sleep evidence ([#827](https://github.com/pgarciaq/ros-ocp-backend/issues/827)):**
+  a sleep-evidence leg counted as "measured" as soon as any sample
+  existed — 28 observations (two hours per day) across a 14-day window
+  produced high-confidence `schedule_nonprod_sleep` over 22 unobserved
+  hours per day. Each leg now requires its **distinct observed hours**
+  to meet half the leg's possible hours for that day, rounded up
+  (migration 000221 adds per-leg observed-hour counts; the floor follows
+  the H-leg minimum-observation precedent and is a methodological
+  constant, not a tenant knob). Possible hours derive by classifying
+  each day's hour buckets against the schedule — the same rule the
+  ingestion writer applies — so overnight windows (split across UTC day
+  boundaries) and fractional windows are exact. Hours are counted as
+  distinct hour buckets, never samples; the workload-day's coverage is
+  the minimum over its containers, with a container missing a leg's
+  window entirely reading zero hours — a fully-observed sibling cannot
+  mask an under-observed one. A below-floor day suppresses the advisory
+  (unknown, never certified idle); coverage is evaluated per day, so
+  one sparse day among fourteen full ones still reads unknown. Existing
+  rows read coverage-unmeasured (and therefore unknown via the #826 p95
+  rule) until re-ingested — the reship-bounded cold start, as before.
+  The robne CLI computes the same coverage in CSV mode, writes the
+  hours in DB mode, and reads the columns back — both modes gate.
+  ADR-0348 §5 amended.
 - **Sustained overnight work can no longer hide behind the off-hours median ([#826](https://github.com/pgarciaq/ros-ocp-backend/issues/826)):**
   the sleep advisory's off-window evidence leg stored a p50 per
   container-day — but a median reads zero when activity occupies a
