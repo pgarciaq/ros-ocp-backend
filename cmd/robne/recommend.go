@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/advisory"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/container"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/csv"
@@ -550,17 +551,18 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 			// persisted alongside the digests above, then read back so the
 			// DB-output path exercises the same read the server performs.
 			if len(fl.sleepBHLegs) > 0 || len(fl.sleepOffLegs) > 0 {
-				if err := pgdigest.WriteSleepEvidence(ctx, pool, fl.orgID, fl.clusterID, fl.sleepBHLegs, fl.sleepOffLegs); err != nil {
+				if err := pgdigest.WriteSleepEvidence(ctx, pool, fl.orgID, fl.clusterID, fl.sleepBHLegs, fl.sleepOffLegs, fl.sleepContainerHours); err != nil {
 					return out, err
 				}
 			}
-			bhLegs, offLegs, offLegacyLegs, err := pgdigest.ReadSleepEvidence(ctx, pool, fl.orgID, fl.clusterID, start, end)
+			bhLegs, offLegs, offLegacyLegs, hoursRows, err := pgdigest.ReadSleepEvidence(ctx, pool, fl.orgID, fl.clusterID, start, end)
 			if err != nil {
 				return out, err
 			}
 			fl.sleepBHLegs = bhLegs
 			fl.sleepOffLegs = offLegs
 			fl.sleepOffLegacyLegs = offLegacyLegs
+			fl.sleepCoverage = coverageFromHoursRows(hoursRows)
 		}
 	} else {
 		out.ClusterID = fl.clusterID
@@ -858,9 +860,16 @@ type fileLoad struct {
 	// #760 sleep evidence legs: in-window and off-window p50s (exact
 	// complements, 0/1 window filters — never the fractional
 	// ScheduleWeight blend).
-	sleepBHLegs           []types.KeyedDigest
-	sleepOffLegs          []types.KeyedDigest
-	sleepOffLegacyLegs    []types.KeyedDigest
+	sleepBHLegs        []types.KeyedDigest
+	sleepOffLegs       []types.KeyedDigest
+	sleepOffLegacyLegs []types.KeyedDigest
+	// sleepContainerHours (#827): per-container-day observed-hour counts —
+	// the DB write's hours input.
+	sleepContainerHours []pgdigest.EvidenceHours
+	// sleepCoverage (#827): per-(day, ns, wl) observed-hour counts per
+	// leg, MIN over containers — the coverage input to
+	// SleepCandidateWithCoverage.
+	sleepCoverage         advisory.DayCoverage
 	containerMeta         map[types.ContainerKey]csv.RowMeta
 	namespaceGrouped      map[namespace.NamespaceKey][]types.DigestRow
 	namespaceBHGrouped    map[namespace.NamespaceKey][]types.DigestRow
@@ -1105,6 +1114,11 @@ func loadBusinessHoursDigests(fl *fileLoad, csvLoaded csv.LoadResult) error {
 	}
 	fl.sleepBHLegs = bhLegs
 	fl.sleepOffLegs = offLegs
+	// #827: per-container-day observed hours — computed once from the raw
+	// rows; the workload-grain MIN collapse feeds the advisory, the list
+	// itself rides the DB write.
+	fl.sleepContainerHours = csvContainerHours(csvLoaded.Rows, s)
+	fl.sleepCoverage = coverageFromHoursRows(fl.sleepContainerHours)
 	if pluginEnabled(fl.plugins, "container") || pluginEnabled(fl.plugins, "quota") || pluginEnabled(fl.plugins, "cluster-quota") {
 		digests, _, err := csv.DailyDigestsWeighted(csvLoaded.Rows, weightFn)
 		if err != nil {
@@ -1841,4 +1855,92 @@ func reportUnparseableRows(n int) {
 		return
 	}
 	_, _ = fmt.Fprintf(os.Stderr, "skipped %d unparseable rows\n", n)
+}
+
+// csvContainerHours computes the #827 per-container-day observed hours from
+// raw CSV rows: distinct UTC hour buckets per leg, keyed by the full
+// container identity (namespace, workload, workload TYPE, container, day)
+// — the same key the server's evidence table uses, so two workloads
+// sharing a name across types never merge their samples. The
+// workload-grain MIN collapse (coverageFromHoursRows) and the DB write both
+// consume this list.
+func csvContainerHours(rows []csv.Row, sched bhschedule.Schedule) []pgdigest.EvidenceHours {
+	type key struct {
+		day    string
+		ns, wl string
+		wt, cn string
+	}
+	bhSeen := map[key]map[int]struct{}{}
+	offSeen := map[key]map[int]struct{}{}
+	for _, r := range rows {
+		k := key{day: r.IntervalStart.UTC().Format("2006-01-02"), ns: r.Namespace, wl: r.WorkloadName, wt: r.WorkloadType, cn: r.ContainerName}
+		if bhschedule.InBusinessHours(r.IntervalStart, sched) {
+			if bhSeen[k] == nil {
+				bhSeen[k] = map[int]struct{}{}
+			}
+			bhSeen[k][r.IntervalStart.UTC().Hour()] = struct{}{}
+		} else {
+			if offSeen[k] == nil {
+				offSeen[k] = map[int]struct{}{}
+			}
+			offSeen[k][r.IntervalStart.UTC().Hour()] = struct{}{}
+		}
+	}
+	// The union of both legs' container keys: a container absent from one
+	// leg's window was unobserved for it — 0 hours for that leg, never
+	// skipped (a fully-observed sibling must not mask it in the MIN).
+	out := make([]pgdigest.EvidenceHours, 0, len(bhSeen)+len(offSeen))
+	seen := map[key]struct{}{}
+	emit := func(k key) {
+		if _, ok := seen[k]; ok {
+			return
+		}
+		seen[k] = struct{}{}
+		// Distinct UTC hour buckets per container-leg: ≤24 by construction.
+		out = append(out, pgdigest.EvidenceHours{
+			Namespace: k.ns, Workload: k.wl, WorkloadType: k.wt, ContainerName: k.cn,
+			Day:      parseDayUTC(k.day),
+			BHHours:  int16(len(bhSeen[k])),  //nolint:gosec // G115: hour buckets, ≤24
+			OffHours: int16(len(offSeen[k])), //nolint:gosec // G115: hour buckets, ≤24
+		})
+	}
+	for k := range bhSeen {
+		emit(k)
+	}
+	for k := range offSeen {
+		emit(k)
+	}
+	return out
+}
+
+// parseDayUTC parses the canonical YYYY-MM-DD day key back to UTC midnight
+// (the bucket_date convention of the evidence table).
+func parseDayUTC(day string) time.Time {
+	t, _ := time.ParseInLocation("2006-01-02", day, time.UTC)
+	return t
+}
+
+// coverageFromHoursRows converts the DB mode's per-container-day hour rows
+// into the day-keyed workload-grain coverage map (MIN over containers). The
+// rows already carry 0 for a container's absent leg (the read side's
+// convention), so the MIN is a plain first-set-then-min — 0 is a real
+// value, never "unset".
+func coverageFromHoursRows(rows []pgdigest.EvidenceHours) advisory.DayCoverage {
+	out := advisory.DayCoverage{}
+	for _, r := range rows {
+		day := r.Day.UTC().Format("2006-01-02")
+		if out[day] == nil {
+			out[day] = map[advisory.DayKey]advisory.LegCoverage{}
+		}
+		dk := advisory.DayKey{NS: r.Namespace, WL: r.Workload}
+		if _, ok := out[day][dk]; !ok {
+			out[day][dk] = advisory.LegCoverage{BHHours: r.BHHours, OffHours: r.OffHours}
+			continue
+		}
+		c := out[day][dk]
+		c.BHHours = min(c.BHHours, r.BHHours)
+		c.OffHours = min(c.OffHours, r.OffHours)
+		out[day][dk] = c
+	}
+	return out
 }

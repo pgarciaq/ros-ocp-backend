@@ -100,16 +100,32 @@ func seedSleepEvidence(t *testing.T, ctx context.Context, pool *pgxpool.Pool, or
 					off95 = w.offP95
 				}
 			}
+			// #827: full observation coverage — the 09:00–17:00 schedule
+			// gives an 8h BH window and 16h off window, all hours sampled.
+			// Absent legs carry NULL hours, mirroring the writer (hours
+			// exist only where samples do).
+			var bhH, offH *int16
+			if !w.bhAbsent {
+				v := int16(8)
+				bhH = &v
+			}
+			if !w.offAbsent {
+				v := int16(16)
+				offH = &v
+			}
 			_, err := pool.Exec(ctx, `
 				INSERT INTO hcp_sleep_evidence (
 					org_id, cluster_uuid, namespace, workload, workload_type,
-					container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc
-				) VALUES ($1,$2,$3,$4,'Deployment','c0',$5,$6,$7,$8)
+					container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc,
+					bh_observed_hours, off_observed_hours
+				) VALUES ($1,$2,$3,$4,'Deployment','c0',$5,$6,$7,$8,$9,$10)
 				ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
 				DO UPDATE SET bh_cpu_p50_mc = EXCLUDED.bh_cpu_p50_mc,
 					off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc,
-					off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc`,
-				orgID, hc, k.ns, k.wl, day, bh, off, off95)
+					off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc,
+					bh_observed_hours = EXCLUDED.bh_observed_hours,
+					off_observed_hours = EXCLUDED.off_observed_hours`,
+				orgID, hc, k.ns, k.wl, day, bh, off, off95, bhH, offH)
 			require.NoError(t, err)
 		}
 	}
@@ -308,27 +324,27 @@ func TestSleepCandidate_NonDefaultFloors(t *testing.T) {
 	mkDays := func(bh, off int64) map[string]map[sleepKey]*sleepWorkloadDay {
 		return map[string]map[sleepKey]*sleepWorkloadDay{
 			start.Format("2006-01-02"): {
-				{"demo-app", "web"}: {bhCPU: bh, offCPU: off, bhMeasured: true, offMeasured: true},
+				{"demo-app", "web"}: {bhCPU: bh, offCPU: off, bhMeasured: true, offMeasured: true, bhObservedHours: 0, offObservedHours: 24},
 			},
 			start.AddDate(0, 0, 1).Format("2006-01-02"): {
-				{"demo-app", "web"}: {bhCPU: bh, offCPU: off, bhMeasured: true, offMeasured: true},
+				{"demo-app", "web"}: {bhCPU: bh, offCPU: off, bhMeasured: true, offMeasured: true, bhObservedHours: 0, offObservedHours: 24},
 			},
 		}
 	}
 	days := mkDays(300, 50)
 
 	// Default-order floors: BH-active (300 >= 10) but outside 50 >= 10 breaks.
-	_, _, match, known := evalSleepSignature(days, start, end, 10, 10, nil, nil, nil)
+	_, _, match, known := evalSleepSignature(days, start, end, 10, 10, 0.5, nil, nil, nil)
 	assert.True(t, known)
 	assert.False(t, match, "outside 50 must break the signature at floor 10")
 
 	// Non-default outside floor 100: outside 50 < 100, BH 300 >= 10 → match.
-	_, _, match, known = evalSleepSignature(days, start, end, 10, 100, nil, nil, nil)
+	_, _, match, known = evalSleepSignature(days, start, end, 10, 100, 0.5, nil, nil, nil)
 	assert.True(t, known)
 	assert.True(t, match, "non-default outside floor must admit outside 50")
 
 	// Non-default BH floor 500: 300 < 500 → not active in hours.
-	_, _, match, known = evalSleepSignature(days, start, end, 500, 100, nil, nil, nil)
+	_, _, match, known = evalSleepSignature(days, start, end, 500, 100, 0.5, nil, nil, nil)
 	assert.True(t, known)
 	assert.False(t, match, "non-default BH floor must reject activity 300")
 }
@@ -578,9 +594,12 @@ func TestSleepCandidate_WeekendActivityVetoes(t *testing.T) {
 // v16NightBurstCSV builds 14 days of hourly container rows: 300m during
 // 09:00-17:00 and 2000m from 00:00-06:00 — #826's night-burst shape. The
 // off-window p50 is 0 (10 of 16 off-hours idle) while the p95 is 2000.
+// sleepCSVHeader is the canonical raw sleep-CSV header the test builders emit.
+const sleepCSVHeader = "interval_start,interval_end,namespace,pod,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count\n"
+
 func v16NightBurstCSV(start time.Time) string {
 	var b strings.Builder
-	b.WriteString("interval_start,interval_end,namespace,pod,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count\n")
+	b.WriteString(sleepCSVHeader)
 	for day := start; day.Before(start.AddDate(0, 0, 14)); day = day.AddDate(0, 0, 1) {
 		for h := 0; h < 24; h++ {
 			cpu := 0.0
@@ -603,7 +622,7 @@ func v16NightBurstCSV(start time.Time) string {
 // is active 14/16 off-hours while each container's off-p50 is 0.
 func v16AlternatingCSV(start time.Time) string {
 	var b strings.Builder
-	b.WriteString("interval_start,interval_end,namespace,pod,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count\n")
+	b.WriteString(sleepCSVHeader)
 	for day := start; day.Before(start.AddDate(0, 0, 14)); day = day.AddDate(0, 0, 1) {
 		for h := 0; h < 24; h++ {
 			for c := 0; c < 2; c++ {
@@ -631,17 +650,25 @@ func v16AlternatingCSV(start time.Time) string {
 // v16RunRawSleepCycle ingests the CSV through the canonical path and runs
 // the sleep cycle for one declared non-prod HC on a Mon-Sun schedule.
 func v16RunRawSleepCycle(t *testing.T, csvText string) []map[string]any {
+	return v16RunRawSleepCycleSched(t, csvText, bhschedule.Schedule{
+		OrgID: "unused", ClusterUUID: sHC1, Timezone: "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
+		StartTime: "09:00", EndTime: "17:00", Enabled: true,
+	})
+}
+
+// v16RunRawSleepCycleSched is v16RunRawSleepCycle with an explicit schedule
+// — the #827 overnight/fractional-window controls need non-default shapes.
+func v16RunRawSleepCycleSched(t *testing.T, csvText string, sched bhschedule.Schedule) []map[string]any {
 	t.Helper()
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	start, _ := sleepWindow()
 	org := "v16-raw-" + t.Name()
 	require.NoError(t, ingestion.EnsureSLOPartitionsForMonth(ctx, pool, start))
-	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
-		OrgID: org, ClusterUUID: sHC1, Timezone: "UTC",
-		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
-		StartTime: "09:00", EndTime: "17:00", Enabled: true,
-	}))
+	sched.OrgID = org // the per-test org, whatever the caller shaped
+	sched.ClusterUUID = sHC1
+	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, sched))
 	_, err := ingestion.ParseAndDigestCSV(ctx, pool, strings.NewReader(csvText), org, sHC1)
 	require.NoError(t, err)
 	seedSleepSnapshot(t, ctx, pool, org, sHC1, hcTierNonProd, time.Now().UTC().Add(-time.Hour))
@@ -710,11 +737,11 @@ func TestSleepCandidate_PartialMigrationReadsUnknown(t *testing.T) {
 	for i := 0; i < 14; i++ {
 		day := start.AddDate(0, 0, i).Format("2006-01-02")
 		// The quiet BH-active web workload (both legs measured).
-		seedEvidenceRow(t, ctx, pool, org, day, "web", "c0", ptr(int64(300)), ptr(int64(0)), ptr(int64(0)))
+		seedEvidenceRow(t, ctx, pool, org, day, "web", "c0", ptr(int64(300)), ptr(int64(0)), ptr(int64(0)), 8, 16)
 		// The split workload: c0 migrated and quiet, c1 legacy with its
 		// activity living only in the pre-#826 p50 column.
-		seedEvidenceRow(t, ctx, pool, org, day, "rotator", "c0", ptr(int64(50)), ptr(int64(0)), ptr(int64(0)))
-		seedEvidenceRow(t, ctx, pool, org, day, "rotator", "c1", ptr(int64(50)), ptr(int64(2000)), nil)
+		seedEvidenceRow(t, ctx, pool, org, day, "rotator", "c0", ptr(int64(50)), ptr(int64(0)), ptr(int64(0)), 8, 16)
+		seedEvidenceRow(t, ctx, pool, org, day, "rotator", "c1", ptr(int64(50)), ptr(int64(2000)), nil, 8, 16)
 	}
 	fired, err := RunSleepCandidateCycle(ctx, pool)
 	require.NoError(t, err)
@@ -736,7 +763,7 @@ func TestSleepCandidate_LegacyRowsReadUnknown(t *testing.T) {
 	seedNodepoolRollup(t, ctx, pool, org, sHC1)
 	for i := 0; i < 14; i++ {
 		day := start.AddDate(0, 0, i).Format("2006-01-02")
-		seedEvidenceRow(t, ctx, pool, org, day, "web", "c0", ptr(int64(300)), ptr(int64(0)), nil)
+		seedEvidenceRow(t, ctx, pool, org, day, "web", "c0", ptr(int64(300)), ptr(int64(0)), nil, 8, 16)
 	}
 	fired, err := RunSleepCandidateCycle(ctx, pool)
 	require.NoError(t, err)
@@ -755,18 +782,25 @@ func seedSleepScheduleRow(t *testing.T, ctx context.Context, pool *pgxpool.Pool,
 	}))
 }
 
-func seedEvidenceRow(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, day, wl, cn string, bhP50, offP50, offP95 *int64) {
+func seedEvidenceRow(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, day, wl, cn string, bhP50, offP50, offP95 *int64, bhHours, offHours int16) { //nolint:unparam // bhHours pinned at full coverage by design — the #826 fixtures isolate the p95 rules from the coverage gate
 	t.Helper()
+	// #827 review (test isolation): the hours default to FULL coverage in
+	// the #826 fixtures so those tests isolate the p95 rules — with NULL
+	// hours the coverage gate would suppress the same advice and the
+	// tests could pass with a broken p95 completeness check.
 	_, err := pool.Exec(ctx, `
 		INSERT INTO hcp_sleep_evidence (
 			org_id, cluster_uuid, namespace, workload, workload_type,
-			container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc
-		) VALUES ($1,$2,$3,$4,'Deployment',$5,$6,$7,$8,$9)
+			container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc,
+			bh_observed_hours, off_observed_hours
+		) VALUES ($1,$2,$3,$4,'Deployment',$5,$6,$7,$8,$9,$10,$11)
 		ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
 		DO UPDATE SET bh_cpu_p50_mc = EXCLUDED.bh_cpu_p50_mc,
 			off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc,
-			off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc`,
-		orgID, sHC1, "demo-app", wl, cn, day, bhP50, offP50, offP95)
+			off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc,
+			bh_observed_hours = EXCLUDED.bh_observed_hours,
+			off_observed_hours = EXCLUDED.off_observed_hours`,
+		orgID, sHC1, "demo-app", wl, cn, day, bhP50, offP50, offP95, bhHours, offHours)
 	require.NoError(t, err)
 }
 
@@ -801,7 +835,7 @@ func TestSleepCandidate_RawCSVConstantVetoed(t *testing.T) {
 // function of the hour.
 func rawSleepCSV(start time.Time, usage func(h int) float64) string {
 	var b strings.Builder
-	b.WriteString("interval_start,interval_end,namespace,pod,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count\n")
+	b.WriteString(sleepCSVHeader)
 	for day := start; day.Before(start.AddDate(0, 0, 14)); day = day.AddDate(0, 0, 1) {
 		for h := 0; h < 24; h++ {
 			ts := day.Add(time.Duration(h) * time.Hour)
@@ -810,4 +844,172 @@ func rawSleepCSV(start time.Time, usage func(h int) float64) string {
 		}
 	}
 	return b.String()
+}
+
+// TestSleepCandidate_SparseCoverageIsUnknown is #827's end-to-end repro:
+// 14 days with only TWO observed hours per day (12:00 BH-active at 300m,
+// 20:00 off-quiet at 0) — 28 observations over 336 window-hours — must NOT
+// produce sleep advice. Baseline: any single sample per leg marks the day
+// measured, and high-confidence advice fired with outside=0 over 22
+// unobserved hours per day (V16-03).
+func TestSleepCandidate_SparseCoverageIsUnknown(t *testing.T) {
+	start, _ := sleepWindow()
+	var b strings.Builder
+	b.WriteString(sleepCSVHeader)
+	for day := start; day.Before(start.AddDate(0, 0, 14)); day = day.AddDate(0, 0, 1) {
+		for _, h := range []int{12, 20} {
+			cpu := 0.0
+			if h == 12 {
+				cpu = 0.3
+			}
+			ts := day.Add(time.Duration(h) * time.Hour)
+			fmt.Fprintf(&b, "%s,%s,user-app,pod,web,Deployment,c0,0.3,3,%.3f,0,1048576,1048576,1048576,1048576,0\n",
+				ts.Format("2006-01-02 15:04:05 +0000 UTC"), ts.Add(time.Hour).Format("2006-01-02 15:04:05 +0000 UTC"), cpu)
+		}
+	}
+	advs := v16RunRawSleepCycle(t, b.String())
+	assert.Empty(t, advs,
+		"two observed hours per day must not count as complete sleep evidence — 22 unobserved hours per day (#827)")
+}
+
+// rawSleepCSVHours emits one hourly row per listed (hour, cpu) pair — the
+// selective-observation builder for the #827 coverage boundary tests.
+func rawSleepCSVHours(start time.Time, hours map[int]float64) string {
+	var b strings.Builder
+	b.WriteString(sleepCSVHeader)
+	for day := start; day.Before(start.AddDate(0, 0, 14)); day = day.AddDate(0, 0, 1) {
+		for h := 0; h < 24; h++ {
+			cpu, ok := hours[h]
+			if !ok {
+				continue // unobserved hour: no row at all
+			}
+			ts := day.Add(time.Duration(h) * time.Hour)
+			fmt.Fprintf(&b, "%s,%s,user-app,pod,web,Deployment,c0,0.3,3,%.3f,0,1048576,1048576,1048576,1048576,0\n",
+				ts.Format("2006-01-02 15:04:05 +0000 UTC"), ts.Add(time.Hour).Format("2006-01-02 15:04:05 +0000 UTC"), cpu)
+		}
+	}
+	return b.String()
+}
+
+// TestSleepCandidate_CoverageAtFloorFires (#827 boundary): the 09:00–17:00
+// schedule gives a 16h off window and the 0.5 floor demands 8 observed
+// off-hours. Exactly at the floor (all 8 BH hours + 8 of 16 off hours) the
+// advisory must fire — a floor is a minimum, not a ceiling.
+func TestSleepCandidate_CoverageAtFloorFires(t *testing.T) {
+	start, _ := sleepWindow()
+	hours := map[int]float64{}
+	for h := 9; h < 17; h++ {
+		hours[h] = 0.3 // BH: fully observed, active
+	}
+	for _, h := range []int{17, 18, 19, 20, 21, 22, 23, 0} {
+		hours[h] = 0 // off: 8 of 16 hours observed, quiet
+	}
+	advs := v16RunRawSleepCycle(t, rawSleepCSVHours(start, hours))
+	assert.NotEmpty(t, advs,
+		"8-of-16 observed off-hours is exactly the 0.5 floor — the advisory must fire")
+}
+
+// TestSleepCandidate_CoverageOneBelowFloorIsUnknown (#827 boundary): 7 of
+// 16 off-hours observed — one hour below the floor — reads the day
+// unknown, never complete coverage.
+func TestSleepCandidate_CoverageOneBelowFloorIsUnknown(t *testing.T) {
+	start, _ := sleepWindow()
+	hours := map[int]float64{}
+	for h := 9; h < 17; h++ {
+		hours[h] = 0.3
+	}
+	for _, h := range []int{17, 18, 19, 20, 21, 22, 23} {
+		hours[h] = 0 // off: 7 of 16 hours observed
+	}
+	advs := v16RunRawSleepCycle(t, rawSleepCSVHours(start, hours))
+	assert.Empty(t, advs,
+		"7-of-16 observed off-hours is below the 0.5 floor — the day must read unknown")
+}
+
+// TestSleepCandidate_CoverageCountsDistinctHoursNotSamples (#827): 8
+// off-window samples crowded into 2 distinct hours (17:00–18:45 at
+// 15-minute intervals) are 2 observed hours, not 8 — the day reads
+// unknown. Pins the distinct-hour semantics: a sample-count reading would
+// clear the floor and fire.
+func TestSleepCandidate_CoverageCountsDistinctHoursNotSamples(t *testing.T) {
+	start, _ := sleepWindow()
+	var b strings.Builder
+	b.WriteString(sleepCSVHeader)
+	for day := start; day.Before(start.AddDate(0, 0, 14)); day = day.AddDate(0, 0, 1) {
+		for h := 9; h < 17; h++ {
+			ts := day.Add(time.Duration(h) * time.Hour)
+			fmt.Fprintf(&b, "%s,%s,user-app,pod,web,Deployment,c0,0.3,3,%.3f,0,1048576,1048576,1048576,1048576,0\n",
+				ts.Format("2006-01-02 15:04:05 +0000 UTC"), ts.Add(time.Hour).Format("2006-01-02 15:04:05 +0000 UTC"), 0.3)
+		}
+		// 8 samples within hours 17 and 18: 17:00, 17:15, …, 18:45.
+		for i := 0; i < 8; i++ {
+			ts := day.Add(17*time.Hour + time.Duration(i)*15*time.Minute)
+			fmt.Fprintf(&b, "%s,%s,user-app,pod,web,Deployment,c0,0.3,3,%.3f,0,1048576,1048576,1048576,1048576,0\n",
+				ts.Format("2006-01-02 15:04:05 +0000 UTC"), ts.Add(15*time.Minute).Format("2006-01-02 15:04:05 +0000 UTC"), 0.0)
+		}
+	}
+	advs := v16RunRawSleepCycle(t, b.String())
+	assert.Empty(t, advs,
+		"8 samples within 2 distinct hours are 2 observed hours, not 8 — the day must read unknown (#827 distinct-hour semantics)")
+}
+
+// TestSleepCandidate_OvernightScheduleFullCoverageFires (#827 review
+// F4/F5): a Mon–Fri 22:00–06:00 schedule splits across UTC day buckets —
+// Monday's evidence row can hold at most its 22:00 and 23:00 buckets (2 BH
+// hours; the post-midnight portion lands on Tuesday's row). Window-length
+// arithmetic (8h BH window → floor 4) demanded more than Monday can
+// produce, so complete observation still suppressed the advisory; the
+// classification-based per-day derivation must let it fire.
+func TestSleepCandidate_OvernightScheduleFullCoverageFires(t *testing.T) {
+	start, _ := sleepWindow()
+	sched := bhschedule.Schedule{
+		Timezone:  "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "22:00", EndTime: "06:00", Enabled: true,
+	}
+	// Complete observation with the compliant activity shape: active
+	// exactly when InBusinessHours says so — Mon–Fri 22:00–23:59 plus
+	// Tue–Sat 00:00–05:59 (the post-midnight portion belongs to the
+	// previous day's shift). Activity fixed at clock hours 22–05 would be
+	// WRONG here: Monday 00:00–05:59 is off-window (Sunday's disallowed
+	// shift) and correctly vetoes the signature.
+	var b strings.Builder
+	b.WriteString(sleepCSVHeader)
+	for day := start; day.Before(start.AddDate(0, 0, 14)); day = day.AddDate(0, 0, 1) {
+		for h := 0; h < 24; h++ {
+			ts := day.Add(time.Duration(h) * time.Hour)
+			cpu := 0.0
+			if bhschedule.InBusinessHours(ts, sched) {
+				cpu = 0.3
+			}
+			fmt.Fprintf(&b, "%s,%s,user-app,pod,web,Deployment,c0,0.3,3,%.3f,0,1048576,1048576,1048576,1048576,0\n",
+				ts.Format("2006-01-02 15:04:05 +0000 UTC"), ts.Add(time.Hour).Format("2006-01-02 15:04:05 +0000 UTC"), cpu)
+		}
+	}
+	advs := v16RunRawSleepCycleSched(t, b.String(), sched)
+	assert.NotEmpty(t, advs,
+		"complete observation on an overnight schedule must fire — the floor derives per-day possible hours, never the window length (#827 review F4/F5)")
+}
+
+// TestSleepCandidate_FractionalWindowFullCoverageFires (#827 review F4):
+// a 22:30–22:00 schedule wraps almost the whole day — 23 BH hour buckets,
+// 1 off bucket. The pre-fix server arithmetic divided a negative minute
+// difference before wrapping (Go truncates toward zero), read a ZERO-hour
+// BH window, and demanded 12 off-hours — more than the single off bucket
+// that exists; the advisory could never fire. The classification-based
+// derivation demands 1 (ceil of 0.5·1).
+func TestSleepCandidate_FractionalWindowFullCoverageFires(t *testing.T) {
+	start, _ := sleepWindow()
+	hours := map[int]float64{}
+	for h := 0; h < 24; h++ {
+		hours[h] = 0.3 // in-window by default (23 of 24 buckets)
+	}
+	hours[22] = 0 // the 22:00–22:30 bucket is the only off window
+	advs := v16RunRawSleepCycleSched(t, rawSleepCSVHours(start, hours), bhschedule.Schedule{
+		Timezone:  "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
+		StartTime: "22:30", EndTime: "22:00", Enabled: true,
+	})
+	assert.NotEmpty(t, advs,
+		"complete observation on a 22:30–22:00 schedule must fire — 1 observed off-hour meets the ceil(0.5·1) floor (#827 review F4)")
 }

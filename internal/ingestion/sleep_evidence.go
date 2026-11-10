@@ -32,6 +32,11 @@ type sleepEvidenceRow struct {
 	// work reads p50=0); the house convention for CPU-usage activity
 	// evidence is p95 (#747's identical zombie-rule migration).
 	OffCPUP95MC *int64
+	// Observed-hour coverage per leg (#827): the count of distinct UTC
+	// hour buckets with at least one sample. Two observed hours per day
+	// must not read as complete evidence over an unobserved window.
+	BHObservedHours  *int16
+	OffObservedHours *int16
 }
 
 // buildSleepEvidenceRows computes per-container-day in-window and off-window
@@ -81,12 +86,16 @@ func buildSleepEvidenceRows(grouped map[DigestKey][]metricSample, cache *bhsched
 		if len(inWindow) > 0 {
 			v := cpuUsageP50MC(inWindow)
 			row.BHCPUP50MC = &v
+			bh := int16(distinctHours(inWindow)) //nolint:gosec // G115: distinct UTC hour buckets, ≤24 by construction
+			row.BHObservedHours = &bh
 		}
 		if len(offWindow) > 0 {
 			v := cpuUsageP50MC(offWindow)
 			row.OffCPUP50MC = &v
 			v95 := cpuUsageP95MC(offWindow)
 			row.OffCPUP95MC = &v95
+			oh := int16(distinctHours(offWindow)) //nolint:gosec // G115: distinct UTC hour buckets, ≤24 by construction
+			row.OffObservedHours = &oh
 		}
 		if row.BHCPUP50MC == nil && row.OffCPUP50MC == nil {
 			continue
@@ -116,6 +125,17 @@ func buildSleepEvidenceRows(grouped map[DigestKey][]metricSample, cache *bhsched
 		return a.BucketDate.Before(b.BucketDate)
 	})
 	return out
+}
+
+// distinctHours counts the distinct UTC hour buckets represented in the
+// sample set (#827): the observation-coverage measure. Hour-of-day suffices
+// — the group is one container-day.
+func distinctHours(samples []metricSample) int {
+	seen := make(map[int]struct{}, len(samples))
+	for _, s := range samples {
+		seen[s.IntervalStart.UTC().Hour()] = struct{}{}
+	}
+	return len(seen)
 }
 
 // cpuUsageP95MC is the CPU-usage p95 through the same percentile core —
@@ -156,14 +176,18 @@ func upsertSleepEvidenceOnSender(ctx context.Context, sender pgxBatchSender, gro
 		batch.Queue(`
 			INSERT INTO hcp_sleep_evidence (
 				org_id, cluster_uuid, namespace, workload, workload_type,
-				container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc
-			) VALUES ($1,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10)
+				container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc,
+				bh_observed_hours, off_observed_hours
+			) VALUES ($1,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
 			DO UPDATE SET bh_cpu_p50_mc = EXCLUDED.bh_cpu_p50_mc,
 				off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc,
-				off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc`,
+				off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc,
+				bh_observed_hours = EXCLUDED.bh_observed_hours,
+				off_observed_hours = EXCLUDED.off_observed_hours`,
 			r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType,
-			r.ContainerName, r.BucketDate, r.BHCPUP50MC, r.OffCPUP50MC, r.OffCPUP95MC)
+			r.ContainerName, r.BucketDate, r.BHCPUP50MC, r.OffCPUP50MC, r.OffCPUP95MC,
+			r.BHObservedHours, r.OffObservedHours)
 		queued++
 		if queued >= maxSleepEvidenceBatch {
 			if err := flushQueuedBatch(ctx, sender, batch, queued); err != nil {

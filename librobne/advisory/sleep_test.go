@@ -408,3 +408,216 @@ func TestSleepCandidate_PartialMigrationReadsUnknown(t *testing.T) {
 	assert.Nil(t, got,
 		"a partially-migrated workload must read unmeasured — the quiet measured container must not mask the legacy row's activity (#826)")
 }
+
+// TestSleepCandidate_SparseCoverageIsUnknown is #827's offline repro: off
+// legs observed for only 2 of 16 window hours must read the day unknown —
+// never complete coverage. The coverage rides the hour-count input the CLI
+// computes; this test drives SleepCandidate through CoverageSums directly.
+func TestSleepCandidate_SparseCoverageIsUnknown(t *testing.T) {
+	now := time.Now()
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	var bhRows, offRows []types.KeyedDigest
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		bhRows = append(bhRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 300, CPUUsageP95MC: 300},
+		})
+		offRows = append(offRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 0, CPUUsageP95MC: 0},
+		})
+	}
+	// Sparse on the OFF leg only (2 of 16): the BH leg sits at full
+	// coverage (8 of 8) so the test isolates the off-leg gate — removing
+	// only that gate must make it fail (#827 review: leg isolation).
+	cov := DayCoverage{}
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		key := d.UTC().Format("2006-01-02")
+		if cov[key] == nil {
+			cov[key] = map[DayKey]LegCoverage{}
+		}
+		cov[key][DayKey{NS: "demo-app", WL: "web"}] = LegCoverage{BHHours: 8, OffHours: 2}
+	}
+	got := SleepCandidateWithCoverage("hc-827", TierNonProd, SleepSums(bhRows, offRows), cov, testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"2-of-16 observed off-hours must read the day unknown — never complete coverage (#827)")
+}
+
+// TestSleepCandidate_SparseBHCoverageIsUnknown isolates the BH leg of the
+// #827 floor: off coverage full (16 of 16), BH coverage sparse (1 of 8) —
+// removing only the BH gate must make it fail.
+func TestSleepCandidate_SparseBHCoverageIsUnknown(t *testing.T) {
+	now := time.Now()
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	var bhRows, offRows []types.KeyedDigest
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		bhRows = append(bhRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 300, CPUUsageP95MC: 300},
+		})
+		offRows = append(offRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 0, CPUUsageP95MC: 0},
+		})
+	}
+	cov := DayCoverage{}
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		key := d.UTC().Format("2006-01-02")
+		if cov[key] == nil {
+			cov[key] = map[DayKey]LegCoverage{}
+		}
+		cov[key][DayKey{NS: "demo-app", WL: "web"}] = LegCoverage{BHHours: 1, OffHours: 16}
+	}
+	got := SleepCandidateWithCoverage("hc-827", TierNonProd, SleepSums(bhRows, offRows), cov, testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"1-of-8 observed BH-hours must read the day unknown — the BH leg of the floor (#827)")
+}
+
+// TestSleepCandidate_CoverageFloorBoundary is #827's boundary control: with
+// the 09:00–17:00 seven-day schedule the off window is 16h and the 0.5
+// floor demands 8 observed off-hours. Exactly at the floor the advisory
+// must still fire (a floor is a minimum, not a ceiling); one hour below
+// reads the day unknown. Also pins the per-day keying: one sparse day among
+// fourteen full ones must read unknown — a workload-wide coverage value
+// would mask it (the day-collision defect the fresh review of the first
+// draft caught). A seven-day schedule keeps the boundary uniform: a
+// weekday-only schedule gives weekends a 24h off window (floor 12), so
+// "at floor" is not one number across the week.
+func TestSleepCandidate_CoverageFloorBoundary(t *testing.T) {
+	now := time.Now()
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	sched := testSchedule()
+	sched.Days = []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+	mkSums := func() map[string]map[DayKey]DaySum {
+		var bhRows, offRows []types.KeyedDigest
+		for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+			bhRows = append(bhRows, types.KeyedDigest{
+				Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+				Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 300, CPUUsageP95MC: 300},
+			})
+			offRows = append(offRows, types.KeyedDigest{
+				Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+				Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 0, CPUUsageP95MC: 0},
+			})
+		}
+		return SleepSums(bhRows, offRows)
+	}
+	fullCov := func(off int16) DayCoverage {
+		cov := DayCoverage{}
+		for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+			key := d.UTC().Format("2006-01-02")
+			if cov[key] == nil {
+				cov[key] = map[DayKey]LegCoverage{}
+			}
+			cov[key][DayKey{NS: "demo-app", WL: "web"}] = LegCoverage{BHHours: 8, OffHours: off}
+		}
+		return cov
+	}
+
+	// At the floor: 8 of 16 off-hours, 8 of 8 BH-hours → fires.
+	got := SleepCandidateWithCoverage("hc-827", TierNonProd, mkSums(), fullCov(8), sched, DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.NotNil(t, got,
+		"8-of-16 observed off-hours is exactly the 0.5 floor — the advisory must fire")
+
+	// One below: 7 of 16 → unknown.
+	got = SleepCandidateWithCoverage("hc-827", TierNonProd, mkSums(), fullCov(7), sched, DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"7-of-16 observed off-hours is below the 0.5 floor — the day must read unknown")
+
+	// Day collision: one sparse day among fourteen full ones → unknown.
+	sparseDay := DayCoverage{}
+	d := start
+	for i := 0; i < 14; i++ {
+		key := d.UTC().Format("2006-01-02")
+		sparseDay[key] = map[DayKey]LegCoverage{}
+		if i == 5 {
+			sparseDay[key][DayKey{NS: "demo-app", WL: "web"}] = LegCoverage{BHHours: 8, OffHours: 2}
+		} else {
+			sparseDay[key][DayKey{NS: "demo-app", WL: "web"}] = LegCoverage{BHHours: 8, OffHours: 16}
+		}
+		d = d.AddDate(0, 0, 1)
+	}
+	got = SleepCandidateWithCoverage("hc-827", TierNonProd, mkSums(), sparseDay, sched, DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"one sparse day among fourteen full ones must read unknown — coverage is per day, never workload-wide")
+}
+
+// TestSleepCandidate_OvernightScheduleCoverageFires (#827 review F4/F5):
+// a Mon–Fri 22:00–06:00 schedule splits across UTC day buckets — Monday
+// holds only its 22:00 and 23:00 buckets (2 BH hours; the post-midnight
+// portion belongs to Tuesday), Tuesday–Friday hold 8, Saturday 6 (the
+// Friday shift's post-midnight portion), Sunday 0. Window-length
+// arithmetic (8h BH window → floor 4) would demand more than Monday can
+// produce and suppress the advisory even under complete observation; the
+// classification-based derivation must let full coverage fire.
+func TestSleepCandidate_OvernightScheduleCoverageFires(t *testing.T) {
+	now := time.Now()
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	sched := testSchedule()
+	sched.StartTime = "22:00"
+	sched.EndTime = "06:00"
+	// bhPossible per UTC weekday: Mon 2, Tue–Fri 8, Sat 6, Sun 0.
+	bhPossible := map[time.Weekday]int{
+		time.Monday: 2, time.Tuesday: 8, time.Wednesday: 8, time.Thursday: 8,
+		time.Friday: 8, time.Saturday: 6, time.Sunday: 0,
+	}
+	var bhRows, offRows []types.KeyedDigest
+	cov := DayCoverage{}
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		bhRows = append(bhRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 300, CPUUsageP95MC: 300},
+		})
+		offRows = append(offRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 0, CPUUsageP95MC: 0},
+		})
+		key := d.UTC().Format("2006-01-02")
+		if cov[key] == nil {
+			cov[key] = map[DayKey]LegCoverage{}
+		}
+		bh := int16(bhPossible[d.UTC().Weekday()]) //nolint:gosec // G115: fixture lookup, values ≤ 24 by construction
+		cov[key][DayKey{NS: "demo-app", WL: "web"}] = LegCoverage{BHHours: bh, OffHours: 24 - bh}
+	}
+	got := SleepCandidateWithCoverage("hc-827", TierNonProd, SleepSums(bhRows, offRows), cov, sched, DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.NotNil(t, got,
+		"complete observation on an overnight schedule must fire — the floor derives per-day possible hours, never the window length (#827 review F4/F5)")
+}
+
+// TestSleepCandidate_FractionalWindowCoverageFires (#827 review F4): a
+// 22:30–22:00 schedule wraps almost the whole day — 23 BH hour buckets,
+// 1 off bucket. The floor must demand 1 off hour (ceil of 0.5·1), not the
+// 12 a zero-BH-window misderivation would demand.
+func TestSleepCandidate_FractionalWindowCoverageFires(t *testing.T) {
+	now := time.Now()
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	sched := testSchedule()
+	sched.Days = []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+	sched.StartTime = "22:30"
+	sched.EndTime = "22:00"
+	var bhRows, offRows []types.KeyedDigest
+	cov := DayCoverage{}
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		bhRows = append(bhRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 300, CPUUsageP95MC: 300},
+		})
+		offRows = append(offRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 0, CPUUsageP95MC: 0},
+		})
+		key := d.UTC().Format("2006-01-02")
+		if cov[key] == nil {
+			cov[key] = map[DayKey]LegCoverage{}
+		}
+		cov[key][DayKey{NS: "demo-app", WL: "web"}] = LegCoverage{BHHours: 23, OffHours: 1}
+	}
+	got := SleepCandidateWithCoverage("hc-827", TierNonProd, SleepSums(bhRows, offRows), cov, sched, DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.NotNil(t, got,
+		"complete observation on a 22:30–22:00 schedule must fire — 1 observed off-hour meets the ceil(0.5·1) floor (#827 review F4)")
+}

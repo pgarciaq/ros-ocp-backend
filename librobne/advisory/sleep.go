@@ -12,6 +12,7 @@ package advisory
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -33,12 +34,16 @@ type SleepPolicy struct {
 	WindowDays           int
 	BHActivityFloorMC    int64
 	OutsideBHIdleFloorMC int64
+	// MinCoverageFrac (#827): the minimum fraction of a leg's window hours
+	// that must be observed — the H-leg minimum-observation precedent. A
+	// methodological floor, not a tenant knob.
+	MinCoverageFrac float64
 }
 
 // DefaultSleepPolicy mirrors the server's compiled defaults
 // (DefaultPolicy in internal/engine/correlate).
 func DefaultSleepPolicy() SleepPolicy {
-	return SleepPolicy{WindowDays: 14, BHActivityFloorMC: 10, OutsideBHIdleFloorMC: 10}
+	return SleepPolicy{WindowDays: 14, BHActivityFloorMC: 10, OutsideBHIdleFloorMC: 10, MinCoverageFrac: 0.5}
 }
 
 // DayKey identifies one (namespace, workload) pair on one day.
@@ -151,10 +156,39 @@ type SleepEvidence struct {
 	ReclaimNodeHoursPerWeek float64
 }
 
+// LegCoverage is one (day, namespace, workload) pair's observed-hour
+// counts per leg (#827). Zero means genuinely unobserved (or a container
+// of the pair missing the leg entirely — the CLI's MIN treats absent as
+// 0); the predicate compares against the window's floor. Absent from the
+// coverage map = no coverage info (legacy rows) — the floor is skipped
+// for that pair.
+type LegCoverage struct {
+	BHHours  int16
+	OffHours int16
+}
+
+// DayCoverage maps day → (namespace, workload) → per-leg observed hours —
+// the same shape as the sums input, so coverage is evaluated per day: a
+// workload sparse on one day and fully observed on another must not read
+// fully covered off the full day's counts.
+type DayCoverage map[string]map[DayKey]LegCoverage
+
 // SleepCandidate evaluates one hosted cluster. Returns nil when the HC does
 // not qualify (undeclared, no schedule, unknown days, or the signature
 // breaks) — silence, mirroring the server's never-fail-on-evidence posture.
+// Coverage is not evaluated by this entry point; use SleepCandidateWithCoverage
+// when the caller can supply observation hours (#827).
 func SleepCandidate(hcID, tier string, sums map[string]map[DayKey]DaySum, sched bhschedule.Schedule, pol SleepPolicy, workerNodes int, syncedExact map[string]bool, syncedPrefixes []string, now time.Time) *Advisory {
+	return SleepCandidateWithCoverage(hcID, tier, sums, nil, sched, pol, workerNodes, syncedExact, syncedPrefixes, now)
+}
+
+// SleepCandidateWithCoverage is SleepCandidate with the #827 observation
+// coverage input: per-leg observed hours keyed by (day, ns, wl). A user
+// workload observed for fewer than SleepMinCoverageFrac of a leg's window
+// hours makes the day unknown — never complete coverage over unobserved
+// hours. Pairs absent from cov carry no coverage info: the floor skips
+// them (legacy rows are already unmeasured via the p95 rule).
+func SleepCandidateWithCoverage(hcID, tier string, sums map[string]map[DayKey]DaySum, cov DayCoverage, sched bhschedule.Schedule, pol SleepPolicy, workerNodes int, syncedExact map[string]bool, syncedPrefixes []string, now time.Time) *Advisory {
 	if tier != TierNonProd {
 		return nil
 	}
@@ -182,6 +216,25 @@ func SleepCandidate(hcID, tier string, sums map[string]map[DayKey]DaySum, sched 
 		// evidence and the BH-activity requirement is vacuous; the off leg
 		// still gates safety (the advice sleeps those hours).
 		dayApplicable := bhschedule.DayAllowed(d.UTC().Weekday(), sched.Days)
+		// #827: the coverage floor (the H-leg minimum-observation
+		// precedent) — a user workload observed for fewer than
+		// SleepMinCoverageFrac of a leg's possible hours makes the day
+		// unknown. Possible hours derive by classifying each UTC hour
+		// bucket of the day with bhschedule.InBusinessHours — the same
+		// rule the ingestion writer's leg split and the server's
+		// predicate apply — so overnight windows (split across UTC day
+		// buckets) and non-applicable days (zero BH hours, floor
+		// vacuous) are exact. The floor rounds up. Pairs absent from
+		// cov carry no coverage info.
+		bhPossible := 0
+		for h := 0; h < 24; h++ {
+			if bhschedule.InBusinessHours(d.UTC().Add(time.Duration(h)*time.Hour), sched) {
+				bhPossible++
+			}
+		}
+		offPossible := 24 - bhPossible
+		minBHHours := int(math.Ceil(pol.MinCoverageFrac * float64(bhPossible)))
+		minOffHours := int(math.Ceil(pol.MinCoverageFrac * float64(offPossible)))
 		covered := false
 		dayBHActive := false
 		for k, r := range rows {
@@ -201,6 +254,17 @@ func SleepCandidate(hcID, tier string, sums map[string]map[DayKey]DaySum, sched 
 					return nil
 				}
 				continue // system workload: stream shape irrelevant
+			}
+			// #827: the coverage floor gate — user workloads only (system
+			// rows carry no user-activity evidence). Per-day lookup: a
+			// pair absent from cov carries no coverage info.
+			if c, ok := cov[key][k]; ok && isUserNamespace(k.NS, exact, prefixes) {
+				if dayApplicable && int(c.BHHours) < minBHHours {
+					return nil
+				}
+				if int(c.OffHours) < minOffHours {
+					return nil
+				}
 			}
 			covered = true
 			if !isUserNamespace(k.NS, exact, prefixes) {

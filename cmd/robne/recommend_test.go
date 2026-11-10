@@ -10,6 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redhatinsights/ros-ocp-backend/librobne/advisory"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/bhschedule"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/csv"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pgdigest"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/quota"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"github.com/stretchr/testify/assert"
@@ -1712,4 +1716,93 @@ func TestRecommend_BusinessHoursNodeCSVError(t *testing.T) {
 	err = writeRecs(bytes.NewBuffer(nil), result, "csv")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "json")
+}
+
+// mkCoverageRow builds one raw CSV row for the #827 coverage-assembler
+// tests.
+func mkCoverageRow(day time.Time, h, m int, ns, wl, wt, cn string) csv.Row {
+	ts := day.Add(time.Duration(h)*time.Hour + time.Duration(m)*time.Minute)
+	return csv.Row{
+		IntervalStart: ts, IntervalEnd: ts.Add(15 * time.Minute),
+		Namespace: ns, WorkloadName: wl, WorkloadType: wt, ContainerName: cn,
+	}
+}
+
+// TestCsvContainerHours (#827 review F6/F7): the per-container hours
+// assembler must key by the FULL container identity — two workloads
+// sharing a name across types (Deployment web + StatefulSet web) are
+// distinct rows, never merged samples — and a container absent from one
+// leg's window reads 0 for that leg.
+func TestCsvContainerHours(t *testing.T) {
+	sched := bhschedule.Schedule{
+		Timezone:  "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
+		StartTime: "09:00", EndTime: "17:00", Enabled: true,
+	}
+	day := time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC) // a Thursday
+	var rows []csv.Row
+	// Deployment web/c0: fully observed — 8 BH hours, 16 off hours.
+	for h := 0; h < 24; h++ {
+		rows = append(rows, mkCoverageRow(day, h, 0, "demo-app", "web", "Deployment", "c0"))
+	}
+	// StatefulSet web/c0 (same workload and container names, different
+	// type): sparse — only the 2 BH hours 09:00 and 10:00.
+	for _, h := range []int{9, 10} {
+		rows = append(rows, mkCoverageRow(day, h, 0, "demo-app", "web", "StatefulSet", "c0"))
+	}
+	// Container c1 of the Deployment: observed only off-window (the
+	// night-only shape) — BH leg absent → 0 BH hours.
+	for h := 18; h < 24; h++ {
+		rows = append(rows, mkCoverageRow(day, h, 0, "demo-app", "web", "Deployment", "c1"))
+	}
+	got := csvContainerHours(rows, sched)
+	byKey := map[pgdigest.EvidenceHours]struct{}{}
+	for _, r := range got {
+		byKey[r] = struct{}{}
+	}
+	requireLen := func(ns, wl, wt, cn string, bhH, offH int16) {
+		t.Helper()
+		want := pgdigest.EvidenceHours{Namespace: ns, Workload: wl, WorkloadType: wt, ContainerName: cn, Day: day, BHHours: bhH, OffHours: offH}
+		if _, ok := byKey[want]; !ok {
+			t.Fatalf("missing %+v in %v", want, got)
+		}
+	}
+	requireLen("demo-app", "web", "Deployment", "c0", 8, 16)
+	requireLen("demo-app", "web", "StatefulSet", "c0", 2, 0)
+	requireLen("demo-app", "web", "Deployment", "c1", 0, 6)
+	if len(got) != 3 {
+		t.Fatalf("expected 3 container-day rows, got %d: %+v", len(got), got)
+	}
+}
+
+// TestCoverageFromHoursRows (#827 review F7): the workload-grain collapse
+// is a per-day MIN over containers — a fully-observed sibling must not
+// mask a sparse one, a real 0 must survive (never read as "unset"), and
+// distinct days must stay distinct.
+func TestCoverageFromHoursRows(t *testing.T) {
+	d1 := time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC)
+	d2 := time.Date(2026, 11, 6, 0, 0, 0, 0, time.UTC)
+	rows := []pgdigest.EvidenceHours{
+		{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0", Day: d1, BHHours: 8, OffHours: 16},
+		{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c1", Day: d1, BHHours: 2, OffHours: 16},
+		// A second workload, same day: unaffected by the MIN above.
+		{Namespace: "other", Workload: "api", WorkloadType: "Deployment", ContainerName: "c0", Day: d1, BHHours: 4, OffHours: 4},
+		// The same workload the next day: distinct day key.
+		{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0", Day: d2, BHHours: 8, OffHours: 3},
+	}
+	got := coverageFromHoursRows(rows)
+	d1s, d2s := d1.Format("2006-01-02"), d2.Format("2006-01-02")
+	assert.Equal(t, advisory.LegCoverage{BHHours: 2, OffHours: 16}, got[d1s][advisory.DayKey{NS: "demo-app", WL: "web"}],
+		"the workload-day coverage is the MIN over its containers (2 < 8)")
+	assert.Equal(t, advisory.LegCoverage{BHHours: 4, OffHours: 4}, got[d1s][advisory.DayKey{NS: "other", WL: "api"}])
+	assert.Equal(t, advisory.LegCoverage{BHHours: 8, OffHours: 3}, got[d2s][advisory.DayKey{NS: "demo-app", WL: "web"}],
+		"coverage is per day — day 2 must not inherit day 1's counts")
+	// A real 0 (night-only container: no BH samples) must survive the MIN.
+	zeroRows := []pgdigest.EvidenceHours{
+		{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0", Day: d1, BHHours: 8, OffHours: 16},
+		{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c1", Day: d1, BHHours: 0, OffHours: 16},
+	}
+	got = coverageFromHoursRows(zeroRows)
+	assert.Equal(t, advisory.LegCoverage{BHHours: 0, OffHours: 16}, got[d1s][advisory.DayKey{NS: "demo-app", WL: "web"}],
+		"a container with no BH samples reads 0 observed BH hours — never masked by its sibling")
 }

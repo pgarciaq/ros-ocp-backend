@@ -155,8 +155,12 @@ func computeSleepAdvisory(fl fileLoad) []advisory.Advisory {
 	pol := sleepPolicyFromYAML(fl.cfg.SleepAdvisory)
 	syncedExact, syncedPrefixes := platformExclusionsFromYAML(fl.cfg.SleepAdvisory)
 	sums := advisory.SleepSumsAll(fl.sleepBHLegs, fl.sleepOffLegs, fl.sleepOffLegacyLegs)
-	got := advisory.SleepCandidate(
-		fl.clusterID, fl.hcTier, sums, fl.bhSchedule, pol,
+	// #827: the coverage input — per-leg observed hours, MIN over
+	// containers. Computed by the CSV path from raw rows; read from the
+	// hours columns by the DB path. Empty map = no coverage info
+	// anywhere (legacy rows) — the floor skips those pairs.
+	got := advisory.SleepCandidateWithCoverage(
+		fl.clusterID, fl.hcTier, sums, fl.sleepCoverage, fl.bhSchedule, pol,
 		fl.hcWorkerNodes, syncedExact, syncedPrefixes, fl.now)
 	if got == nil {
 		return nil

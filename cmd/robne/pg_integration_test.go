@@ -20,6 +20,7 @@ import (
 
 	modeltypes "github.com/redhatinsights/ros-ocp-backend/internal/model/types"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/advisory"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/namespace"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
@@ -1287,4 +1288,81 @@ func createEmptyDatabase(t *testing.T, admin *pgxpool.Pool) string {
 		_, _ = admin.Exec(context.Background(), "DROP DATABASE IF EXISTS "+pgx.Identifier{name}.Sanitize()+" WITH (FORCE)")
 	})
 	return poolDSN(t, admin, name)
+}
+
+// TestWriteReadSleepEvidenceHoursRoundTrip (#827 review F1/F2): the CLI's
+// DB mode writes and reads back its own evidence — the observed hours must
+// ride the same upsert as the values (a write without hours left NULL
+// coverage that the read treated as absent, bypassing the offline gate),
+// replacement upserts must REPLACE the hours (not retain stale ones), and
+// pre-#827 rows with NULL hours must read as 0 observed hours — the same
+// COALESCE the server's loader applies — never as "no information".
+func TestWriteReadSleepEvidenceHoursRoundTrip(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	org := "pgdigest-827-roundtrip"
+	cluster := "dddddddd-1111-1111-1111-111111111111"
+	day := time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC)
+	mk := func(p50, p95 int64) []types.KeyedDigest {
+		return []types.KeyedDigest{{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: day, CPUUsageP50MC: p50, CPUUsageP95MC: p95},
+		}}
+	}
+	hoursFor := func(bh, off int16) []pgdigest.EvidenceHours {
+		return []pgdigest.EvidenceHours{{
+			Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0",
+			Day: day, BHHours: bh, OffHours: off,
+		}}
+	}
+
+	// First write: full coverage.
+	require.NoError(t, pgdigest.WriteSleepEvidence(ctx, pool, org, cluster, mk(300, 0), mk(0, 0), hoursFor(8, 16)))
+	// A pre-#827 legacy sibling row: p50s only — no p95, no hours.
+	_, err := pool.Exec(ctx, `
+		INSERT INTO hcp_sleep_evidence (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc
+		) VALUES ($1,$2::uuid,$3,$4,'Deployment','c1',$5,$6,$7)`,
+		org, cluster, "demo-app", "web", day, int64(50), int64(2000))
+	require.NoError(t, err)
+
+	readBack := func() (bh, off, legacy []types.KeyedDigest, hours []pgdigest.EvidenceHours) {
+		t.Helper()
+		bh, off, legacy, hours, err = pgdigest.ReadSleepEvidence(ctx, pool, org, cluster,
+			day.AddDate(0, 0, -1), day.AddDate(0, 0, 1))
+		require.NoError(t, err)
+		return
+	}
+	_, _, legacy, hours := readBack()
+	require.Len(t, hours, 2)
+	byContainer := map[string]pgdigest.EvidenceHours{}
+	for _, h := range hours {
+		byContainer[h.ContainerName] = h
+	}
+	assert.Equal(t, int16(8), byContainer["c0"].BHHours)
+	assert.Equal(t, int16(16), byContainer["c0"].OffHours,
+		"the written hours must round-trip through the DB mode's own read")
+	assert.Equal(t, int16(0), byContainer["c1"].BHHours,
+		"a pre-#827 row with NULL hours reads 0 observed hours — never absent (F2)")
+	assert.Equal(t, int16(0), byContainer["c1"].OffHours)
+	require.Len(t, legacy, 1,
+		"the legacy row (p95 NULL) still routes to the legacy slice for the #761 gate")
+	assert.Equal(t, "c1", legacy[0].Key.ContainerName)
+	// The workload-grain collapse: the sparse legacy sibling makes the
+	// workload-day read 0 coverage — the gate bites in DB mode.
+	cov := coverageFromHoursRows(hours)
+	assert.Equal(t, advisory.LegCoverage{BHHours: 0, OffHours: 0},
+		cov[day.Format("2006-01-02")][advisory.DayKey{NS: "demo-app", WL: "web"}])
+
+	// Replacement write with sparse coverage must REPLACE the hours.
+	require.NoError(t, pgdigest.WriteSleepEvidence(ctx, pool, org, cluster, mk(300, 0), mk(0, 0), hoursFor(2, 2)))
+	_, _, _, hours = readBack()
+	byContainer = map[string]pgdigest.EvidenceHours{}
+	for _, h := range hours {
+		byContainer[h.ContainerName] = h
+	}
+	assert.Equal(t, int16(2), byContainer["c0"].BHHours,
+		"a replacement upsert must replace the hours, not retain stale full coverage (F1)")
+	assert.Equal(t, int16(2), byContainer["c0"].OffHours)
 }

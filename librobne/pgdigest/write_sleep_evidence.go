@@ -16,13 +16,17 @@ import (
 // rows the server's ingestion writes. The two leg sets merge per
 // (namespace, workload, workload_type, container, day): a key present in
 // both sets gets both columns; a key in one set gets that column and NULL
-// for the other. Replacement upserts (idempotent replay).
-func WriteSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, bh, off []types.KeyedDigest) error {
+// for the other. Replacement upserts (idempotent replay). hours (#827)
+// carries the per-container-day observed-hour counts and rides the same
+// upsert — a write without hours would leave NULL coverage that reads as
+// unobserved and bypass the offline gate.
+func WriteSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, bh, off []types.KeyedDigest, hours []EvidenceHours) error {
 	type row struct {
 		ns, wl, wt, cn string
 		day            time.Time
 		bhP50, offP50  *int64
 		offP95         *int64
+		bhH, offH      *int16
 	}
 	rows := map[[5]string]*row{}
 	add := func(legs []types.KeyedDigest, isBH bool) {
@@ -46,6 +50,16 @@ func WriteSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, clusterU
 	}
 	add(bh, true)
 	add(off, false)
+	for _, h := range hours {
+		k := [5]string{h.Namespace, h.Workload, h.WorkloadType, h.ContainerName, h.Day.Format("2006-01-02")}
+		r := rows[k]
+		if r == nil {
+			r = &row{ns: h.Namespace, wl: h.Workload, wt: h.WorkloadType, cn: h.ContainerName, day: h.Day}
+			rows[k] = r
+		}
+		bh, off := h.BHHours, h.OffHours
+		r.bhH, r.offH = &bh, &off
+	}
 	if len(rows) == 0 {
 		return nil
 	}
@@ -75,13 +89,16 @@ func WriteSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, clusterU
 		batch.Queue(`
 			INSERT INTO hcp_sleep_evidence (
 				org_id, cluster_uuid, namespace, workload, workload_type,
-				container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc
-			) VALUES ($1,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10)
+				container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc,
+				bh_observed_hours, off_observed_hours
+			) VALUES ($1,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
 			DO UPDATE SET bh_cpu_p50_mc = EXCLUDED.bh_cpu_p50_mc,
 				off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc,
-				off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc`,
-			orgID, clusterUUID, r.ns, r.wl, r.wt, r.cn, r.day, r.bhP50, r.offP50, r.offP95)
+				off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc,
+				bh_observed_hours = EXCLUDED.bh_observed_hours,
+				off_observed_hours = EXCLUDED.off_observed_hours`,
+			orgID, clusterUUID, r.ns, r.wl, r.wt, r.cn, r.day, r.bhP50, r.offP50, r.offP95, r.bhH, r.offH)
 		queued++
 		if queued >= 2000 {
 			if err := flushEvidenceBatch(ctx, pool, batch, queued); err != nil {

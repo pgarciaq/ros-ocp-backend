@@ -43,17 +43,21 @@ func writeAdvisoryFixture(t *testing.T, tier string) (guestDir, mgmtDir string) 
 	var rows string
 	for i := 0; i < 14; i++ {
 		day := 29 - i
-		// In-window rows (09:00 and 12:00, 100m) — the BH-activity leg.
-		// Two in-window samples keep the all-hours digest's percentiles
-		// representative: with a lone in-window sample plus the tiny
-		// off-window row, the 2-sample p95 reads the minimum and the
-		// zombie rule would see an idle cluster.
-		for _, h := range []string{"09", "12"} {
-			rows += "2026-10-01 00:00:00 +0000 UTC,2026-11-01 00:00:00 +0000 UTC,2026-10-" + pad2(day) + " " + h + ":00:00 +0000 UTC,2026-10-" + pad2(day) + " " + h + ":30:00 +0000 UTC,c0,demo-app-pod,web,ReplicaSet,web,deployment,demo-app,quay.io/example/app:latest,worker-0,i-0,8,33554432000,250,7.5,32212254720,0,m5.xlarge,workers,worker,0.05,0.05,0.2,0.2,0.1,0.08,0.15,0.1,0,0,0,0,1073741824,1073741824,1127428915,1127428915,268435456,241591910,322122547,268435456,255013683,228170137,295279001,255013683,0,0,1,1,1,,,,,,,,,,,,,,,\n"
+		// In-window rows (09:00–16:59 hourly, 100m) — the BH-activity
+		// leg at FULL observation (#827: the coverage floor demands
+		// half the window's hours; two in-window hours would now read
+		// sparse and correctly suppress the advisory). Eight hourly
+		// samples also keep the all-hours digest's percentiles
+		// representative for the zombie rule.
+		for h := 9; h < 17; h++ {
+			rows += "2026-10-01 00:00:00 +0000 UTC,2026-11-01 00:00:00 +0000 UTC,2026-10-" + pad2(day) + " " + pad2(h) + ":00:00 +0000 UTC,2026-10-" + pad2(day) + " " + pad2(h) + ":30:00 +0000 UTC,c0,demo-app-pod,web,ReplicaSet,web,deployment,demo-app,quay.io/example/app:latest,worker-0,i-0,8,33554432000,250,7.5,32212254720,0,m5.xlarge,workers,worker,0.05,0.05,0.2,0.2,0.1,0.08,0.15,0.1,0,0,0,0,1073741824,1073741824,1127428915,1127428915,268435456,241591910,322122547,268435456,255013683,228170137,295279001,255013683,0,0,1,1,1,,,,,,,,,,,,,,,\n"
 		}
-		// Off-window row (20:00, 1m) — the #760 off leg: present and
-		// below the 10mC outside-idle floor (quiet nights).
-		rows += "2026-10-01 00:00:00 +0000 UTC,2026-11-01 00:00:00 +0000 UTC,2026-10-" + pad2(day) + " 20:00:00 +0000 UTC,2026-10-" + pad2(day) + " 21:00:00 +0000 UTC,c0,demo-app-pod,web,ReplicaSet,web,deployment,demo-app,quay.io/example/app:latest,worker-0,i-0,8,33554432000,250,7.5,32212254720,0,m5.xlarge,workers,worker,0.0005,0.0005,0.002,0.002,0.001,0.0008,0.0015,0.001,0,0,0,0,1073741824,1073741824,1127428915,1127428915,268435456,241591910,322122547,268435456,255013683,228170137,295279001,255013683,0,0,1,1,1,,,,,,,,,,,,,,,\n"
+		// Off-window rows (all 16 off hours, 1m) — the #760 off leg:
+		// present, fully observed, and below the 10mC outside-idle
+		// floor (quiet nights).
+		for _, h := range append([]int{0, 1, 2, 3, 4, 5, 6, 7, 8}, []int{17, 18, 19, 20, 21, 22, 23}...) {
+			rows += "2026-10-01 00:00:00 +0000 UTC,2026-11-01 00:00:00 +0000 UTC,2026-10-" + pad2(day) + " " + pad2(h) + ":00:00 +0000 UTC,2026-10-" + pad2(day) + " " + pad2(h) + ":30:00 +0000 UTC,c0,demo-app-pod,web,ReplicaSet,web,deployment,demo-app,quay.io/example/app:latest,worker-0,i-0,8,33554432000,250,7.5,32212254720,0,m5.xlarge,workers,worker,0.0005,0.0005,0.002,0.002,0.001,0.0008,0.0015,0.001,0,0,0,0,1073741824,1073741824,1127428915,1127428915,268435456,241591910,322122547,268435456,255013683,228170137,295279001,255013683,0,0,1,1,1,,,,,,,,,,,,,,,\n"
+		}
 
 	}
 	require.NoError(t, os.WriteFile(filepath.Join(guestDir, "ros-openshift-container-202610.csv"), []byte(hdr+rows), 0o600))

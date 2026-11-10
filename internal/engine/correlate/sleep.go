@@ -3,6 +3,7 @@ package correlate
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -119,6 +120,11 @@ type sleepWorkloadDay struct {
 	offCPU      int64
 	bhMeasured  bool
 	offMeasured bool
+	// Per-leg observed-hour coverage (#827): MIN over the workload's
+	// container rows, a missing leg on any container reading as 0 —
+	// a fully-observed sibling cannot mask an under-observed one.
+	bhObservedHours  int16
+	offObservedHours int16
 }
 
 // loadSleepEvidence loads per (day, namespace, workload) CPU for both
@@ -140,7 +146,8 @@ func loadSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, hcID stri
 	rows, err := pool.Query(ctx, `
 		SELECT bucket_date::text, namespace, workload,
 			SUM(bh_cpu_p50_mc), COUNT(bh_cpu_p50_mc),
-			SUM(off_cpu_p95_mc), COUNT(off_cpu_p95_mc), COUNT(*)
+			SUM(off_cpu_p95_mc), COUNT(off_cpu_p95_mc), COUNT(*),
+			MIN(COALESCE(bh_observed_hours, 0)), MIN(COALESCE(off_observed_hours, 0))
 		FROM hcp_sleep_evidence
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date < $4
@@ -155,7 +162,8 @@ func loadSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, hcID stri
 		var day, ns, wl string
 		var bhTotal, offTotal *int64
 		var bhN, offN, totalN int64
-		if err := rows.Scan(&day, &ns, &wl, &bhTotal, &bhN, &offTotal, &offN, &totalN); err != nil {
+		var bhHours, offHours *int16
+		if err := rows.Scan(&day, &ns, &wl, &bhTotal, &bhN, &offTotal, &offN, &totalN, &bhHours, &offHours); err != nil {
 			return nil, fmt.Errorf("scan sleep evidence: %w", err)
 		}
 		if out[day] == nil {
@@ -184,6 +192,19 @@ func loadSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, hcID stri
 				d.offMeasured = true
 			}
 		}
+		// #827: observed-hour coverage — MIN over the workload's container
+		// rows, with a missing leg on any container reading as 0 observed
+		// hours (COALESCE in the SQL): a fully-observed sibling must not
+		// mask an under-observed one (#826's F1 lesson, one level down).
+		// The scan is defensive about NULL only; GROUP BY rows always
+		// carry a MIN over COALESCEd values.
+		d.bhObservedHours, d.offObservedHours = 0, 0
+		if bhHours != nil {
+			d.bhObservedHours = *bhHours
+		}
+		if offHours != nil {
+			d.offObservedHours = *offHours
+		}
 	}
 	return out, rows.Err()
 }
@@ -200,7 +221,22 @@ func loadSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, hcID stri
 // vacuous there, and off-window activity still vetoes. Partition with the
 // zombie rule holds by construction: idle-always matches zombie, never
 // this.
-func evalSleepSignature(days map[string]map[sleepKey]*sleepWorkloadDay, windowStart, windowEnd time.Time, bhFloor, outsideFloor int64, sched *sleepSchedule, syncedExact map[string]bool, syncedPrefixes []string) (bhPeak, outsidePeak int64, match, known bool) {
+func evalSleepSignature(days map[string]map[sleepKey]*sleepWorkloadDay, windowStart, windowEnd time.Time, bhFloor, outsideFloor int64, minCoverageFrac float64, sched *sleepSchedule, syncedExact map[string]bool, syncedPrefixes []string) (bhPeak, outsidePeak int64, match, known bool) {
+	// The bhschedule form of the resolved schedule: the identical rule
+	// the ingestion writer's leg split applies (#827 review — the
+	// possible-hours derivation must classify with the writer, never a
+	// re-derivation that can disagree). Nil schedule → disabled
+	// placeholder → zero BH hours (floor vacuous, off = 24h).
+	bs := bhschedule.Schedule{}
+	if sched != nil {
+		bs = bhschedule.Schedule{
+			Timezone:  sched.Timezone,
+			Days:      sched.Days,
+			Enabled:   true,
+			StartTime: fmt.Sprintf("%02d:%02d", sched.StartMin/60, sched.StartMin%60),
+			EndTime:   fmt.Sprintf("%02d:%02d", sched.EndMin/60, sched.EndMin%60),
+		}
+	}
 	for d := windowStart; d.Before(windowEnd); d = d.AddDate(0, 0, 1) {
 		key := d.UTC().Format("2006-01-02")
 		rows, ok := days[key]
@@ -212,6 +248,32 @@ func evalSleepSignature(days map[string]map[sleepKey]*sleepWorkloadDay, windowSt
 		// no business hours to be active in), but the off leg still gates
 		// safety: the advice sleeps those hours.
 		dayApplicable := sched == nil || bhschedule.DayAllowed(d.UTC().Weekday(), sched.Days)
+		// #827: the coverage floor — each leg's observed hours must meet
+		// SleepMinCoverageFrac of the leg's possible hours for that day,
+		// rounded up (the H-leg minimum-observation precedent). Unknown
+		// on shortfall, never zero-activity. Possible hours derive by
+		// classifying each UTC hour bucket of the day against the
+		// schedule — the same classification the writer's leg split
+		// applies — so overnight windows (split across UTC day buckets:
+		// a Mon–Fri 22:00–06:00 schedule gives Monday only its 22:00 and
+		// 23:00 buckets) and non-applicable days (zero BH hours, floor
+		// vacuous) are exact, never window-length arithmetic that
+		// demands more than a day can produce. Fractional boundaries err
+		// lenient by construction: a bucket counts as possible only when
+		// its start is in-window, and observed buckets are never fewer
+		// than the demand. Pre-#827 rows carry NULL hours, which the
+		// loader's COALESCE reads as 0 — pre-#826 rows are then unknown
+		// via the p95 rule, #826-window rows (p95 present, hours absent)
+		// unknown via this floor; no separate legacy skip exists.
+		bhPossible := 0
+		for h := 0; h < 24; h++ {
+			if bhschedule.InBusinessHours(d.UTC().Add(time.Duration(h)*time.Hour), bs) {
+				bhPossible++
+			}
+		}
+		offPossible := 24 - bhPossible
+		minBHHours := int(math.Ceil(minCoverageFrac * float64(bhPossible)))
+		minOffHours := int(math.Ceil(minCoverageFrac * float64(offPossible)))
 		covered := false
 		dayBHActive := false
 		for k, r := range rows {
@@ -235,6 +297,17 @@ func evalSleepSignature(days map[string]map[sleepKey]*sleepWorkloadDay, windowSt
 			covered = true
 			if !isZombieUserNamespace(k.ns, syncedExact, syncedPrefixes) {
 				continue
+			}
+			// #827: the coverage floor gate — a USER workload observed for
+			// fewer than the floor's hours on either applicable leg makes
+			// the day unknown (the sparse-evidence defect: two observed
+			// hours must not read as complete coverage). System
+			// workloads don't gate: they carry no user-activity evidence.
+			if dayApplicable && int(r.bhObservedHours) < minBHHours {
+				return 0, 0, false, false
+			}
+			if int(r.offObservedHours) < minOffHours {
+				return 0, 0, false, false
 			}
 			// #760 (V15-10) + #826 (V16-02): the off-window p95 sum is the
 			// direct outside-BH measure — never all-minus-bh percentile
@@ -337,7 +410,7 @@ func evaluateSleepForHC(ctx context.Context, pool *pgxpool.Pool, c zombieCandida
 	}
 	syncedExact, syncedPrefixes := loadSyncedPlatformSet(ctx, pool, c.orgID)
 	bhPeak, outsidePeak, match, known := evalSleepSignature(signature, windowStart, windowEnd,
-		int64(p.SleepBHActivityFloorMC), int64(p.SleepOutsideBHIdleFloorMC), sched, syncedExact, syncedPrefixes)
+		int64(p.SleepBHActivityFloorMC), int64(p.SleepOutsideBHIdleFloorMC), p.SleepMinCoverageFrac, sched, syncedExact, syncedPrefixes)
 	if !known || !match {
 		return false, nil
 	}

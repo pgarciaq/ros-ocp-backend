@@ -51,6 +51,12 @@ type Policy struct {
 	// SleepOutsideBHIdleFloorMC is the daily per-workload CPU outside BH
 	// at or above which the signature breaks (idle-outside leg).
 	SleepOutsideBHIdleFloorMC int
+	// SleepMinCoverageFrac (#827): the minimum fraction of a window's
+	// hours that must be observed per leg for the day to count as
+	// covered — the H-leg minimum-observation precedent (HMinDataMinutes).
+	// A methodological floor, NOT a tenant settings field (#628: floors
+	// aren't tenant knobs). Unknown on shortfall, never zero-activity.
+	SleepMinCoverageFrac float64
 	// NodeFreshnessHours calibrates N to the daily node pipeline: 2h would
 	// permanently silence N (and thus the correlator) on daily uploads, so N
 	// freshness follows ingest cadence. Lab controls (#646) own recalibration.
@@ -76,6 +82,7 @@ func DefaultPolicy() Policy {
 		SleepWindowDays:           14,
 		SleepBHActivityFloorMC:    10,
 		SleepOutsideBHIdleFloorMC: 10,
+		SleepMinCoverageFrac:      0.5,
 		NodeFreshnessHours:        36,
 	}
 }
@@ -101,9 +108,11 @@ func PolicyFromSettings(s engine.HCPCorrelationSettings) Policy {
 		SleepWindowDays:           s.SleepWindowDays,
 		SleepBHActivityFloorMC:    s.SleepBHActivityFloorMC,
 		SleepOutsideBHIdleFloorMC: s.SleepOutsideBHIdleFloorMC,
-		ZombieShortRequiredDays:   s.ZombieShortRequiredDays,
-		ZombieIdleWindowDays:      s.ZombieIdleWindowDays,
-		NodeFreshnessHours:        DefaultPolicy().NodeFreshnessHours,
+		// #827/#628: a methodological floor, not a tenant knob.
+		SleepMinCoverageFrac:    DefaultPolicy().SleepMinCoverageFrac,
+		ZombieShortRequiredDays: s.ZombieShortRequiredDays,
+		ZombieIdleWindowDays:    s.ZombieIdleWindowDays,
+		NodeFreshnessHours:      DefaultPolicy().NodeFreshnessHours,
 	}
 }
 
