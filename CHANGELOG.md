@@ -73,6 +73,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Detail-only list filters no longer lie about counts and pagination ([#842](https://github.com/pgarciaq/ros-ocp-backend/issues/842)):**
+  the native container and namespace lists applied detail-only
+  predicates — term, engine, idle state, date ranges — AFTER page
+  selection: counts omitted them, and a page of nonmatching keys
+  swallowed the limit so `HasNext` reported no continuation while
+  matching records remained beyond the selected keys. Both the count
+  and the page-key queries now gate on a per-predicate eligibility
+  EXISTS against the recommendation table (identity-index-backed;
+  a strict no-op when no detail filters are present). Regressions
+  cover the truncation shape end-to-end on both lists, including
+  cursor continuation past the nonmatching page. Found by the phase17
+  branch review. (A pre-existing multi-value gpu_model filter binding
+  error, surfaced by this cycle's review, is tracked with #841.)
 - **Container-list detail expansion can no longer read another tenant's recommendations ([#840](https://github.com/pgarciaq/ros-ocp-backend/issues/840)):**
   the native container list's detail expansion joined recommendation
   rows through the CLUSTERS table's organization — never the
