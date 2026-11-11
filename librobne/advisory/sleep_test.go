@@ -439,7 +439,7 @@ func TestSleepCandidate_SparseCoverageIsUnknown(t *testing.T) {
 		}
 		cov[key][DayKey{NS: "demo-app", WL: "web"}] = LegCoverage{BHHours: 8, OffHours: 2}
 	}
-	got := SleepCandidateWithCoverage("hc-827", TierNonProd, SleepSums(bhRows, offRows), cov, testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	got := SleepCandidateWithCoverage("hc-827", TierNonProd, SleepSums(bhRows, offRows), cov, true, testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
 	assert.Nil(t, got,
 		"2-of-16 observed off-hours must read the day unknown — never complete coverage (#827)")
 }
@@ -470,7 +470,7 @@ func TestSleepCandidate_SparseBHCoverageIsUnknown(t *testing.T) {
 		}
 		cov[key][DayKey{NS: "demo-app", WL: "web"}] = LegCoverage{BHHours: 1, OffHours: 16}
 	}
-	got := SleepCandidateWithCoverage("hc-827", TierNonProd, SleepSums(bhRows, offRows), cov, testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	got := SleepCandidateWithCoverage("hc-827", TierNonProd, SleepSums(bhRows, offRows), cov, true, testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
 	assert.Nil(t, got,
 		"1-of-8 observed BH-hours must read the day unknown — the BH leg of the floor (#827)")
 }
@@ -518,12 +518,12 @@ func TestSleepCandidate_CoverageFloorBoundary(t *testing.T) {
 	}
 
 	// At the floor: 8 of 16 off-hours, 8 of 8 BH-hours → fires.
-	got := SleepCandidateWithCoverage("hc-827", TierNonProd, mkSums(), fullCov(8), sched, DefaultSleepPolicy(), 2, nil, nil, now)
+	got := SleepCandidateWithCoverage("hc-827", TierNonProd, mkSums(), fullCov(8), true, sched, DefaultSleepPolicy(), 2, nil, nil, now)
 	assert.NotNil(t, got,
 		"8-of-16 observed off-hours is exactly the 0.5 floor — the advisory must fire")
 
 	// One below: 7 of 16 → unknown.
-	got = SleepCandidateWithCoverage("hc-827", TierNonProd, mkSums(), fullCov(7), sched, DefaultSleepPolicy(), 2, nil, nil, now)
+	got = SleepCandidateWithCoverage("hc-827", TierNonProd, mkSums(), fullCov(7), true, sched, DefaultSleepPolicy(), 2, nil, nil, now)
 	assert.Nil(t, got,
 		"7-of-16 observed off-hours is below the 0.5 floor — the day must read unknown")
 
@@ -540,7 +540,7 @@ func TestSleepCandidate_CoverageFloorBoundary(t *testing.T) {
 		}
 		d = d.AddDate(0, 0, 1)
 	}
-	got = SleepCandidateWithCoverage("hc-827", TierNonProd, mkSums(), sparseDay, sched, DefaultSleepPolicy(), 2, nil, nil, now)
+	got = SleepCandidateWithCoverage("hc-827", TierNonProd, mkSums(), sparseDay, true, sched, DefaultSleepPolicy(), 2, nil, nil, now)
 	assert.Nil(t, got,
 		"one sparse day among fourteen full ones must read unknown — coverage is per day, never workload-wide")
 }
@@ -583,7 +583,7 @@ func TestSleepCandidate_OvernightScheduleCoverageFires(t *testing.T) {
 		bh := int16(bhPossible[d.UTC().Weekday()]) //nolint:gosec // G115: fixture lookup, values ≤ 24 by construction
 		cov[key][DayKey{NS: "demo-app", WL: "web"}] = LegCoverage{BHHours: bh, OffHours: 24 - bh}
 	}
-	got := SleepCandidateWithCoverage("hc-827", TierNonProd, SleepSums(bhRows, offRows), cov, sched, DefaultSleepPolicy(), 2, nil, nil, now)
+	got := SleepCandidateWithCoverage("hc-827", TierNonProd, SleepSums(bhRows, offRows), cov, true, sched, DefaultSleepPolicy(), 2, nil, nil, now)
 	assert.NotNil(t, got,
 		"complete observation on an overnight schedule must fire — the floor derives per-day possible hours, never the window length (#827 review F4/F5)")
 }
@@ -617,7 +617,44 @@ func TestSleepCandidate_FractionalWindowCoverageFires(t *testing.T) {
 		}
 		cov[key][DayKey{NS: "demo-app", WL: "web"}] = LegCoverage{BHHours: 23, OffHours: 1}
 	}
-	got := SleepCandidateWithCoverage("hc-827", TierNonProd, SleepSums(bhRows, offRows), cov, sched, DefaultSleepPolicy(), 2, nil, nil, now)
+	got := SleepCandidateWithCoverage("hc-827", TierNonProd, SleepSums(bhRows, offRows), cov, true, sched, DefaultSleepPolicy(), 2, nil, nil, now)
 	assert.NotNil(t, got,
 		"complete observation on a 22:30–22:00 schedule must fire — 1 observed off-hour meets the ceil(0.5·1) floor (#827 review F4)")
+}
+
+// TestSleepCandidate_UnattestedScheduleIsSilent (#831): stored evidence
+// split under a window other than the one this evaluation resolves must
+// not produce advice — the owner-approved silence-over-wrong trade. The
+// DB mode computes the flag from the rows' fingerprints; the CSV mode is
+// inherently attested.
+func TestSleepCandidate_UnattestedScheduleIsSilent(t *testing.T) {
+	now := time.Now()
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	var bhRows, offRows []types.KeyedDigest
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		bhRows = append(bhRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 300, CPUUsageP95MC: 300},
+		})
+		offRows = append(offRows, types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: "demo-app", Workload: "web", WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: 0, CPUUsageP95MC: 0},
+		})
+	}
+	cov := DayCoverage{}
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		key := d.UTC().Format("2006-01-02")
+		if cov[key] == nil {
+			cov[key] = map[DayKey]LegCoverage{}
+		}
+		cov[key][DayKey{NS: "demo-app", WL: "web"}] = LegCoverage{BHHours: 8, OffHours: 16}
+	}
+	// Attested: the signature evaluates normally (the quiet positive).
+	got := SleepCandidateWithCoverage("hc-831", TierNonProd, SleepSums(bhRows, offRows), cov, true, testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.NotNil(t, got, "attested evidence must evaluate normally")
+	// Unattested: silence, regardless of the otherwise-qualifying signature.
+	got = SleepCandidateWithCoverage("hc-831", TierNonProd, SleepSums(bhRows, offRows), cov, false, testSchedule(), DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"evidence split under a different window must read unknown — never wrong-window advice (#831)")
 }

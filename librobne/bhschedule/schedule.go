@@ -1,7 +1,10 @@
 package bhschedule
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -199,4 +202,37 @@ func parseHHMM(s string) (int, error) {
 		return 0, fmt.Errorf("time out of range %q", s)
 	}
 	return h*60 + m, nil
+}
+
+// Fingerprint returns a stable identity of the schedule fields that
+// determine the BH/off evidence split — timezone, day list, and window
+// bounds (#831). It is the attestation stamped on sleep-evidence rows at
+// ingest: the evaluator compares it against the CURRENTLY resolved
+// schedule and reads unknown on mismatch, so evidence split under an old
+// window can never support new advice under a changed one. Enabled-ness
+// is deliberately excluded: a disable/re-enable with unchanged fields
+// does not change the split.
+func Fingerprint(s Schedule) string {
+	startMin, startErr := parseHHMM(s.StartTime)
+	endMin, endErr := parseHHMM(s.EndTime)
+	if startErr != nil || endErr != nil {
+		// Unparseable bounds degrade identically on both sides (the
+		// writer skips disabled schedules; the evaluator's resolved row
+		// is enabled by query) — a shared canonical zero keeps the
+		// comparison total.
+		startMin, endMin = 0, 0
+	}
+	return FingerprintBounds(s.Timezone, s.Days, startMin, endMin)
+}
+
+// FingerprintBounds is Fingerprint over the minute form — the server's
+// resolved schedule carries minutes since midnight.
+func FingerprintBounds(timezone string, days []string, startMin, endMin int) string {
+	sorted := append([]string(nil), days...)
+	sort.Strings(sorted)
+	canonical := fmt.Sprintf("%s|%s|%02d:%02d-%02d:%02d",
+		timezone, strings.Join(sorted, ","),
+		startMin/60, startMin%60, endMin/60, endMin%60)
+	sum := sha256.Sum256([]byte(canonical))
+	return hex.EncodeToString(sum[:])
 }

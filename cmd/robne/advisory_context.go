@@ -159,8 +159,11 @@ func computeSleepAdvisory(fl fileLoad) []advisory.Advisory {
 	// containers. Computed by the CSV path from raw rows; read from the
 	// hours columns by the DB path. Empty map = no coverage info
 	// anywhere (legacy rows) — the floor skips those pairs.
+	// #831: the CSV path is inherently attested (split and evaluation
+	// share fl.bhSchedule); the DB path computes it from the rows'
+	// fingerprints against the current schedule.
 	got := advisory.SleepCandidateWithCoverage(
-		fl.clusterID, fl.hcTier, sums, fl.sleepCoverage, fl.bhSchedule, pol,
+		fl.clusterID, fl.hcTier, sums, fl.sleepCoverage, fl.scheduleAttested, fl.bhSchedule, pol,
 		fl.hcWorkerNodes, syncedExact, syncedPrefixes, fl.now)
 	if got == nil {
 		return nil

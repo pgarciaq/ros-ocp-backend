@@ -117,15 +117,16 @@ func seedSleepEvidence(t *testing.T, ctx context.Context, pool *pgxpool.Pool, or
 				INSERT INTO hcp_sleep_evidence (
 					org_id, cluster_uuid, namespace, workload, workload_type,
 					container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc,
-					bh_observed_hours, off_observed_hours
-				) VALUES ($1,$2,$3,$4,'Deployment','c0',$5,$6,$7,$8,$9,$10)
+					bh_observed_hours, off_observed_hours, schedule_fingerprint
+				) VALUES ($1,$2,$3,$4,'Deployment','c0',$5,$6,$7,$8,$9,$10,$11)
 				ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
 				DO UPDATE SET bh_cpu_p50_mc = EXCLUDED.bh_cpu_p50_mc,
 					off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc,
 					off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc,
 					bh_observed_hours = EXCLUDED.bh_observed_hours,
-					off_observed_hours = EXCLUDED.off_observed_hours`,
-				orgID, hc, k.ns, k.wl, day, bh, off, off95, bhH, offH)
+					off_observed_hours = EXCLUDED.off_observed_hours,
+					schedule_fingerprint = EXCLUDED.schedule_fingerprint`,
+				orgID, hc, k.ns, k.wl, day, bh, off, off95, bhH, offH, fixtureFingerprint())
 			require.NoError(t, err)
 		}
 	}
@@ -147,6 +148,27 @@ func seedSleepSnapshot(t *testing.T, ctx context.Context, pool *pgxpool.Pool, or
 
 // seedSleepSchedule writes a business-hours schedule row. namespace==""
 // means cluster scope; the sentinel UUID means org-wide default.
+// fixtureFingerprint returns the schedule attestation for evidence seeded
+// via seedSleepSchedule (UTC, Mon–Fri, 09:00–17:00). Computed through the
+// canonical fingerprint so it can never drift from the evaluator's.
+func fixtureFingerprint() string {
+	return bhschedule.Fingerprint(bhschedule.Schedule{
+		Timezone:  "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "09:00", EndTime: "17:00", Enabled: true,
+	})
+}
+
+// fixtureFingerprint7Day is fixtureFingerprint for the 7-day shape seeded
+// by seedSleepScheduleRow (the #826/#827 family).
+func fixtureFingerprint7Day() string {
+	return bhschedule.Fingerprint(bhschedule.Schedule{
+		Timezone:  "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
+		StartTime: "09:00", EndTime: "17:00", Enabled: true,
+	})
+}
+
 func seedSleepSchedule(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, cluster, namespace string) {
 	t.Helper()
 	_, err := pool.Exec(ctx, `
@@ -324,10 +346,10 @@ func TestSleepCandidate_NonDefaultFloors(t *testing.T) {
 	mkDays := func(bh, off int64) map[string]map[sleepKey]*sleepWorkloadDay {
 		return map[string]map[sleepKey]*sleepWorkloadDay{
 			start.Format("2006-01-02"): {
-				{"demo-app", "web"}: {bhCPU: bh, offCPU: off, bhMeasured: true, offMeasured: true, bhObservedHours: 0, offObservedHours: 24},
+				{"demo-app", "web"}: {bhCPU: bh, offCPU: off, bhMeasured: true, offMeasured: true, bhObservedHours: 0, offObservedHours: 24, scheduleAttested: true},
 			},
 			start.AddDate(0, 0, 1).Format("2006-01-02"): {
-				{"demo-app", "web"}: {bhCPU: bh, offCPU: off, bhMeasured: true, offMeasured: true, bhObservedHours: 0, offObservedHours: 24},
+				{"demo-app", "web"}: {bhCPU: bh, offCPU: off, bhMeasured: true, offMeasured: true, bhObservedHours: 0, offObservedHours: 24, scheduleAttested: true},
 			},
 		}
 	}
@@ -773,7 +795,7 @@ func TestSleepCandidate_LegacyRowsReadUnknown(t *testing.T) {
 
 func ptr(v int64) *int64 { return &v }
 
-func seedSleepScheduleRow(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, cluster string) {
+func seedSleepScheduleRow(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, cluster string) { //nolint:unparam // cluster pinned at sHC1 across the sleep fixtures by design — signature symmetry with the other seeders
 	t.Helper()
 	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
 		OrgID: orgID, ClusterUUID: cluster, Timezone: "UTC",
@@ -792,15 +814,16 @@ func seedEvidenceRow(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgI
 		INSERT INTO hcp_sleep_evidence (
 			org_id, cluster_uuid, namespace, workload, workload_type,
 			container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc,
-			bh_observed_hours, off_observed_hours
-		) VALUES ($1,$2,$3,$4,'Deployment',$5,$6,$7,$8,$9,$10,$11)
+			bh_observed_hours, off_observed_hours, schedule_fingerprint
+		) VALUES ($1,$2,$3,$4,'Deployment',$5,$6,$7,$8,$9,$10,$11,$12)
 		ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
 		DO UPDATE SET bh_cpu_p50_mc = EXCLUDED.bh_cpu_p50_mc,
 			off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc,
 			off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc,
 			bh_observed_hours = EXCLUDED.bh_observed_hours,
-			off_observed_hours = EXCLUDED.off_observed_hours`,
-		orgID, sHC1, "demo-app", wl, cn, day, bhP50, offP50, offP95, bhHours, offHours)
+			off_observed_hours = EXCLUDED.off_observed_hours,
+			schedule_fingerprint = EXCLUDED.schedule_fingerprint`,
+		orgID, sHC1, "demo-app", wl, cn, day, bhP50, offP50, offP95, bhHours, offHours, fixtureFingerprint7Day())
 	require.NoError(t, err)
 }
 
@@ -1012,4 +1035,243 @@ func TestSleepCandidate_FractionalWindowFullCoverageFires(t *testing.T) {
 	})
 	assert.NotEmpty(t, advs,
 		"complete observation on a 22:30–22:00 schedule must fire — 1 observed off-hour meets the ceil(0.5·1) floor (#827 review F4)")
+}
+
+// TestSleepCandidate_ScheduleChangeDoesNotWriteNewAdvice is #831's (V16-04)
+// end-to-end repro: 14 fully-observed days ingested under a 09:00–21:00
+// schedule whose 18:00–21:00 hours carry 2000m; the schedule is then changed
+// to 09:00–17:00 WITHOUT re-ingesting. The evidence legs were split under
+// the old window — the 18:00–21:00 activity sits in the BH leg — so the
+// current evaluator reads a quiet off leg and writes NEW high-confidence
+// advice with outside=0 over hours the workload is actually active in.
+// The prior #760 disposition bounded STALE advice; this is advice that was
+// never valid under any schedule the evidence attested to.
+func TestSleepCandidate_ScheduleChangeDoesNotWriteNewAdvice(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	start, _ := sleepWindow()
+	org := "v16-schedule-change"
+	weekdays := []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+
+	// Ingest under the OLD window: 09:00–21:00, busy 09:00–17:00 at 300m,
+	// 18:00–21:00 at 2000m, quiet overnight.
+	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
+		OrgID: org, ClusterUUID: sHC1, Timezone: "UTC", Days: weekdays,
+		StartTime: "09:00", EndTime: "21:00", Enabled: true,
+	}))
+	hours := map[int]float64{}
+	for h := 0; h < 24; h++ {
+		hours[h] = 0
+	}
+	for h := 9; h < 17; h++ {
+		hours[h] = 0.3
+	}
+	for h := 18; h < 21; h++ {
+		hours[h] = 2
+	}
+	require.NoError(t, ingestion.EnsureSLOPartitionsForMonth(ctx, pool, start))
+	_, err := ingestion.ParseAndDigestCSV(ctx, pool, strings.NewReader(rawSleepCSVHours(start, hours)), org, sHC1)
+	require.NoError(t, err)
+
+	// The schedule changes; no re-ingest. The reship is asynchronous and
+	// the evaluator must not treat old-split evidence as attested to the
+	// new window.
+	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
+		OrgID: org, ClusterUUID: sHC1, Timezone: "UTC", Days: weekdays,
+		StartTime: "09:00", EndTime: "17:00", Enabled: true,
+	}))
+	seedSleepSnapshot(t, ctx, pool, org, sHC1, hcTierNonProd, time.Now().UTC().Add(-time.Hour))
+	seedNodepoolRollup(t, ctx, pool, org, sHC1)
+	_, err = RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	advs := sleepAdvisories(t, ctx, pool, org)
+	assert.Empty(t, advs,
+		"a schedule change must not produce NEW advice from evidence split under the old window — the 18:00–21:00 activity sits in the old BH leg (#831 / V16-04)")
+}
+
+// scheduleChangeHarness runs #831's shape: 14 fully-observed days ingested
+// under the OLD schedule (busy 09:00–17:00 at 300m, 18:00–21:00 at 2000m,
+// quiet overnight), the schedule then changed to NEW, and — when reingest
+// is set — the same observations re-ingested under it. Returns the
+// advisories after one cycle.
+func scheduleChangeHarness(t *testing.T, org string, old, new bhschedule.Schedule, usage func(h int) float64, reingest bool) []map[string]any {
+	t.Helper()
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	start, _ := sleepWindow()
+	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, old))
+	hours := map[int]float64{}
+	for h := 0; h < 24; h++ {
+		hours[h] = usage(h)
+	}
+	require.NoError(t, ingestion.EnsureSLOPartitionsForMonth(ctx, pool, start))
+	csvText := rawSleepCSVHours(start, hours)
+	_, err := ingestion.ParseAndDigestCSV(ctx, pool, strings.NewReader(csvText), org, sHC1)
+	require.NoError(t, err)
+	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, new))
+	if reingest {
+		_, err := ingestion.ParseAndDigestCSV(ctx, pool, strings.NewReader(csvText), org, sHC1)
+		require.NoError(t, err)
+	}
+	seedSleepSnapshot(t, ctx, pool, org, sHC1, hcTierNonProd, time.Now().UTC().Add(-time.Hour))
+	seedNodepoolRollup(t, ctx, pool, org, sHC1)
+	_, err = RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	return sleepAdvisories(t, ctx, pool, org)
+}
+
+func stdScheduleFor(org, endTime string) bhschedule.Schedule {
+	return bhschedule.Schedule{
+		OrgID: org, ClusterUUID: sHC1, Timezone: "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"},
+		StartTime: "09:00", EndTime: endTime, Enabled: true,
+	}
+}
+
+// TestSleepCandidate_ScheduleDayListChangeReadsUnknown (#831): changing
+// the day list without re-ingesting must not produce new advice from
+// old-split evidence.
+func TestSleepCandidate_ScheduleDayListChangeReadsUnknown(t *testing.T) {
+	oldSched := stdScheduleFor("v16-daylist", "21:00")
+	newSched := stdScheduleFor("v16-daylist", "21:00")
+	newSched.Days = []string{"monday", "tuesday", "wednesday", "thursday", "friday"}
+	advs := scheduleChangeHarness(t, "v16-daylist", oldSched, newSched, scheduleChangeUsage, false)
+	assert.Empty(t, advs, "a day-list change must not produce new advice from old-split evidence (#831)")
+}
+
+// TestSleepCandidate_ScheduleTimezoneChangeReadsUnknown (#831): changing
+// the timezone shifts the effective window; old-split evidence is not
+// attested to it.
+func TestSleepCandidate_ScheduleTimezoneChangeReadsUnknown(t *testing.T) {
+	oldSched := stdScheduleFor("v16-tzchange", "21:00")
+	newSched := stdScheduleFor("v16-tzchange", "21:00")
+	newSched.Timezone = "America/New_York"
+	advs := scheduleChangeHarness(t, "v16-tzchange", oldSched, newSched, scheduleChangeUsage, false)
+	assert.Empty(t, advs, "a timezone change must not produce new advice from old-split evidence (#831)")
+}
+
+// scheduleChangeUsage is the #831 repro's activity shape: busy 09:00–17:00
+// at 300m, 18:00–21:00 at 2000m, quiet overnight.
+func scheduleChangeUsage(h int) float64 {
+	switch {
+	case h >= 9 && h < 17:
+		return 0.3
+	case h >= 18 && h < 21:
+		return 2
+	default:
+		return 0
+	}
+}
+
+// TestSleepCandidate_ReingestAfterScheduleChangeEvaluatesCorrectly (#831):
+// the gate is self-healing — re-ingesting the same observations under the
+// new schedule re-attests the evidence, and the evaluation then sees the
+// truth: the 18:00–21:00 activity now sits in the OFF leg where it
+// belongs, so the off-p95 veto correctly fires. The lifecycle is
+// wrongly-fires (pre-fix) → unknown (post-fix, no re-ingest) → correctly
+// vetoed (post-re-ingest).
+func TestSleepCandidate_ReingestAfterScheduleChangeEvaluatesCorrectly(t *testing.T) {
+	advs := scheduleChangeHarness(t, "v16-reingest", stdScheduleFor("v16-reingest", "21:00"), stdScheduleFor("v16-reingest", "17:00"), scheduleChangeUsage, true)
+	assert.Empty(t, advs,
+		"after re-ingestion the 18:00–21:00 activity is visible in the off leg and the off-p95 veto must fire — correctly no advice for an active-evening workload (#831)")
+}
+
+// TestSleepCandidate_ReingestAfterScheduleChangeRestoresAdvice (#831): the
+// positive recovery arc — a workload quiet outside the NEW window goes
+// unknown at the schedule change (unattested) and fires again once
+// re-ingestion re-attests its evidence. Two tests: SetupTestDB's
+// shared-pool mutex is held per test, so the two states cannot share one.
+func TestSleepCandidate_QuietWorkloadUnknownAtScheduleChange(t *testing.T) {
+	quiet := func(h int) float64 {
+		if h >= 9 && h < 17 {
+			return 0.3
+		}
+		return 0
+	}
+	noReingest := scheduleChangeHarness(t, "v16-reingest-pos", stdScheduleFor("v16-reingest-pos", "21:00"), stdScheduleFor("v16-reingest-pos", "17:00"), quiet, false)
+	assert.Empty(t, noReingest, "the schedule change alone must read unknown (unattested)")
+}
+
+func TestSleepCandidate_ReingestAfterScheduleChangeRestoresAdvice(t *testing.T) {
+	quiet := func(h int) float64 {
+		if h >= 9 && h < 17 {
+			return 0.3
+		}
+		return 0
+	}
+	reingested := scheduleChangeHarness(t, "v16-reingest-pos2", stdScheduleFor("v16-reingest-pos2", "21:00"), stdScheduleFor("v16-reingest-pos2", "17:00"), quiet, true)
+	assert.NotEmpty(t, reingested,
+		"re-ingestion under the new schedule must re-attest the evidence and restore the advisory for a workload quiet outside the new window (#831)")
+}
+
+// TestSleepCandidate_UnfingerprintedEvidenceReadsUnknown (#831, cold-start
+// round 4): rows written before the attestation column existed carry NULL
+// fingerprints and read unknown until re-ingestion.
+func TestSleepCandidate_UnfingerprintedEvidenceReadsUnknown(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	start, _ := sleepWindow()
+	org := testutil.TestOrgID + "-s-831-cold"
+	seedSleepScheduleRow(t, ctx, pool, org, sHC1)
+	seedSleepSnapshot(t, ctx, pool, org, sHC1, hcTierNonProd, time.Now().UTC().Add(-time.Hour))
+	seedNodepoolRollup(t, ctx, pool, org, sHC1)
+	// Fully-measured, fully-covered evidence rows with NULL fingerprints
+	// (the pre-#831 shape) — inserted directly, bypassing the writer.
+	for i := 0; i < 14; i++ {
+		day := start.AddDate(0, 0, i).Format("2006-01-02")
+		_, err := pool.Exec(ctx, `
+			INSERT INTO hcp_sleep_evidence (
+				org_id, cluster_uuid, namespace, workload, workload_type,
+				container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc,
+				bh_observed_hours, off_observed_hours
+			) VALUES ($1,$2,'demo-app','web','Deployment','c0',$3,$4,$5,$6,8,16)`,
+			org, sHC1, day, int64(300), int64(0), int64(0))
+		require.NoError(t, err)
+	}
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fired, "NULL-fingerprint rows (pre-#831) must read unattested → unknown, the cold-start round 4 (#831)")
+}
+
+// TestSleepCandidate_PartialFingerprintWindowReadsUnknown (#831): one
+// stale row among re-attested siblings must not be masked — the #826
+// completeness rule one level up.
+func TestSleepCandidate_PartialFingerprintWindowReadsUnknown(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	start, _ := sleepWindow()
+	org := testutil.TestOrgID + "-s-831-partial"
+	seedSleepScheduleRow(t, ctx, pool, org, sHC1)
+	seedSleepSnapshot(t, ctx, pool, org, sHC1, hcTierNonProd, time.Now().UTC().Add(-time.Hour))
+	seedNodepoolRollup(t, ctx, pool, org, sHC1)
+	staleFp := fixtureFingerprint() // a DIFFERENT window's identity
+	for i := 0; i < 14; i++ {
+		day := start.AddDate(0, 0, i).Format("2006-01-02")
+		fp := fixtureFingerprint7Day()
+		_, err := pool.Exec(ctx, `
+			INSERT INTO hcp_sleep_evidence (
+				org_id, cluster_uuid, namespace, workload, workload_type,
+				container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc,
+				bh_observed_hours, off_observed_hours, schedule_fingerprint
+			) VALUES ($1,$2,'demo-app','web','Deployment','c0',$3,$4,$5,$6,8,16,$7)`,
+			org, sHC1, day, int64(300), int64(0), int64(0), fp)
+		require.NoError(t, err)
+		// On day 5, the workload gains a SECOND container whose row is
+		// stale — same workload-day group, mixed fingerprints. An
+		// any-match rule would let the attested sibling mask the stale
+		// row (the #826 lesson); the window must read unknown.
+		if i == 5 {
+			_, err := pool.Exec(ctx, `
+				INSERT INTO hcp_sleep_evidence (
+					org_id, cluster_uuid, namespace, workload, workload_type,
+					container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc,
+					bh_observed_hours, off_observed_hours, schedule_fingerprint
+				) VALUES ($1,$2,'demo-app','web','Deployment','c1',$3,$4,$5,$6,8,16,$7)`,
+				org, sHC1, day, int64(300), int64(0), int64(0), staleFp)
+			require.NoError(t, err)
+		}
+	}
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fired, "a stale-fingerprint row must unattest its workload-day — an attested sibling cannot mask it (#831, the #826 completeness rule one level up)")
 }

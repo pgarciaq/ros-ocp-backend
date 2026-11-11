@@ -176,19 +176,25 @@ type DayCoverage map[string]map[DayKey]LegCoverage
 // SleepCandidate evaluates one hosted cluster. Returns nil when the HC does
 // not qualify (undeclared, no schedule, unknown days, or the signature
 // breaks) — silence, mirroring the server's never-fail-on-evidence posture.
-// Coverage is not evaluated by this entry point; use SleepCandidateWithCoverage
-// when the caller can supply observation hours (#827).
+// Coverage and schedule attestation are not evaluated by this entry point;
+// use SleepCandidateWithCoverage when the caller can supply observation
+// hours or reads stored evidence (#827, #831).
 func SleepCandidate(hcID, tier string, sums map[string]map[DayKey]DaySum, sched bhschedule.Schedule, pol SleepPolicy, workerNodes int, syncedExact map[string]bool, syncedPrefixes []string, now time.Time) *Advisory {
-	return SleepCandidateWithCoverage(hcID, tier, sums, nil, sched, pol, workerNodes, syncedExact, syncedPrefixes, now)
+	return SleepCandidateWithCoverage(hcID, tier, sums, nil, true, sched, pol, workerNodes, syncedExact, syncedPrefixes, now)
 }
 
 // SleepCandidateWithCoverage is SleepCandidate with the #827 observation
-// coverage input: per-leg observed hours keyed by (day, ns, wl). A user
-// workload observed for fewer than SleepMinCoverageFrac of a leg's window
-// hours makes the day unknown — never complete coverage over unobserved
-// hours. Pairs absent from cov carry no coverage info: the floor skips
-// them (legacy rows are already unmeasured via the p95 rule).
-func SleepCandidateWithCoverage(hcID, tier string, sums map[string]map[DayKey]DaySum, cov DayCoverage, sched bhschedule.Schedule, pol SleepPolicy, workerNodes int, syncedExact map[string]bool, syncedPrefixes []string, now time.Time) *Advisory {
+// coverage input (per-leg observed hours keyed by (day, ns, wl)) and the
+// #831 schedule-attestation input: scheduleAttested is false when any
+// stored evidence row was split under a window other than the one this
+// evaluation resolves — the day reads unknown, never wrong-window advice
+// (the owner-approved silence-over-wrong trade). The CSV mode is always
+// attested (split and evaluation share the current schedule); the DB mode
+// computes it from the rows' fingerprints.
+func SleepCandidateWithCoverage(hcID, tier string, sums map[string]map[DayKey]DaySum, cov DayCoverage, scheduleAttested bool, sched bhschedule.Schedule, pol SleepPolicy, workerNodes int, syncedExact map[string]bool, syncedPrefixes []string, now time.Time) *Advisory {
+	if !scheduleAttested {
+		return nil
+	}
 	if tier != TierNonProd {
 		return nil
 	}

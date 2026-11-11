@@ -1,0 +1,19 @@
+-- #831 (V16-04): sleep evidence gains the split-schedule attestation.
+-- Evidence legs are split at ingest under the cluster-scope schedule
+-- resolved at that moment; the table carried no record of WHICH window
+-- produced the split. When the schedule changed without re-ingestion,
+-- old-split evidence remained admissible: activity inside the newly
+-- proposed sleep hours sat in the old BH leg, invisible to every gate,
+-- and the evaluator wrote NEW high-confidence advice over hours the
+-- workload was actually active in (V16-04; the #760 disposition had
+-- bounded only STALE advice, not advice born wrong).
+--
+-- Every row now carries the fingerprint of the schedule that produced
+-- its split. The loader requires EVERY row in the evaluated window to
+-- match the CURRENTLY resolved schedule's fingerprint (the #826
+-- COUNT=COUNT(*) completeness rule — a re-ingested sibling cannot mask
+-- a stale row); any mismatch, including NULL (pre-#831 rows — cold-start
+-- round 4, the accepted trade), reads the day unknown, never
+-- zero-activity. The gate is self-healing: re-ingestion under the new
+-- schedule rewrites the rows and advice flows again.
+ALTER TABLE hcp_sleep_evidence ADD COLUMN schedule_fingerprint TEXT;

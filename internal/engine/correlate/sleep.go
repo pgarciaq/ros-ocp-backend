@@ -125,6 +125,9 @@ type sleepWorkloadDay struct {
 	// a fully-observed sibling cannot mask an under-observed one.
 	bhObservedHours  int16
 	offObservedHours int16
+	// scheduleAttested (#831): every container row of the workload-day
+	// carries the currently resolved schedule's fingerprint.
+	scheduleAttested bool
 }
 
 // loadSleepEvidence loads per (day, namespace, workload) CPU for both
@@ -142,17 +145,18 @@ type sleepWorkloadDay struct {
 // N-leg convention: cluster_uuid is the HC's own ID. All namespaces load;
 // the platform split happens in Go, shared with the zombie rule (including
 // the synced cost-groups set).
-func loadSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, hcID string, start, end time.Time) (map[string]map[sleepKey]*sleepWorkloadDay, error) {
+func loadSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, hcID string, start, end time.Time, scheduleFingerprint string) (map[string]map[sleepKey]*sleepWorkloadDay, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT bucket_date::text, namespace, workload,
 			SUM(bh_cpu_p50_mc), COUNT(bh_cpu_p50_mc),
 			SUM(off_cpu_p95_mc), COUNT(off_cpu_p95_mc), COUNT(*),
-			MIN(COALESCE(bh_observed_hours, 0)), MIN(COALESCE(off_observed_hours, 0))
+			MIN(COALESCE(bh_observed_hours, 0)), MIN(COALESCE(off_observed_hours, 0)),
+			NOT bool_or(schedule_fingerprint IS DISTINCT FROM $5)
 		FROM hcp_sleep_evidence
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date < $4
 		GROUP BY 1, 2, 3`,
-		orgID, hcID, start.Format("2006-01-02"), end.Format("2006-01-02"))
+		orgID, hcID, start.Format("2006-01-02"), end.Format("2006-01-02"), scheduleFingerprint)
 	if err != nil {
 		return nil, fmt.Errorf("load sleep evidence: %w", err)
 	}
@@ -163,7 +167,8 @@ func loadSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, hcID stri
 		var bhTotal, offTotal *int64
 		var bhN, offN, totalN int64
 		var bhHours, offHours *int16
-		if err := rows.Scan(&day, &ns, &wl, &bhTotal, &bhN, &offTotal, &offN, &totalN, &bhHours, &offHours); err != nil {
+		var attested bool
+		if err := rows.Scan(&day, &ns, &wl, &bhTotal, &bhN, &offTotal, &offN, &totalN, &bhHours, &offHours, &attested); err != nil {
 			return nil, fmt.Errorf("scan sleep evidence: %w", err)
 		}
 		if out[day] == nil {
@@ -205,6 +210,13 @@ func loadSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, hcID stri
 		if offHours != nil {
 			d.offObservedHours = *offHours
 		}
+		// #831: split-schedule attestation — every row of the workload-day
+		// must carry the CURRENTLY resolved schedule's fingerprint. Any
+		// mismatch (an old-window row, a mixed-version window, or NULL
+		// pre-#831 rows) reads unattested → unknown; a re-ingested sibling
+		// cannot mask a stale row (the #826 completeness rule, one level
+		// up). Self-healing on re-ingestion.
+		d.scheduleAttested = attested
 	}
 	return out, rows.Err()
 }
@@ -309,6 +321,16 @@ func evalSleepSignature(days map[string]map[sleepKey]*sleepWorkloadDay, windowSt
 			if int(r.offObservedHours) < minOffHours {
 				return 0, 0, false, false
 			}
+			// #831: the split-schedule attestation gate — a USER workload
+			// whose evidence was split under a different window than the
+			// one THIS evaluation resolves makes the day unknown. The
+			// old-window activity sits in the wrong leg, invisible to the
+			// activity and coverage gates; attestation is the only sound
+			// answer (the owner-approved silence-over-wrong trade: no new
+			// advice until re-ingestion rewrites the evidence).
+			if !r.scheduleAttested {
+				return 0, 0, false, false
+			}
 			// #760 (V15-10) + #826 (V16-02): the off-window p95 sum is the
 			// direct outside-BH measure — never all-minus-bh percentile
 			// subtraction (a constant workload reads outside=0 that way
@@ -404,7 +426,11 @@ func evaluateSleepForHC(ctx context.Context, pool *pgxpool.Pool, c zombieCandida
 	if err != nil || sched == nil {
 		return false, err
 	}
-	signature, err := loadSleepEvidence(ctx, pool, c.orgID, c.hcID, windowStart, windowEnd)
+	// #831: the fingerprint of the schedule the evidence must be attested
+	// to — the one THIS evaluation resolves. Any row split under a
+	// different window reads unknown.
+	fingerprint := bhschedule.FingerprintBounds(sched.Timezone, sched.Days, sched.StartMin, sched.EndMin)
+	signature, err := loadSleepEvidence(ctx, pool, c.orgID, c.hcID, windowStart, windowEnd, fingerprint)
 	if err != nil {
 		return false, err
 	}

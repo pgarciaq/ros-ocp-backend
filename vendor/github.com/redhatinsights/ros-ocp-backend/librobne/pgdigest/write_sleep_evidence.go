@@ -19,8 +19,11 @@ import (
 // for the other. Replacement upserts (idempotent replay). hours (#827)
 // carries the per-container-day observed-hour counts and rides the same
 // upsert — a write without hours would leave NULL coverage that reads as
-// unobserved and bypass the offline gate.
-func WriteSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, bh, off []types.KeyedDigest, hours []EvidenceHours) error {
+// unobserved and bypass the offline gate. scheduleFingerprint (#831) is
+// the identity of the schedule the legs were split under: written on
+// insert and REPLACED on conflict — leaving a stale fingerprint on
+// replaced evidence would falsely attest it to the old window.
+func WriteSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, bh, off []types.KeyedDigest, hours []EvidenceHours, scheduleFingerprint string) error {
 	type row struct {
 		ns, wl, wt, cn string
 		day            time.Time
@@ -90,15 +93,16 @@ func WriteSleepEvidence(ctx context.Context, pool *pgxpool.Pool, orgID, clusterU
 			INSERT INTO hcp_sleep_evidence (
 				org_id, cluster_uuid, namespace, workload, workload_type,
 				container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc,
-				bh_observed_hours, off_observed_hours
-			) VALUES ($1,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+				bh_observed_hours, off_observed_hours, schedule_fingerprint
+			) VALUES ($1,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
 			DO UPDATE SET bh_cpu_p50_mc = EXCLUDED.bh_cpu_p50_mc,
 				off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc,
 				off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc,
 				bh_observed_hours = EXCLUDED.bh_observed_hours,
-				off_observed_hours = EXCLUDED.off_observed_hours`,
-			orgID, clusterUUID, r.ns, r.wl, r.wt, r.cn, r.day, r.bhP50, r.offP50, r.offP95, r.bhH, r.offH)
+				off_observed_hours = EXCLUDED.off_observed_hours,
+				schedule_fingerprint = EXCLUDED.schedule_fingerprint`,
+			orgID, clusterUUID, r.ns, r.wl, r.wt, r.cn, r.day, r.bhP50, r.offP50, r.offP95, r.bhH, r.offH, scheduleFingerprint)
 		queued++
 		if queued >= 2000 {
 			if err := flushEvidenceBatch(ctx, pool, batch, queued); err != nil {

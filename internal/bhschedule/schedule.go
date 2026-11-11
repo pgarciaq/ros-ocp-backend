@@ -37,3 +37,16 @@ func ScheduleWeight(intervalStart time.Time, schedule Schedule) float64 {
 func ScheduleWeightForStream(intervalStart time.Time, schedule Schedule, allHoursStream bool) float64 {
 	return libbh.ScheduleWeightForStream(intervalStart, schedule, allHoursStream)
 }
+
+// Fingerprint returns the split-determining schedule identity (#831) —
+// see the librobne implementation. Stamped on sleep-evidence rows at
+// ingest; compared by the evaluator against the currently resolved
+// schedule.
+func Fingerprint(s Schedule) string {
+	return libbh.Fingerprint(s)
+}
+
+// FingerprintBounds is Fingerprint over the minute form.
+func FingerprintBounds(timezone string, days []string, startMin, endMin int) string {
+	return libbh.FingerprintBounds(timezone, days, startMin, endMin)
+}

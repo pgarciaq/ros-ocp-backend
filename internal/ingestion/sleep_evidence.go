@@ -37,6 +37,12 @@ type sleepEvidenceRow struct {
 	// must not read as complete evidence over an unobserved window.
 	BHObservedHours  *int16
 	OffObservedHours *int16
+	// ScheduleFingerprint (#831): the identity of the cluster-scope
+	// schedule THIS split was produced under. The evaluator compares it
+	// against the currently resolved schedule and reads unknown on
+	// mismatch — evidence split under an old window can never support
+	// new advice under a changed one.
+	ScheduleFingerprint string
 }
 
 // buildSleepEvidenceRows computes per-container-day in-window and off-window
@@ -66,6 +72,9 @@ func buildSleepEvidenceRows(grouped map[DigestKey][]metricSample, cache *bhsched
 		if !sched.Enabled {
 			continue
 		}
+		// #831: attest the split schedule on every row this group
+		// produces.
+		fingerprint := bhschedule.Fingerprint(sched)
 		var inWindow, offWindow []metricSample
 		for _, s := range group {
 			if bhschedule.InBusinessHours(s.IntervalStart, sched) {
@@ -100,6 +109,7 @@ func buildSleepEvidenceRows(grouped map[DigestKey][]metricSample, cache *bhsched
 		if row.BHCPUP50MC == nil && row.OffCPUP50MC == nil {
 			continue
 		}
+		row.ScheduleFingerprint = fingerprint
 		out = append(out, row)
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -177,17 +187,18 @@ func upsertSleepEvidenceOnSender(ctx context.Context, sender pgxBatchSender, gro
 			INSERT INTO hcp_sleep_evidence (
 				org_id, cluster_uuid, namespace, workload, workload_type,
 				container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc,
-				bh_observed_hours, off_observed_hours
-			) VALUES ($1,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+				bh_observed_hours, off_observed_hours, schedule_fingerprint
+			) VALUES ($1,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
 			DO UPDATE SET bh_cpu_p50_mc = EXCLUDED.bh_cpu_p50_mc,
 				off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc,
 				off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc,
 				bh_observed_hours = EXCLUDED.bh_observed_hours,
-				off_observed_hours = EXCLUDED.off_observed_hours`,
+				off_observed_hours = EXCLUDED.off_observed_hours,
+				schedule_fingerprint = EXCLUDED.schedule_fingerprint`,
 			r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType,
 			r.ContainerName, r.BucketDate, r.BHCPUP50MC, r.OffCPUP50MC, r.OffCPUP95MC,
-			r.BHObservedHours, r.OffObservedHours)
+			r.BHObservedHours, r.OffObservedHours, r.ScheduleFingerprint)
 		queued++
 		if queued >= maxSleepEvidenceBatch {
 			if err := flushQueuedBatch(ctx, sender, batch, queued); err != nil {

@@ -30,26 +30,41 @@ type EvidenceHours struct {
 	OffHours      int16
 }
 
-func ReadSleepEvidence(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time) (bh, off, offLegacy []types.KeyedDigest, hours []EvidenceHours, err error) {
+// ReadSleepEvidence loads the sleep evidence legs for the CLI's DB mode.
+// scheduleFingerprint (#831) is the CURRENTLY resolved schedule's identity;
+// the returned attested flag is true only when EVERY row in the window
+// carries it (NULL pre-#831 rows read unattested) — the caller suppresses
+// the advisory on mismatch, mirroring the server's gate.
+func ReadSleepEvidence(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time, scheduleFingerprint string) (bh, off, offLegacy []types.KeyedDigest, hours []EvidenceHours, attested bool, err error) {
 	rows, err := q.Query(ctx, `
 		SELECT namespace, workload, workload_type, container_name, bucket_date,
 			bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc,
-			bh_observed_hours, off_observed_hours
+			bh_observed_hours, off_observed_hours, schedule_fingerprint
 		FROM hcp_sleep_evidence
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date < $4`,
 		orgID, clusterUUID, start.Format("2006-01-02"), end.Format("2006-01-02"))
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, false, err
 	}
 	defer rows.Close()
+	attested = true
+	rowCount := 0
 	for rows.Next() {
 		var ns, wl, wt, cn string
 		var day time.Time
 		var bhP50, offP50, offP95 *int64
 		var bhH, offH *int16
-		if err := rows.Scan(&ns, &wl, &wt, &cn, &day, &bhP50, &offP50, &offP95, &bhH, &offH); err != nil {
-			return nil, nil, nil, nil, err
+		var fp *string
+		if err := rows.Scan(&ns, &wl, &wt, &cn, &day, &bhP50, &offP50, &offP95, &bhH, &offH, &fp); err != nil {
+			return nil, nil, nil, nil, false, err
+		}
+		rowCount++
+		// #831: any row not matching the current fingerprint (including
+		// NULL pre-#831 rows) unattests the whole window — a re-ingested
+		// sibling cannot mask a stale row.
+		if fp == nil || *fp != scheduleFingerprint {
+			attested = false
 		}
 		// #827: observed hours for EVERY row, COALESCEd to 0 when the
 		// columns are NULL (pre-#827 rows) — a missing measurement is 0
@@ -89,5 +104,8 @@ func ReadSleepEvidence(ctx context.Context, q Querier, orgID, clusterUUID string
 			})
 		}
 	}
-	return bh, off, offLegacy, hours, rows.Err()
+	if rowCount == 0 {
+		attested = false // no evidence at all — nothing attests the window
+	}
+	return bh, off, offLegacy, hours, attested, rows.Err()
 }

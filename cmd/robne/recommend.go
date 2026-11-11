@@ -551,11 +551,21 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 			// persisted alongside the digests above, then read back so the
 			// DB-output path exercises the same read the server performs.
 			if len(fl.sleepBHLegs) > 0 || len(fl.sleepOffLegs) > 0 {
-				if err := pgdigest.WriteSleepEvidence(ctx, pool, fl.orgID, fl.clusterID, fl.sleepBHLegs, fl.sleepOffLegs, fl.sleepContainerHours); err != nil {
+				if err := pgdigest.WriteSleepEvidence(ctx, pool, fl.orgID, fl.clusterID, fl.sleepBHLegs, fl.sleepOffLegs, fl.sleepContainerHours, bhschedule.Fingerprint(fl.bhSchedule)); err != nil {
 					return out, err
 				}
 			}
-			bhLegs, offLegs, offLegacyLegs, hoursRows, err := pgdigest.ReadSleepEvidence(ctx, pool, fl.orgID, fl.clusterID, start, end)
+			attested, err := false, error(nil)
+			// #831 review F3: attest (and read) exactly the sleep
+			// evaluation window — the digest lookback above spans up to
+			// 90 days, and a stale row outside the sleep window would
+			// suppress advice long after the sleep-relevant evidence
+			// rebuilt. Same window the advisory iterates (policy days,
+			// UTC-midnight truncated).
+			sleepPol := sleepPolicyFromYAML(fl.cfg.SleepAdvisory)
+			sleepEnd := now.UTC().Truncate(24 * time.Hour)
+			sleepStart := sleepEnd.AddDate(0, 0, -sleepPol.WindowDays)
+			bhLegs, offLegs, offLegacyLegs, hoursRows, attested, err := pgdigest.ReadSleepEvidence(ctx, pool, fl.orgID, fl.clusterID, sleepStart, sleepEnd, bhschedule.Fingerprint(fl.bhSchedule))
 			if err != nil {
 				return out, err
 			}
@@ -563,6 +573,7 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 			fl.sleepOffLegs = offLegs
 			fl.sleepOffLegacyLegs = offLegacyLegs
 			fl.sleepCoverage = coverageFromHoursRows(hoursRows)
+			fl.scheduleAttested = attested
 		}
 	} else {
 		out.ClusterID = fl.clusterID
@@ -863,6 +874,11 @@ type fileLoad struct {
 	sleepBHLegs        []types.KeyedDigest
 	sleepOffLegs       []types.KeyedDigest
 	sleepOffLegacyLegs []types.KeyedDigest
+	// scheduleAttested (#831): true when every stored evidence row was
+	// split under the currently resolved schedule (the CSV path sets it
+	// true — split and evaluation share the schedule; the DB path
+	// computes it from the rows' fingerprints).
+	scheduleAttested bool
 	// sleepContainerHours (#827): per-container-day observed-hour counts —
 	// the DB write's hours input.
 	sleepContainerHours []pgdigest.EvidenceHours
@@ -1119,6 +1135,7 @@ func loadBusinessHoursDigests(fl *fileLoad, csvLoaded csv.LoadResult) error {
 	// itself rides the DB write.
 	fl.sleepContainerHours = csvContainerHours(csvLoaded.Rows, s)
 	fl.sleepCoverage = coverageFromHoursRows(fl.sleepContainerHours)
+	fl.scheduleAttested = true
 	if pluginEnabled(fl.plugins, "container") || pluginEnabled(fl.plugins, "quota") || pluginEnabled(fl.plugins, "cluster-quota") {
 		digests, _, err := csv.DailyDigestsWeighted(csvLoaded.Rows, weightFn)
 		if err != nil {

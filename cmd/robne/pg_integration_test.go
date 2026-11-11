@@ -1316,8 +1316,24 @@ func TestWriteReadSleepEvidenceHoursRoundTrip(t *testing.T) {
 		}}
 	}
 
-	// First write: full coverage.
-	require.NoError(t, pgdigest.WriteSleepEvidence(ctx, pool, org, cluster, mk(300, 0), mk(0, 0), hoursFor(8, 16)))
+	// First write: full coverage, attested to schedule fingerprint A.
+	const fpA = "fp-schedule-a"
+	const fpB = "fp-schedule-b"
+	readBack := func(fp string) (bh, off, legacy []types.KeyedDigest, hours []pgdigest.EvidenceHours, attested bool) {
+		t.Helper()
+		var readErr error
+		bh, off, legacy, hours, attested, readErr = pgdigest.ReadSleepEvidence(ctx, pool, org, cluster,
+			day.AddDate(0, 0, -1), day.AddDate(0, 0, 1), fp)
+		require.NoError(t, readErr)
+		return
+	}
+	require.NoError(t, pgdigest.WriteSleepEvidence(ctx, pool, org, cluster, mk(300, 0), mk(0, 0), hoursFor(8, 16), fpA))
+	if _, _, _, _, attested := readBack(fpA); !attested {
+		t.Error("rows written under fingerprint A must read attested against A (#831 review F1)")
+	}
+	if _, _, _, _, attested := readBack(fpB); attested {
+		t.Error("rows written under fingerprint A must read UNattested against B (#831 review F1)")
+	}
 	// A pre-#827 legacy sibling row: p50s only — no p95, no hours.
 	_, err := pool.Exec(ctx, `
 		INSERT INTO hcp_sleep_evidence (
@@ -1327,14 +1343,9 @@ func TestWriteReadSleepEvidenceHoursRoundTrip(t *testing.T) {
 		org, cluster, "demo-app", "web", day, int64(50), int64(2000))
 	require.NoError(t, err)
 
-	readBack := func() (bh, off, legacy []types.KeyedDigest, hours []pgdigest.EvidenceHours) {
-		t.Helper()
-		bh, off, legacy, hours, err = pgdigest.ReadSleepEvidence(ctx, pool, org, cluster,
-			day.AddDate(0, 0, -1), day.AddDate(0, 0, 1))
-		require.NoError(t, err)
-		return
-	}
-	_, _, legacy, hours := readBack()
+	// The legacy sibling row (inserted below without a fingerprint)
+	// unattests any window it shares — asserted after that insert.
+	_, _, legacy, hours, _ := readBack("some-fingerprint")
 	require.Len(t, hours, 2)
 	byContainer := map[string]pgdigest.EvidenceHours{}
 	for _, h := range hours {
@@ -1348,6 +1359,10 @@ func TestWriteReadSleepEvidenceHoursRoundTrip(t *testing.T) {
 	assert.Equal(t, int16(0), byContainer["c1"].OffHours)
 	require.Len(t, legacy, 1,
 		"the legacy row (p95 NULL) still routes to the legacy slice for the #761 gate")
+	// The NULL-fingerprint legacy sibling unattests the shared window.
+	if _, _, _, _, attested := readBack(fpA); attested {
+		t.Error("a NULL-fingerprint row sharing the window must unattest it (#831)")
+	}
 	assert.Equal(t, "c1", legacy[0].Key.ContainerName)
 	// The workload-grain collapse: the sparse legacy sibling makes the
 	// workload-day read 0 coverage — the gate bites in DB mode.
@@ -1355,9 +1370,11 @@ func TestWriteReadSleepEvidenceHoursRoundTrip(t *testing.T) {
 	assert.Equal(t, advisory.LegCoverage{BHHours: 0, OffHours: 0},
 		cov[day.Format("2006-01-02")][advisory.DayKey{NS: "demo-app", WL: "web"}])
 
-	// Replacement write with sparse coverage must REPLACE the hours.
-	require.NoError(t, pgdigest.WriteSleepEvidence(ctx, pool, org, cluster, mk(300, 0), mk(0, 0), hoursFor(2, 2)))
-	_, _, _, hours = readBack()
+	// Replacement write with sparse coverage must REPLACE the hours AND
+	// the fingerprint — a stale fingerprint on replaced evidence would
+	// falsely attest it to the old window (#831 review F1).
+	require.NoError(t, pgdigest.WriteSleepEvidence(ctx, pool, org, cluster, mk(300, 0), mk(0, 0), hoursFor(2, 2), fpB))
+	_, _, _, hours, _ = readBack("some-fingerprint")
 	byContainer = map[string]pgdigest.EvidenceHours{}
 	for _, h := range hours {
 		byContainer[h.ContainerName] = h
