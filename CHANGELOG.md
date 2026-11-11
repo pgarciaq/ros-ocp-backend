@@ -73,6 +73,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Container-list detail expansion can no longer read another tenant's recommendations ([#840](https://github.com/pgarciaq/ros-ocp-backend/issues/840)):**
+  the native container list's detail expansion joined recommendation
+  rows through the CLUSTERS table's organization — never the
+  recommendation row's own — and cluster UUIDs are not globally unique,
+  so another organization's rows for a co-registered cluster could join
+  the expansion by container identity alone, leaking cross-tenant
+  recommendation variants into the caller's serialized result. Both
+  detail expansions (the live keys path and the dormant DISTINCT
+  fallback) now filter by the recommendation row's org_id — the rule
+  the file's own documentation states and every other query site
+  already followed. Regression: two organizations sharing a cluster
+  UUID with identical container identities; the org-scope test suite
+  additionally now asserts the qualified predicate. Found by the
+  phase17 branch review (tenant isolation, the hand-off blocker).
 - **A schedule change can no longer produce sleep advice from evidence split under the old window ([#831](https://github.com/pgarciaq/ros-ocp-backend/issues/831)):**
   sleep-evidence legs are split at ingest under the schedule resolved
   at that moment, and nothing recorded which window produced the
