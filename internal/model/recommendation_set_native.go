@@ -511,6 +511,13 @@ func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listop
 	detailQuery := db.Table("recommendation_sets rs").
 		Select(nativeDetailSelect+", page.ros_container_page_sort").
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid AND c.org_id = ?`, orgID).
+		// #840 (branch review): the clusters join constrains the CLUSTER
+		// row's org, never the RECOMMENDATION row's — and cluster_uuid is
+		// not globally unique (migration 191), so another org's rows for a
+		// co-registered UUID joined this expansion by identity alone. The
+		// file's own rule (see the header): every detail lookup MUST filter
+		// by recommendation_sets.org_id.
+		Where("rs.org_id = ?", orgID).
 		Joins(`JOIN (?) page ON page.cluster_uuid = rs.cluster_uuid
 			AND page.namespace = rs.namespace
 			AND page.workload = rs.workload
@@ -601,6 +608,9 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 	detailQuery := db.Table("recommendation_sets rs").
 		Select(nativeDetailSelect+", page.ros_container_page_sort").
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid AND c.org_id = ?`, orgID).
+		// #840: same rule as the keys path above — the page subquery is
+		// org-scoped, but this re-join is by identity only.
+		Where("rs.org_id = ?", orgID).
 		Joins(`JOIN (?) page ON page.cluster_uuid = rs.cluster_uuid
 			AND page.namespace = rs.namespace
 			AND page.workload = rs.workload

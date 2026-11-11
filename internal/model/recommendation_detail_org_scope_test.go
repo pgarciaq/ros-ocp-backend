@@ -52,6 +52,11 @@ func TestDetailQueries_ScopeByOrgID(t *testing.T) {
 		assert.Contains(t, sql, orgID)
 		assert.Contains(t, sql, recID)
 		assert.NotContains(t, strings.ToLower(sql), "rh_accounts")
+		// #840 review W2: the qualified predicate — the clusters join alone
+		// supplies a bare org_id and the org value, so an unqualified
+		// assertion passes with the recommendation row unconstrained (the
+		// tenant-isolation bug shape this suite exists to catch).
+		assert.Contains(t, sql, "rs.org_id = ")
 	})
 
 	t.Run("native namespace detail", func(t *testing.T) {

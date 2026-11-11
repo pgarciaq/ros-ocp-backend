@@ -561,3 +561,64 @@ func TestGetNativeRecommendations_StaleFilter_CountConsistency(t *testing.T) {
 		})
 	}
 }
+
+// TestGetNativeRecommendations_DetailExpansionScopesByOrgID is #840's
+// regression (branch-review finding 1): the container-list detail expansion
+// joined recommendation_sets through the CLUSTERS row's org — never
+// rs.org_id — so org B's rows for a cluster UUID also registered by org A
+// (cluster_uuid is not globally unique, migration 191) leaked into org A's
+// expansion. The existing org-scope test covers single-record detail
+// builders, not the list expansion: that is how the bug lived under a green
+// suite.
+func TestGetNativeRecommendations_DetailExpansionScopesByOrgID(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster")
+
+	// Org B registers the SAME cluster UUID under its own tenant — the
+	// schema permits it (the clusters unique key is tenant-scoped).
+	orgB := testutil.TestOrgID + "-b"
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (2, $1) ON CONFLICT DO NOTHING`, orgB)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (2, $1, 'org-b-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	// Org A's real pipeline: digests -> recommendations -> org keys.
+	start := testutil.RecentStart()
+	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
+	end := start.AddDate(0, 0, 6)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, end, engine.OOMConfig{})
+	require.NoError(t, err)
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
+	require.NotEmpty(t, recs)
+	first := recs[0]
+
+	// Org B's row: the SAME cluster UUID and container identity, a term
+	// org A's pipeline never produces, through the production writer. The
+	// rogue_term key appearing in org A's result IS the leak —
+	// unambiguous and order-independent (A's own long/performance rows
+	// legitimately exist and must not be conflated with it).
+	rogue := first
+	rogue.OrgID = orgB
+	rogue.Term = "rogue"
+	rogue.Engine = "cost"
+	rogue.RecCPURequestMC = 9000
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, []engine.ContainerRec{rogue}))
+
+	queryParams := map[string]interface{}{"rs.stale = ?": false}
+	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
+	require.NoError(t, err)
+	require.NotEmpty(t, page.Results, "org A's own recommendation must be present (control)")
+
+	for _, r := range page.Results {
+		_, hasRogue := r.Recommendations["rogue_term"]
+		assert.False(t, hasRogue,
+			"org B's rogue_term variant must not appear in org A's list — the detail expansion must scope rs by org_id (#840)")
+		short, hasShort := r.Recommendations["short_term"]
+		if assert.True(t, hasShort, "org A's own short-term variant must be present (control)") {
+			assert.NotNil(t, short.Cost, "org A's own cost-engine variant must be present (control)")
+		}
+	}
+}
