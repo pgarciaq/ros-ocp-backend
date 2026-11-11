@@ -73,6 +73,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Namespace numeric sorts no longer order lexicographically ([#843](https://github.com/pgarciaq/ros-ocp-backend/issues/843)):**
+  the namespace list's page-sort key was cast to text before ordering,
+  so numeric sorts with different digit lengths compared as strings —
+  descending savings returned 2, 100, 10 instead of 100, 10, 2. A
+  numeric cast now applies to the page-subquery ordering, the detail
+  ordering, and the cursor seek when the sort expression targets a
+  numeric column (suffix detection including the legacy request
+  columns). Cursor continuations follow the numeric order across all
+  pages. Found by the phase17 branch review; the pre-existing
+  ascending-cursor NULL-anchor defect is filed separately (#850).
 - **Accepted category and engine filters no longer silently disappear ([#841](https://github.com/pgarciaq/ros-ocp-backend/issues/841)):**
   `filter[category]` and the container-side `filter[engine]` were
   accepted by the API layer but classified into neither query leg —
