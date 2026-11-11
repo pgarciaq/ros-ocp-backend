@@ -191,6 +191,34 @@ func applyDBTagFiltersToNSKeys(query *gorm.DB, orgID string, filters []TagFilter
 	return query
 }
 
+// isNumericNSSort reports whether the namespace sort expression targets a
+// numeric DB column whose text representation does not sort
+// lexicographically the same as the numeric value (#843 — the same
+// suffix-detection the container path uses).
+func isNumericNSSort(sortExpr string) bool {
+	numericSuffixes := []string{
+		"_cents", "_millicores", "_kib", "_bytes", "_days", "_pct",
+		"_current", // legacy request columns (cpu_request_current, memory_request_current) — #843 review F1
+	}
+	for _, s := range numericSuffixes {
+		if strings.HasSuffix(sortExpr, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// nsPageSortCol returns the SQL expression for ordering by
+// ros_ns_page_sort, applying a numeric cast when the underlying column
+// is numeric (#843 — mirrors the container's pageSortCol).
+func nsPageSortCol(alias string, numericSort bool) string {
+	col := alias + ".ros_ns_page_sort"
+	if numericSort {
+		return "(" + col + ")::numeric"
+	}
+	return col
+}
+
 // nativeNSSortUsesOrgKeysOnly reports whether sortExpr only references onk/c columns.
 func nativeNSSortUsesOrgKeysOnly(sortExpr string) bool {
 	return !strings.Contains(sortExpr, "ns.")
@@ -319,10 +347,11 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 		pageKeys = pageKeys.Order(nativeNSKeysDistinctOnOrder(pageSortExpr, orderHow))
 	}
 
+	numSort := isNumericNSSort(sortExpr)
 	pageSubquery := db.Table("(?) AS page", pageKeys).
 		Select("page.cluster_uuid, page.namespace_name, page.ros_ns_page_sort").
-		Order(nativeNSKeysSubqueryPageOrder(orderHow))
-	pageSubquery = applyNativeNSPageSeekOnPageKeys(pageSubquery, opts, orderHow)
+		Order(nativeNSKeysSubqueryPageOrder(orderHow, numSort))
+	pageSubquery = applyNativeNSPageSeekOnPageKeys(pageSubquery, opts, orderHow, numSort)
 	if !opts.HasCursor {
 		pageSubquery = pageSubquery.Offset(opts.Offset)
 	}
@@ -338,7 +367,7 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 		Where("ns.org_id = ?", orgID).
 		Where("ns.term IS NOT NULL")
 	detailQuery = applyNSQueryParams(detailQuery, detailParams)
-	sqlRows, err := detailQuery.Order(nativeNSKeysDetailOrder(orderHow)).Rows()
+	sqlRows, err := detailQuery.Order(nativeNSKeysDetailOrder(orderHow, numSort)).Rows()
 	if err != nil {
 		return NativeNamespaceListPage{}, err
 	}
@@ -379,12 +408,12 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 // nativeNSKeysDetailOrder preserves page order for the keys path detail query.
 // Uses ros_ns_page_sort (text cast) instead of ros_ns_page_sort_raw (typed) because
 // the keys path page subquery only selects ros_ns_page_sort.
-func nativeNSKeysDetailOrder(orderHow string) string {
+func nativeNSKeysDetailOrder(orderHow string, numericSort bool) string {
 	nulls := "NULLS FIRST"
 	if orderHow == listoptions.OrderDesc {
 		nulls = "NULLS LAST"
 	}
-	return fmt.Sprintf("page.ros_ns_page_sort %s %s, page.cluster_uuid, page.namespace_name, ns.term, ns.engine", orderHow, nulls)
+	return fmt.Sprintf("%s %s %s, page.cluster_uuid, page.namespace_name, ns.term, ns.engine", nsPageSortCol("page", numericSort), orderHow, nulls)
 }
 
 // nativeNSKeysPageOrder orders org_namespace_keys rows for direct pagination (identity sorts).
@@ -411,14 +440,14 @@ func nativeNSKeysDistinctOnOrder(sortExpr, orderHow string) string {
 }
 
 // nativeNSKeysSubqueryPageOrder orders the page subquery after DISTINCT ON deduplication.
-func nativeNSKeysSubqueryPageOrder(orderHow string) string {
+func nativeNSKeysSubqueryPageOrder(orderHow string, numericSort bool) string {
 	nulls := "NULLS FIRST"
 	if orderHow == listoptions.OrderDesc {
 		nulls = "NULLS LAST"
 	}
 	return fmt.Sprintf(
-		"page.ros_ns_page_sort %s %s, page.cluster_uuid, page.namespace_name",
-		orderHow, nulls,
+		"%s %s %s, page.cluster_uuid, page.namespace_name",
+		nsPageSortCol("page", numericSort), orderHow, nulls,
 	)
 }
 
@@ -459,12 +488,12 @@ func applyNativeNSKeysPageSeek(query *gorm.DB, opts listoptions.ListOptions, sor
 }
 
 // applyNativeNSPageSeekOnPageKeys applies cursor-based seek on the page subquery for the keys path.
-func applyNativeNSPageSeekOnPageKeys(query *gorm.DB, opts listoptions.ListOptions, orderHow string) *gorm.DB {
+func applyNativeNSPageSeekOnPageKeys(query *gorm.DB, opts listoptions.ListOptions, orderHow string, numericSort bool) *gorm.DB {
 	if !opts.HasCursor {
 		return query
 	}
 	if opts.AfterNSSortPresent {
-		sortCol := "page.ros_ns_page_sort"
+		sortCol := nsPageSortCol("page", numericSort)
 		tie := "(page.cluster_uuid, page.namespace_name)"
 		sortValue := opts.AfterNSSortValue
 		clusterUUID := opts.AfterNSClusterUUID
