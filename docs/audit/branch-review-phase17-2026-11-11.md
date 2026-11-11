@@ -258,4 +258,16 @@ No source files were modified.
 
 ---
 
-*Findings tracker: see the phase17 branch-review remediation tracker issue. The residue adjudication companion report records the pre-rebase phase-branch reconciliation.*
+## Issue links
+
+- Finding 1 (tenant isolation, **P1 blocker**): [#840](https://github.com/pgarciaq/ros-ocp-backend/issues/840)
+- Finding 2 (dropped category/engine filters): [#841](https://github.com/pgarciaq/ros-ocp-backend/issues/841)
+- Finding 3 (post-pagination detail filters): [#842](https://github.com/pgarciaq/ros-ocp-backend/issues/842)
+- Finding 4 (lexicographic namespace numeric sort): [#843](https://github.com/pgarciaq/ros-ocp-backend/issues/843)
+- Finding 5 (legacy-column sort aliases): [#844](https://github.com/pgarciaq/ros-ocp-backend/issues/844)
+- Finding 6 (UTC weekday vs timezone-shifted schedules): [#845](https://github.com/pgarciaq/ros-ocp-backend/issues/845)
+- Finding 7 (populated down-migration failures): [#846](https://github.com/pgarciaq/ros-ocp-backend/issues/846)
+- Finding 8 (offline attestation platform parity): [#847](https://github.com/pgarciaq/ros-ocp-backend/issues/847)
+- Finding 9 (weekly reclaim omission): [#848](https://github.com/pgarciaq/ros-ocp-backend/issues/848)
+
+**Findings tracker:** [#849](https://github.com/pgarciaq/ros-ocp-backend/issues/849). The residue adjudication companion report records the pre-rebase phase-branch reconciliation (runtime clean; OpenAPI debt → #90/#605).
