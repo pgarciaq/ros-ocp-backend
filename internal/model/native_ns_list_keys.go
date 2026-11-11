@@ -36,6 +36,9 @@ var nativeNSDetailOnlyQueryKeys = map[string]struct{}{
 	"ns.engine IN ?":              {},
 	"ns.term IN ?":                {},
 	"ns.idle_state IN ?":          {},
+	// #841 (branch review): accepted-but-dropped — detail-only under
+	// #842's eligibility machinery.
+	"ns.category IN ?": {},
 }
 
 // usesOrgNamespaceKeys returns true when the query should route through
@@ -119,7 +122,7 @@ func ApplyQueryParamsToNSKeys(query *gorm.DB, queryParams map[string]interface{}
 			log.Warnf("ApplyQueryParamsToNSKeys: skipping unknown query key %q", key)
 			continue
 		}
-		query = query.Where(mappedKey, values)
+		query = query.Where(mappedKey, bindQueryParamValues(mappedKey, values)...)
 	}
 	return query
 }
@@ -505,16 +508,23 @@ func applyNativeNSDetailEligibility(query *gorm.DB, detailParams map[string]inte
 	prefix := "EXISTS (SELECT 1 FROM namespace_recommendation_sets ns WHERE ns.org_id = onk.org_id" +
 		" AND ns.cluster_uuid = onk.cluster_uuid AND ns.namespace_name = onk.namespace_name" +
 		" AND ns.term IS NOT NULL"
-	// One EXISTS per predicate with only that predicate's values — the
-	// production per-key binding. Every predicate is PARENTHESIZED so an
-	// OR composite cannot escape the identity scope (see the container
-	// helper). ns.stale is excluded — the keys leg already filters it via
-	// routing (usesOrgNamespaceKeys requires stale=false).
+	// ONE EXISTS containing ALL detail predicates — the conjunction must
+	// hold on ONE row (per-predicate EXISTSes could match different rows
+	// of the same identity; see the container helper). Each predicate is
+	// parenthesized; ns.stale is excluded (the keys routing already
+	// requires it).
+	var sb strings.Builder
+	sb.WriteString(prefix)
+	var args []interface{}
 	for key, values := range detailParams {
 		if key == "ns.stale = ?" {
 			continue
 		}
-		query = query.Where(prefix+" AND ("+key+"))", values)
+		sb.WriteString(" AND (" + key + ")")
+		args = append(args, bindQueryParamValues(key, values)...)
 	}
-	return query
+	if len(args) == 0 {
+		return query
+	}
+	return query.Where(sb.String()+")", args...)
 }

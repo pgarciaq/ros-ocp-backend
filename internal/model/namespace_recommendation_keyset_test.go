@@ -166,3 +166,50 @@ func TestGetNativeNamespaceRecommendations_DetailFilterEligibility(t *testing.T)
 	assert.True(t, page1.HasNext,
 		"HasNext must be true — ns-c's long-term row remains beyond the page (#842)")
 }
+
+// TestGetNativeNamespaceRecommendations_CategoryFilterWorks is #841's
+// namespace RED: "ns.category IN ?" is accepted but unclassified — the
+// filter is silently dropped.
+func TestGetNativeNamespaceRecommendations_CategoryFilterWorks(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.DB = testutil.OpenTestGORM(pool)
+	t.Cleanup(func() { database.DB = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	var recs []namespace.NamespaceRec
+	for _, spec := range []struct {
+		ns string
+	}{
+		{"ns-a"}, {"ns-b"},
+	} {
+		recs = append(recs, namespace.NamespaceRec{
+			OrgID:           testutil.TestOrgID,
+			ClusterUUID:     testutil.TestClusterUUID,
+			Namespace:       spec.ns,
+			Term:            "short",
+			Engine:          "cost",
+			RecCPURequestMC: 100,
+		})
+	}
+	require.NoError(t, engine.WriteNamespaceRecommendations(ctx, pool, recs))
+	require.NoError(t, model.RefreshOrgNamespaceKeys(ctx, pool, testutil.TestOrgID))
+	_, err = pool.Exec(ctx, `UPDATE namespace_recommendation_sets SET category = 'zombie' WHERE namespace_name = $1 AND org_id = $2`, "ns-a", testutil.TestOrgID)
+	require.NoError(t, err)
+
+	queryParams := map[string]interface{}{
+		"ns.stale = ?":     false,
+		"ns.category IN ?": []string{"zombie"},
+	}
+	opts := listoptions.ListOptions{Limit: 10, OrderBy: "namespace_recommendation_sets.namespace_name", OrderHow: listoptions.OrderAsc}
+	page, err := model.GetNativeNamespaceRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
+	require.NoError(t, err)
+	assert.Equal(t, 1, page.Count, "the namespace category filter must gate the count (#841)")
+	require.Len(t, page.Results, 1, "the namespace category filter must actually filter — baseline drops it (#841)")
+	assert.Equal(t, "ns-a", page.Results[0].Project)
+}

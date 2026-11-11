@@ -696,3 +696,208 @@ func TestGetNativeRecommendations_DetailFilterEligibility(t *testing.T) {
 		"the cursor continuation must reach ns-c — eligibility must not truncate traversal (#842)")
 	assert.False(t, page2.HasNext)
 }
+
+// TestGetNativeRecommendations_CategoryFilterWorks is #841's RED
+// (branch-review finding 2): filter[category] is accepted by the API
+// layer (utils.go builds "rs.category IN ?") but classified into NEITHER
+// leg — the remapper logs "skipping unknown query key" and the filter is
+// silently dropped. Two identities, one zombie-categorized and one not:
+// the category filter must actually filter. The engine filter
+// ("rs.engine IN ?") shares the defect on the container side.
+func TestGetNativeRecommendations_CategoryFilterWorks(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster")
+
+	// Two identities; the zombie-category is set post-write (the writer
+	// takes Category via ContainerRec — check the field exists).
+	zombie := engine.ContainerRec{
+		OrgID:           testutil.TestOrgID,
+		ClusterUUID:     testutil.TestClusterUUID,
+		Namespace:       "ns-zombie",
+		Workload:        "web",
+		WorkloadType:    testutil.TestWorkloadType,
+		ContainerName:   "c0",
+		Term:            "short",
+		Engine:          "cost",
+		RecCPURequestMC: 100,
+	}
+	optimized := zombie
+	optimized.Namespace = "ns-optimized"
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, []engine.ContainerRec{zombie, optimized}))
+
+	// Mark one as zombie directly — the category classification is
+	// engine-owned; the model test seeds the terminal state.
+	_, err := pool.Exec(ctx, `UPDATE recommendation_sets SET category = 'zombie' WHERE namespace = $1 AND org_id = $2`, "ns-zombie", testutil.TestOrgID)
+	require.NoError(t, err)
+
+	queryParams := map[string]interface{}{
+		"rs.stale = ?":     false,
+		"rs.category IN ?": []string{"zombie"},
+	}
+	opts := listoptions.ListOptions{Limit: 10, OrderBy: "recommendation_sets.namespace", OrderHow: listoptions.OrderAsc}
+	page, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, page.Count,
+		"the category filter must gate the count — only the zombie identity matches (#841)")
+	require.Len(t, page.Results, 1,
+		"the category filter must actually filter — baseline drops it silently (#841)")
+	assert.Equal(t, "ns-zombie", page.Results[0].Project)
+}
+
+// TestGetNativeRecommendations_EngineFilterWorks is #841's container
+// engine-filter RED: "rs.engine IN ?" is accepted but unclassified — the
+// filter is silently dropped (the namespace side's ns.engine is already
+// detail-only; the container side's is not).
+func TestGetNativeRecommendations_EngineFilterWorks(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster")
+
+	cost := engine.ContainerRec{
+		OrgID:           testutil.TestOrgID,
+		ClusterUUID:     testutil.TestClusterUUID,
+		Namespace:       "ns-a",
+		Workload:        "web",
+		WorkloadType:    testutil.TestWorkloadType,
+		ContainerName:   "c0",
+		Term:            "short",
+		Engine:          "cost",
+		RecCPURequestMC: 100,
+	}
+	perf := cost
+	perf.Namespace = "ns-b"
+	perf.Engine = "performance"
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, []engine.ContainerRec{cost, perf}))
+
+	queryParams := map[string]interface{}{
+		"rs.stale = ?":   false,
+		"rs.engine IN ?": []string{"performance"},
+	}
+	opts := listoptions.ListOptions{Limit: 10, OrderBy: "recommendation_sets.namespace", OrderHow: listoptions.OrderAsc}
+	page, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
+	require.NoError(t, err)
+	assert.Equal(t, 1, page.Count, "the engine filter must gate the count (#841)")
+	require.Len(t, page.Results, 1, "the engine filter must actually filter — baseline drops it (#841)")
+	assert.Equal(t, "ns-b", page.Results[0].Project)
+}
+
+// TestGetNativeRecommendations_CompositeDetailFilterEligibility is #841's
+// Scope-B RED (inherited from #842's review): the gpu_model_name
+// OR-composite (handlers.go:370–381 — multiple placeholders, one flat
+// value slice) errors with like_escape(record) in BOTH the detail query
+// and the eligibility EXISTS on the baseline — a pre-existing production
+// bug (stash-verified during #842's cycle). The binding fix distributes
+// positional values across placeholders. The empty-match case pins the
+// binding; the positive case pins the filtering.
+func TestGetNativeRecommendations_CompositeDetailFilterEligibility(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster")
+
+	gpu := engine.ContainerRec{
+		OrgID:           testutil.TestOrgID,
+		ClusterUUID:     testutil.TestClusterUUID,
+		Namespace:       "ns-gpu",
+		Workload:        "web",
+		WorkloadType:    testutil.TestWorkloadType,
+		ContainerName:   "c0",
+		Term:            "short",
+		Engine:          "cost",
+		RecCPURequestMC: 100,
+	}
+	plain := gpu
+	plain.Namespace = "ns-plain"
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, []engine.ContainerRec{gpu, plain}))
+	// GPU model is denormalized metadata (migration 000063) — seed the
+	// terminal state directly, as with the category.
+	_, err := pool.Exec(ctx, `UPDATE recommendation_sets SET gpu_model_name = 'NVIDIA A100' WHERE namespace = $1 AND org_id = $2`, "ns-gpu", testutil.TestOrgID)
+	require.NoError(t, err)
+
+	compositeKey := "(rs.gpu_model_name ILIKE ? ESCAPE '\\' OR rs.gpu_model_name ILIKE ? ESCAPE '\\')"
+
+	// Positive: values matching the seeded GPU model — the composite
+	// filter must bind cleanly AND filter to the GPU identity.
+	queryParams := map[string]interface{}{
+		"rs.stale = ?": false,
+		compositeKey:   []string{"%A100%", "%H100%"},
+	}
+	opts := listoptions.ListOptions{Limit: 10, OrderBy: "recommendation_sets.namespace", OrderHow: listoptions.OrderAsc}
+	page, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
+	require.NoError(t, err,
+		"the composite detail predicate must bind cleanly — positional distribution across placeholders, never a record argument (#841)")
+	_ = err
+	assert.Equal(t, 1, page.Count, "the composite filter matching one identity must count 1 (#841)")
+	require.Len(t, page.Results, 1)
+	assert.Equal(t, "ns-gpu", page.Results[0].Project)
+
+	// Empty-match: values matching nothing — count 0, no error.
+	queryParams[compositeKey] = []string{"%zzz-no-such-a%", "%zzz-no-such-b%"}
+	page, err = model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
+	require.NoError(t, err)
+	assert.Equal(t, 0, page.Count, "the composite filter matching nothing must zero the count (#841)")
+	assert.Empty(t, page.Results)
+}
+
+// TestGetNativeRecommendations_SplitRowEligibilityIsHonest is #841 review
+// F1's regression: per-predicate EXISTSes could match DIFFERENT rows of
+// the same identity — (engine=cost, category=zombie) and
+// (engine=performance, category=optimized) satisfy engine=performance AND
+// category=zombie across two rows while no single row does — counting the
+// identity but returning no detail. A single EXISTS over all predicates
+// requires the conjunction on ONE row, matching the detail query.
+func TestGetNativeRecommendations_SplitRowEligibilityIsHonest(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster")
+
+	// One identity with split predicates across two rows.
+	var recs []engine.ContainerRec
+	for _, spec := range []struct{ engine string }{
+		{"cost"}, {"performance"},
+	} {
+		recs = append(recs, engine.ContainerRec{
+			OrgID:           testutil.TestOrgID,
+			ClusterUUID:     testutil.TestClusterUUID,
+			Namespace:       "ns-split",
+			Workload:        "web",
+			WorkloadType:    testutil.TestWorkloadType,
+			ContainerName:   "c0",
+			Term:            "short",
+			Engine:          spec.engine,
+			RecCPURequestMC: 100,
+		})
+	}
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
+	_, err := pool.Exec(ctx, `UPDATE recommendation_sets SET category = 'zombie' WHERE namespace = $1 AND org_id = $2 AND engine = 'cost'`, "ns-split", testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `UPDATE recommendation_sets SET category = 'optimized' WHERE namespace = $1 AND org_id = $2 AND engine = 'performance'`, "ns-split", testutil.TestOrgID)
+	require.NoError(t, err)
+
+	// engine=performance AND category=zombie: no single row satisfies it.
+	queryParams := map[string]interface{}{
+		"rs.stale = ?":     false,
+		"rs.engine IN ?":   []string{"performance"},
+		"rs.category IN ?": []string{"zombie"},
+	}
+	opts := listoptions.ListOptions{Limit: 10, OrderBy: "recommendation_sets.namespace", OrderHow: listoptions.OrderAsc}
+	page, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
+	require.NoError(t, err)
+	assert.Equal(t, 0, page.Count,
+		"split-row satisfaction must not count — the conjunction must hold on ONE row, as the detail query requires (#841 review F1)")
+	assert.Empty(t, page.Results)
+
+	// Control: engine=performance AND category=optimized — one row does.
+	queryParams["rs.category IN ?"] = []string{"optimized"}
+	page, err = model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
+	require.NoError(t, err)
+	assert.Equal(t, 1, page.Count, "the single matching row must count (control)")
+	require.Len(t, page.Results, 1)
+	short := page.Results[0].Recommendations["short_term"]
+	require.NotNil(t, short.Performance, "the performance-engine variant must be returned (control)")
+}

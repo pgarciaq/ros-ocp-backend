@@ -36,6 +36,13 @@ var nativeRecDetailOnlyQueryKeys = map[string]struct{}{
 	"rs.idle_state IN ?":         {},
 	"rs.gpu_idle_state IN ?":     {},
 	"rs.term IN ?":               {},
+	// #841 (branch review): accepted-but-dropped filters — these are
+	// recommendation-dependent predicates and were classified into NEITHER
+	// leg, so the keys remapper logged "skipping unknown query key" and
+	// the filter silently disappeared. Detail-only classification puts
+	// them under #842's eligibility machinery.
+	"rs.engine IN ?":   {},
+	"rs.category IN ?": {},
 }
 
 func usesOrgContainerKeys(_ map[string]interface{}) bool {
@@ -117,7 +124,7 @@ func ApplyQueryParamsToKeys(query *gorm.DB, queryParams map[string]interface{}) 
 			log.Warnf("ApplyQueryParamsToKeys: skipping unknown query key %q", key)
 			continue
 		}
-		query = query.Where(mappedKey, values)
+		query = query.Where(mappedKey, bindQueryParamValues(mappedKey, values)...)
 	}
 	return query
 }
@@ -138,21 +145,40 @@ func applyNativeContainerDetailEligibility(query *gorm.DB, detailParams map[stri
 		" AND rs.cluster_uuid = ock.cluster_uuid AND rs.namespace = ock.namespace" +
 		" AND rs.workload = ock.workload AND rs.workload_type = ock.workload_type" +
 		" AND rs.container_name = ock.container_name"
-	// One EXISTS per predicate, each carrying only that predicate's
-	// values — the same per-key Where(key, values) binding the production
-	// detail query uses. AND across EXISTS ≡ AND within one for
-	// conjunctive combination. Every predicate is PARENTHESIZED inside
-	// the EXISTS: an unparenthesized OR would split the AND and let the
-	// second disjunct escape the identity scope (review finding — a
-	// tenant-scope bypass). rs.stale is EXCLUDED: the keys leg already
-	// filters ock.is_stale, so its eligibility EXISTS is redundant, and
-	// excluding it keeps the default request (stale + date range) from
-	// doubling that check.
+	// ONE EXISTS containing ALL detail predicates (#841 review F1):
+	// per-predicate EXISTSes could match DIFFERENT rows of the same
+	// identity — (engine=cost, category=zombie) and (engine=performance,
+	// category=optimized) satisfy engine=performance AND category=zombie
+	// across two rows while no single row does — counting and paging the
+	// identity but returning no detail. A single EXISTS requires the
+	// conjunction on ONE row, exactly what the detail query enforces.
+	// Each predicate is PARENTHESIZED: an unparenthesized OR would split
+	// the AND and let the second disjunct escape the identity scope
+	// (#842 review — a tenant-scope bypass). rs.stale is EXCLUDED — the
+	// keys leg already filters ock.is_stale; excluding it keeps the
+	// default request from doubling that check.
+	//
+	// Binding: predicates concatenate with their values in matching
+	// order — the distributor's per-key output is flattened into the
+	// combined argument list.
+	var sb strings.Builder
+	sb.WriteString(prefix)
+	var args []interface{}
 	for key, values := range detailParams {
 		if key == "rs.stale = ?" {
 			continue
 		}
-		query = query.Where(prefix+" AND ("+key+"))", values)
+		sb.WriteString(" AND (" + key + ")")
+		args = append(args, bindQueryParamValues(key, values)...)
 	}
-	return query
+	if len(args) == 0 {
+		return query
+	}
+	if len(args) == 0 {
+		return query
+	}
+	if len(args) == 0 {
+		return query
+	}
+	return query.Where(sb.String()+")", args...)
 }

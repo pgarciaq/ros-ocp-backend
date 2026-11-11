@@ -152,3 +152,42 @@ func isAllowedNativeNamespaceQueryKey(key string) bool {
 	}
 	return isCompositeOfAtoms(key, nativeNSFilterAtoms, []string{" OR ", " AND "})
 }
+
+// bindQueryParamValues distributes a query parameter's values across its
+// SQL placeholders the way GORM expects (#841, inherited from #842's
+// review): a key containing `IN ?` takes the slice as ONE argument
+// (GORM expands it into the IN list); a key with MULTIPLE positional
+// placeholders takes the flat slice distributed positionally (each `?`
+// gets one value — the shape handlers produce for OR-composites like
+// gpu_model_name); a single-placeholder scalar key takes the value
+// directly. The previous uniform Where(key, values) bound multi-
+// placeholder keys' flat slices as a single record argument
+// (like_escape(record) errors).
+func bindQueryParamValues(key string, values interface{}) []interface{} {
+	if values == nil {
+		return nil
+	}
+
+	// IN ? keys: the slice is the IN list — one argument.
+	if strings.Contains(key, "IN ?") {
+		return []interface{}{values}
+	}
+	// Positional keys: count top-level placeholders and distribute.
+	placeholders := strings.Count(key, "?")
+	if placeholders <= 1 {
+		return []interface{}{values}
+	}
+	switch v := values.(type) {
+	case []string:
+		if len(v) == placeholders {
+			args := make([]interface{}, placeholders)
+			for i, s := range v {
+				args[i] = s
+			}
+			return args
+		}
+		// Length mismatch: fall through to the single-arg binding and
+		// let the database report it — never silently redistribute.
+	}
+	return []interface{}{values}
+}

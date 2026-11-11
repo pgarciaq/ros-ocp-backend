@@ -733,7 +733,7 @@ func ApplyQueryParams(query *gorm.DB, queryParams map[string]interface{}) *gorm.
 			log.Warnf("ApplyQueryParams: skipping unknown query key %q", key)
 			continue
 		}
-		query = query.Where(key, values)
+		query = query.Where(key, bindQueryParamValues(key, values)...)
 	}
 	return query
 }
