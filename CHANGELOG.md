@@ -73,6 +73,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Accepted category and engine filters no longer silently disappear ([#841](https://github.com/pgarciaq/ros-ocp-backend/issues/841)):**
+  `filter[category]` and the container-side `filter[engine]` were
+  accepted by the API layer but classified into neither query leg —
+  the keys remapper logged "skipping unknown query key" and the filter
+  was silently dropped. All three keys (`rs.engine`, `rs.category`,
+  `ns.category`) are now classified as detail-only predicates, gating
+  counts, page selection, and rows consistently through the
+  eligibility machinery. The same cycle fixed a pre-existing
+  multi-value binding bug: composite filters (GPU model, project,
+  cluster, workload, container) with multiple SQL placeholders over
+  one flat value slice errored with a database function-not-exist
+  message — values now distribute positionally across placeholders on
+  every binding site, with `IN` filters preserving GORM's list
+  expansion. Found by the phase17 branch review; the eligibility
+  conjunction was additionally hardened to require all predicates on
+  ONE row (per-predicate existence could match different rows of the
+  same identity).
 - **Detail-only list filters no longer lie about counts and pagination ([#842](https://github.com/pgarciaq/ros-ocp-backend/issues/842)):**
   the native container and namespace lists applied detail-only
   predicates — term, engine, idle state, date ranges — AFTER page
