@@ -495,8 +495,14 @@ func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listop
 	if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
 		countQuery = ApplyTagFiltersToKeys(countQuery, orgID, tagFilters)
 	}
+	// #842 (branch review): detail-only predicates must gate ELIGIBILITY —
+	// counts and page selection — not merely filter rows after the page is
+	// chosen. Without this, a page of nonmatching keys swallows the limit
+	// and HasNext reports no continuation while matches remain.
+	countQuery = applyNativeContainerDetailEligibility(countQuery, detailParams)
 
 	pageKeysQuery := buildNativeContainerKeysPageQuery(db, orgID, opts, keysParams, queryParams, userPerms, sortExpr, sortFilter, orderHow)
+	pageKeysQuery = applyNativeContainerDetailEligibility(pageKeysQuery, detailParams)
 	numSort := isNumericPageSort(sortExpr)
 
 	pageSubquery := db.Table("(?) AS page", pageKeysQuery).

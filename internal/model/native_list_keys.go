@@ -121,3 +121,38 @@ func ApplyQueryParamsToKeys(query *gorm.DB, queryParams map[string]interface{}) 
 	}
 	return query
 }
+
+// applyNativeContainerDetailEligibility gates key-table rows on the
+// EXISTENCE of a matching recommendation row carrying the detail-only
+// predicates (#842, branch review finding 3): counts and page selection
+// must see the same eligibility the detail query enforces, or a page of
+// nonmatching keys swallows the limit and HasNext reports no continuation
+// while matches remain beyond the selected keys. The identity shape
+// mirrors nativeContainerRSJoin. No-op when no detail predicates exist —
+// the common unfiltered path pays nothing.
+func applyNativeContainerDetailEligibility(query *gorm.DB, detailParams map[string]interface{}) *gorm.DB {
+	if len(detailParams) == 0 {
+		return query
+	}
+	prefix := "EXISTS (SELECT 1 FROM recommendation_sets rs WHERE rs.org_id = ock.org_id" +
+		" AND rs.cluster_uuid = ock.cluster_uuid AND rs.namespace = ock.namespace" +
+		" AND rs.workload = ock.workload AND rs.workload_type = ock.workload_type" +
+		" AND rs.container_name = ock.container_name"
+	// One EXISTS per predicate, each carrying only that predicate's
+	// values — the same per-key Where(key, values) binding the production
+	// detail query uses. AND across EXISTS ≡ AND within one for
+	// conjunctive combination. Every predicate is PARENTHESIZED inside
+	// the EXISTS: an unparenthesized OR would split the AND and let the
+	// second disjunct escape the identity scope (review finding — a
+	// tenant-scope bypass). rs.stale is EXCLUDED: the keys leg already
+	// filters ock.is_stale, so its eligibility EXISTS is redundant, and
+	// excluding it keeps the default request (stale + date range) from
+	// doubling that check.
+	for key, values := range detailParams {
+		if key == "rs.stale = ?" {
+			continue
+		}
+		query = query.Where(prefix+" AND ("+key+"))", values)
+	}
+	return query
+}

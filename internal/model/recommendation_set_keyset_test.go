@@ -622,3 +622,77 @@ func TestGetNativeRecommendations_DetailExpansionScopesByOrgID(t *testing.T) {
 		}
 	}
 }
+
+// TestGetNativeRecommendations_DetailFilterEligibility is #842's RED
+// (branch-review finding 3): detail-only predicates applied AFTER
+// pagination make counts and HasNext lie. Three identities sorted a, b, c —
+// a carries only short-term rows, b and c only long-term. Filtering
+// term=long with limit 1 must count 2, return b, and report HasNext (c
+// remains); the baseline counts 3, selects key a, returns nothing, and
+// reports HasNext=false while matches exist beyond the selected keys.
+func TestGetNativeRecommendations_DetailFilterEligibility(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster")
+
+	var recs []engine.ContainerRec
+	for _, spec := range []struct {
+		ns   string
+		term string
+	}{
+		{"ns-a", "short"},
+		{"ns-b", "long"},
+		{"ns-c", "long"},
+	} {
+		recs = append(recs, engine.ContainerRec{
+			OrgID:           testutil.TestOrgID,
+			ClusterUUID:     testutil.TestClusterUUID,
+			Namespace:       spec.ns,
+			Workload:        "web",
+			WorkloadType:    testutil.TestWorkloadType,
+			ContainerName:   "c0",
+			Term:            spec.term,
+			Engine:          "cost",
+			RecCPURequestMC: 100,
+		})
+	}
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
+
+	queryParams := map[string]interface{}{
+		"rs.stale = ?": false,
+		"rs.term IN ?": []string{"long"},
+	}
+	opts := listoptions.ListOptions{
+		Limit:    1,
+		OrderBy:  "recommendation_sets.namespace",
+		OrderHow: listoptions.OrderAsc,
+	}
+	page1, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, page1.Count,
+		"the count must apply the term filter — only b and c carry long-term rows (#842)")
+	require.Len(t, page1.Results, 1,
+		"the page must select an ELIGIBLE key — b, not the nonmatching a (#842)")
+	assert.Equal(t, "ns-b", page1.Results[0].Project)
+	assert.True(t, page1.HasNext,
+		"HasNext must be true — c's long-term row remains beyond the page (#842)")
+
+	// The cursor continuation must reach c — the traversal does not end on
+	// the nonmatching key.
+	opts.HasCursor = true
+	opts.AfterNamespace = page1.LastAnchor.Namespace
+	opts.AfterWorkload = page1.LastAnchor.Workload
+	opts.AfterWorkloadType = page1.LastAnchor.WorkloadType
+	opts.AfterContainer = page1.LastAnchor.ContainerName
+	opts.AfterContainerClusterUUID = page1.LastAnchor.ClusterUUID
+	opts.AfterContainerSortPresent = true
+	opts.AfterContainerSortValue = page1.LastAnchor.SortValue
+	page2, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
+	require.NoError(t, err)
+	require.Len(t, page2.Results, 1)
+	assert.Equal(t, "ns-c", page2.Results[0].Project,
+		"the cursor continuation must reach ns-c — eligibility must not truncate traversal (#842)")
+	assert.False(t, page2.HasNext)
+}

@@ -276,6 +276,9 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 	if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
 		countQuery = ApplyTagFiltersToNSKeys(countQuery, orgID, tagFilters)
 	}
+	// #842 (branch review): detail-only predicates gate ELIGIBILITY — counts
+	// and page selection — not merely rows after the page is chosen.
+	countQuery = applyNativeNSDetailEligibility(countQuery, detailParams)
 
 	// 2. Page keys query
 	pageKeys := db.Table("org_namespace_keys onk").
@@ -286,6 +289,7 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 	if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
 		pageKeys = ApplyTagFiltersToNSKeys(pageKeys, orgID, tagFilters)
 	}
+	pageKeys = applyNativeNSDetailEligibility(pageKeys, detailParams)
 
 	keysOnlySort := nativeNSSortUsesOrgKeysOnly(sortExpr)
 	var pageSortExpr string
@@ -486,4 +490,31 @@ func applyNativeNSPageSeekOnPageKeys(query *gorm.DB, opts listoptions.ListOption
 		return query.Where(clause, args...)
 	}
 	return query.Where("(page.namespace_name, page.cluster_uuid) > (?, ?)", opts.AfterNamespaceName, opts.AfterNSClusterUUID)
+}
+
+// applyNativeNSDetailEligibility gates org_namespace_keys rows on the
+// EXISTENCE of a matching namespace_recommendation_sets row carrying the
+// detail-only predicates (#842, branch review finding 3): counts and page
+// selection must see the same eligibility the detail query enforces. The
+// identity shape mirrors nativeNSKeysNRSJoin. No-op when no detail
+// predicates exist.
+func applyNativeNSDetailEligibility(query *gorm.DB, detailParams map[string]interface{}) *gorm.DB {
+	if len(detailParams) == 0 {
+		return query
+	}
+	prefix := "EXISTS (SELECT 1 FROM namespace_recommendation_sets ns WHERE ns.org_id = onk.org_id" +
+		" AND ns.cluster_uuid = onk.cluster_uuid AND ns.namespace_name = onk.namespace_name" +
+		" AND ns.term IS NOT NULL"
+	// One EXISTS per predicate with only that predicate's values — the
+	// production per-key binding. Every predicate is PARENTHESIZED so an
+	// OR composite cannot escape the identity scope (see the container
+	// helper). ns.stale is excluded — the keys leg already filters it via
+	// routing (usesOrgNamespaceKeys requires stale=false).
+	for key, values := range detailParams {
+		if key == "ns.stale = ?" {
+			continue
+		}
+		query = query.Where(prefix+" AND ("+key+"))", values)
+	}
+	return query
 }
