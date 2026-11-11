@@ -73,6 +73,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **A schedule change can no longer produce sleep advice from evidence split under the old window ([#831](https://github.com/pgarciaq/ros-ocp-backend/issues/831)):**
+  sleep-evidence legs are split at ingest under the schedule resolved
+  at that moment, and nothing recorded which window produced the
+  split. Changing the schedule without re-ingesting left old-split
+  evidence admissible: activity inside the newly proposed sleep hours
+  sat in the old business-hours leg, invisible to every gate, and the
+  evaluator wrote NEW high-confidence advice over hours the workload
+  was actually active in. Every evidence row now carries the
+  fingerprint of the schedule that split it (migration 000222); the
+  evaluator requires every row in the window to match the currently
+  resolved schedule and reads unknown on any mismatch — never
+  wrong-window advice. The gate is self-healing: re-ingestion under
+  the new schedule re-attests the evidence and evaluation proceeds on
+  the truth (an active-evening workload is then correctly vetoed by
+  the off-hours p95). Accepted trade: the sleep advisory goes silent
+  after every schedule change until evidence rebuilds, bounded by the
+  reship/ingest cadence. Existing rows read unattested (unknown)
+  until re-ingestion — the reship-bounded cold start, as before. The
+  robne CSV mode is inherently attested; its DB mode applies the same
+  gate from the rows' fingerprints. ADR-0348 §5 amended.
 - **Sparse observation can no longer pass as complete sleep evidence ([#827](https://github.com/pgarciaq/ros-ocp-backend/issues/827)):**
   a sleep-evidence leg counted as "measured" as soon as any sample
   existed — 28 observations (two hours per day) across a 14-day window
