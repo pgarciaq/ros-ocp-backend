@@ -1,6 +1,6 @@
 # Hosted Control Plane Recommendations
 
-> **Last verified:** 2026-10-31
+> **Last verified:** 2026-11-12
 
 !!! success "Status: Shipped"
     Per-hosted-cluster rightsizing for OpenShift HyperShift control planes:
@@ -171,7 +171,13 @@ decides.
 - **Signature.** User workloads are active during the org's business
   hours and idle outside them (the dual business-hours/all-hours
   digests). A day counts only when both digest streams exist — partial
-  coverage reads unknown, never zero-activity.
+  coverage reads unknown, never zero-activity. A day requires
+  business-hours evidence exactly when it carries business hours under
+  the schedule — classified in the schedule's own timezone, including
+  the post-midnight portion of overnight windows, so a timezone-shifted
+  weekly schedule (e.g. `Pacific/Kiritimati`) demands and exempts the
+  right UTC days, not the ones its local weekday list names on a UTC
+  calendar.
 
 **Why the declaration is required (and what the signature does *not*
 mean):** a production cluster that happens to be quiet at night produces

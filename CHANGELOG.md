@@ -73,6 +73,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Timezone-shifted sleep schedules no longer suppressed by UTC weekday checks ([#845](https://github.com/pgarciaq/ros-ocp-backend/issues/845)):**
+  the non-prod sleep evaluator decided whether a UTC day requires
+  business-hours evidence using that UTC day's weekday, but evidence is
+  classified in the schedule's local timezone — a Mon–Fri
+  `00:00–08:00` schedule in `Pacific/Kiritimati` puts its business
+  hours on Sunday–Thursday UTC, so a fully observed Friday was rejected
+  as unknown forever and the advice never fired; the reverse mismatch
+  skipped the activity gates on UTC days carrying real business hours
+  (including the post-midnight portion of overnight windows). A day now
+  requires business-hours evidence exactly when it carries business
+  hours under the schedule, classified at minute granularity in both
+  the server and robne evaluators. Found by the phase17 branch review;
+  the fresh-review pass also fixed a sub-hour-window case that would
+  otherwise have produced false sleep advice.
 - **Ascending namespace cursors no longer strand on NULL sort values ([#850](https://github.com/pgarciaq/ros-ocp-backend/issues/850)):**
   the namespace list sorts ascending with NULLS FIRST, but the ASC cursor
   seek compared `sortCol > anchor` — with a NULL anchor (a page boundary
