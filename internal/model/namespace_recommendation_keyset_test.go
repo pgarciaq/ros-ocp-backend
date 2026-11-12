@@ -502,3 +502,74 @@ func TestGetNativeNamespaceRecommendations_VariationSortAliasTranslation(t *test
 		"cpu_variation_short_cost must select the COST row's variation (90 > 50 → ns-z first) — the alias encodes engine=cost (#844)")
 	assert.Equal(t, "ns-a", page.Results[1].Project)
 }
+
+// TestGetNativeNamespaceRecommendations_NullAnchorASCContinuation is #850's
+// RED: the namespace ASC seek uses NULLS FIRST, so a page boundary at a NULL
+// sort value strands the cursor — `sortExpr > NULL` is never true, and the
+// traversal can't reach the non-NULL rows that follow. The container path is
+// unaffected (it uses NULLS LAST for ASC, making NULL anchors terminal).
+func TestGetNativeNamespaceRecommendations_NullAnchorASCContinuation(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.DB = testutil.OpenTestGORM(pool)
+	t.Cleanup(func() { database.DB = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	var recs []namespace.NamespaceRec
+	for _, ns := range []string{"ns-a", "ns-b", "ns-c"} {
+		recs = append(recs, namespace.NamespaceRec{
+			OrgID:           testutil.TestOrgID,
+			ClusterUUID:     testutil.TestClusterUUID,
+			Namespace:       ns,
+			Term:            "short",
+			Engine:          "cost",
+			RecCPURequestMC: 100,
+		})
+	}
+	require.NoError(t, engine.WriteNamespaceRecommendations(ctx, pool, recs))
+	require.NoError(t, model.RefreshOrgNamespaceKeys(ctx, pool, testutil.TestOrgID))
+
+	// ns-a gets a savings value; ns-b and ns-c get NULL (the default).
+	// ASC with NULLS FIRST: [ns-b(NULL), ns-c(NULL), ns-a(100)].
+	_, err = pool.Exec(ctx, `UPDATE namespace_recommendation_sets SET estimated_savings_cents = 100 WHERE namespace_name = 'ns-a' AND org_id = $1`, testutil.TestOrgID)
+	require.NoError(t, err)
+
+	queryParams := map[string]interface{}{"ns.stale = ?": false}
+	opts := listoptions.ListOptions{
+		Limit:    1,
+		OrderBy:  "namespace_recommendation_sets.estimated_savings_cents",
+		OrderHow: listoptions.OrderAsc,
+	}
+
+	// Page 1: first NULL row (ns-b by tiebreaker).
+	p1, err := model.GetNativeNamespaceRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
+	require.NoError(t, err)
+	require.Len(t, p1.Results, 1)
+
+	// Page 2: second NULL row (ns-c). The anchor has a NULL sort value.
+	opts.HasCursor = true
+	opts.AfterNSSortPresent = true
+	opts.AfterNSSortValue = p1.LastAnchor.SortValue
+	opts.AfterNSClusterUUID = p1.LastAnchor.ClusterUUID
+	opts.AfterNamespaceName = p1.LastAnchor.Namespace
+	p2, err := model.GetNativeNamespaceRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
+	require.NoError(t, err)
+	require.Len(t, p2.Results, 1, "page 2 must reach the second NULL row (within the NULL block by tiebreaker)")
+
+	// Page 3: the non-NULL row (ns-a, value 100). The anchor is still NULL —
+	// the seek must jump PAST the NULL block to the non-NULL rows (#850).
+	opts.AfterNSSortValue = p2.LastAnchor.SortValue
+	opts.AfterNSClusterUUID = p2.LastAnchor.ClusterUUID
+	opts.AfterNamespaceName = p2.LastAnchor.Namespace
+	p3, err := model.GetNativeNamespaceRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
+	require.NoError(t, err)
+	require.Len(t, p3.Results, 1,
+		"page 3 must reach the non-NULL row after exhausting the NULL block — the ASC seek with a NULL anchor strands the traversal (#850)")
+	assert.Equal(t, "ns-a", p3.Results[0].Project)
+	assert.False(t, p3.HasNext)
+}

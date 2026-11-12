@@ -901,3 +901,62 @@ func TestGetNativeRecommendations_SplitRowEligibilityIsHonest(t *testing.T) {
 	short := page.Results[0].Recommendations["short_term"]
 	require.NotNil(t, short.Performance, "the performance-engine variant must be returned (control)")
 }
+
+// TestGetNativeRecommendations_VariationSortProductionTerms is #852's RED:
+// the container's variation sort filter uses kruizeplugin term constants
+// ("short_term") but the engine emits "short" — all 12 variation sorts
+// match zero rows in production. (The namespace side's identical bug was
+// fixed in #844.)
+func TestGetNativeRecommendations_VariationSortProductionTerms(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster")
+
+	// Production term values: "short" (not "short_term").
+	var recs []engine.ContainerRec
+	for _, spec := range []struct {
+		ns  string
+		eng string
+	}{
+		{"ns-low", "cost"}, {"ns-low", "performance"},
+		{"ns-high", "cost"}, {"ns-high", "performance"},
+	} {
+		recs = append(recs, engine.ContainerRec{
+			OrgID:           testutil.TestOrgID,
+			ClusterUUID:     testutil.TestClusterUUID,
+			Namespace:       spec.ns,
+			Workload:        "web",
+			WorkloadType:    testutil.TestWorkloadType,
+			ContainerName:   "c0",
+			Term:            "short",
+			Engine:          spec.eng,
+			RecCPURequestMC: 100,
+		})
+	}
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
+
+	// Variation values: cost rows carry the sort-defining values;
+	// performance rows the opposite (the filter must select the cost row).
+	_, err := pool.Exec(ctx, `UPDATE recommendation_sets SET variation_cpu_request_pct = 50.0 WHERE namespace = 'ns-low' AND org_id = $1 AND engine = 'cost'`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `UPDATE recommendation_sets SET variation_cpu_request_pct = 90.0 WHERE namespace = 'ns-high' AND org_id = $1 AND engine = 'cost'`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `UPDATE recommendation_sets SET variation_cpu_request_pct = 90.0 WHERE namespace = 'ns-low' AND org_id = $1 AND engine = 'performance'`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `UPDATE recommendation_sets SET variation_cpu_request_pct = 50.0 WHERE namespace = 'ns-high' AND org_id = $1 AND engine = 'performance'`, testutil.TestOrgID)
+	require.NoError(t, err)
+
+	queryParams := map[string]interface{}{"rs.stale = ?": false}
+	opts := listoptions.ListOptions{
+		Limit:    10,
+		OrderBy:  "recommendation_sets.cpu_variation_short_cost_pct",
+		OrderHow: listoptions.OrderDesc,
+	}
+	page, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
+	require.NoError(t, err)
+	require.NotEmpty(t, page.Results,
+		"the container variation sort must find rows with production term values ('short') — the kruizeplugin constants ('short_term') match zero rows (#852)")
+	assert.Equal(t, "ns-high", page.Results[0].Project,
+		"the cost row's variation (90) must sort first — the filter selects the cost row (#852)")
+}

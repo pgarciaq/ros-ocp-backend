@@ -91,8 +91,8 @@ func nativeContainerDetailOrder(orderHow string, numericSort bool) string {
 
 // nativeContainerSeekAfter returns a WHERE clause for keyset pagination after the cursor row.
 func nativeContainerSeekAfter(sortExpr, orderHow string, sortValue interface{}, clusterUUID, namespace, workload, workloadType, container string) (string, []interface{}) {
-	tie := "(rs.namespace, rs.workload, rs.workload_type, rs.container_name, rs.cluster_uuid)"
-	tieArgs := []interface{}{namespace, workload, workloadType, container, clusterUUID}
+	tie := "(rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name)"
+	tieArgs := []interface{}{clusterUUID, namespace, workload, workloadType, container}
 	if sortValue == nil {
 		return fmt.Sprintf(
 			"((%s) IS NULL AND %s > (?, ?, ?, ?, ?))",
@@ -134,8 +134,8 @@ func applyNativeContainerPageSeek(query *gorm.DB, opts listoptions.ListOptions, 
 
 // nativeContainerKeysSeekAfter returns keyset seek predicates for org_container_keys pagination.
 func nativeContainerKeysSeekAfter(sortExpr, orderHow string, sortValue interface{}, clusterUUID, namespace, workload, workloadType, container string) (string, []interface{}) {
-	tie := "(ock.namespace, ock.workload, ock.workload_type, ock.container_name, ock.cluster_uuid)"
-	tieArgs := []interface{}{namespace, workload, workloadType, container, clusterUUID}
+	tie := "(ock.cluster_uuid, ock.namespace, ock.workload, ock.workload_type, ock.container_name)"
+	tieArgs := []interface{}{clusterUUID, namespace, workload, workloadType, container}
 	if sortValue == nil {
 		return fmt.Sprintf(
 			"((%s) IS NULL AND %s > (?, ?, ?, ?, ?))",

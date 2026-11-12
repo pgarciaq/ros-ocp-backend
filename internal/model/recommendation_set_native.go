@@ -18,7 +18,6 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model/types"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
-	kruizeplugin "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
 	"github.com/redhatinsights/ros-ocp-backend/internal/rbac"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 	"gorm.io/gorm"
@@ -29,9 +28,12 @@ var containerVariationOrderByRe = regexp.MustCompile(
 )
 
 var containerVariationTermSuffix = map[string]string{
-	"short":  kruizeplugin.ShortTerm,
-	"medium": kruizeplugin.MediumTerm,
-	"long":   kruizeplugin.LongTerm,
+	// #852: the engine emits "short", "medium", "long"
+	// (librobne/engine/defaults.go) — NOT the kruizeplugin API constants
+	// ("short_term" etc.). The namespace side's identical fix: #844.
+	"short":  "short",
+	"medium": "medium",
+	"long":   "long",
 }
 
 // remapNativeContainerOrderBy translates listoptions DB columns to native query aliases.
@@ -407,9 +409,15 @@ func buildNativeContainerKeysPageQuery(
 	if keysOnlySort {
 		pageSortExpr = remapSortExprToOrgKeys(sortExpr)
 	} else {
-		pageKeys = pageKeys.Joins(nativeContainerRSJoin)
 		if sortFilter != "" {
+			// #850 review P2: LEFT JOIN keeps containers lacking the
+			// selected term (the engine skips terms without enough data;
+			// an inner join drops them while the count includes them).
+			leftJoin := strings.Replace(nativeContainerRSJoin, "JOIN", "LEFT JOIN", 1)
+			pageKeys = pageKeys.Joins(leftJoin)
 			pageKeys = pageKeys.Where(sortFilter)
+		} else {
+			pageKeys = pageKeys.Joins(nativeContainerRSJoin)
 		}
 	}
 

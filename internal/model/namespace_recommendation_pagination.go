@@ -137,11 +137,22 @@ func applyNativeNSPageSeekOnPage(query *gorm.DB, opts listoptions.ListOptions) *
 				args = []interface{}{sortValue, sortValue, clusterUUID, namespace}
 			}
 		} else {
-			clause = fmt.Sprintf(
-				"((%s) > ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?)))",
-				sortCol, sortCol, tie,
-			)
-			args = []interface{}{sortValue, sortValue, clusterUUID, namespace}
+			if sortValue == nil {
+				// #850 review: same NULL-anchor fix as the keys-path seeks —
+				// ASC with NULLS FIRST, a NULL anchor must jump past the
+				// NULL block to the non-NULL rows.
+				clause = fmt.Sprintf(
+					"((%s) IS NULL AND %s > (?, ?)) OR (%s) IS NOT NULL",
+					sortCol, tie, sortCol,
+				)
+				args = []interface{}{clusterUUID, namespace}
+			} else {
+				clause = fmt.Sprintf(
+					"((%s) > ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?)))",
+					sortCol, sortCol, tie,
+				)
+				args = []interface{}{sortValue, sortValue, clusterUUID, namespace}
+			}
 		}
 		return query.Where(clause, args...)
 	}

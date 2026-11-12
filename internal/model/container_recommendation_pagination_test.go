@@ -17,8 +17,8 @@ func TestNativeContainerSeekAfter_NilSortValue(t *testing.T) {
 
 	assert.True(t, strings.HasPrefix(clause, "((rs.estimated_savings_cents) IS NULL AND"),
 		"nil sort value should restrict to NULL region: got %s", clause)
-	assert.Contains(t, clause, "(rs.namespace, rs.workload, rs.workload_type, rs.container_name, rs.cluster_uuid) > (?, ?, ?, ?, ?)")
-	assert.Equal(t, []interface{}{"ns-a", "wl-a", "Deployment", "ctr-a", "c1"}, args)
+	assert.Contains(t, clause, "(rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name) > (?, ?, ?, ?, ?)")
+	assert.Equal(t, []interface{}{"c1", "ns-a", "wl-a", "Deployment", "ctr-a"}, args)
 }
 
 func TestNativeContainerSeekAfter_NonNilASC(t *testing.T) {
@@ -60,8 +60,8 @@ func TestNativeContainerKeysSeekAfter_NilSortValue(t *testing.T) {
 
 	assert.True(t, strings.HasPrefix(clause, "((rs.estimated_savings_cents) IS NULL AND"),
 		"nil sort value should restrict to NULL region: got %s", clause)
-	assert.Contains(t, clause, "(ock.namespace, ock.workload, ock.workload_type, ock.container_name, ock.cluster_uuid) > (?, ?, ?, ?, ?)")
-	assert.Equal(t, []interface{}{"ns-c", "wl-c", "DaemonSet", "ctr-c", "c3"}, args)
+	assert.Contains(t, clause, "(ock.cluster_uuid, ock.namespace, ock.workload, ock.workload_type, ock.container_name) > (?, ?, ?, ?, ?)")
+	assert.Equal(t, []interface{}{"c3", "ns-c", "wl-c", "DaemonSet", "ctr-c"}, args)
 }
 
 func TestNativeContainerKeysSeekAfter_NonNilASC(t *testing.T) {

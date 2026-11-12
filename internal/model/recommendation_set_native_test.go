@@ -184,7 +184,7 @@ func TestNativeContainerSortExpr_Variation(t *testing.T) {
 	if expr != "rs.variation_cpu_request_pct" {
 		t.Errorf("sort expr = %q, want rs.variation_cpu_request_pct", expr)
 	}
-	wantFilter := "rs.term = 'short_term' AND rs.engine = 'cost'"
+	wantFilter := "rs.term = 'short' AND rs.engine = 'cost'"
 	if filter != wantFilter {
 		t.Errorf("filter = %q, want %q", filter, wantFilter)
 	}
@@ -194,8 +194,8 @@ func TestAssembleNativeResults_PreservesRowOrder(t *testing.T) {
 	older := time.Date(2026, 5, 1, 13, 17, 17, 0, time.UTC)
 	newer := time.Date(2026, 5, 1, 14, 17, 16, 0, time.UTC)
 	rows := []NativeRecommendationRow{
-		{ClusterUUID: "c-new", Namespace: "ns-b", Workload: "w", WorkloadType: "deployment", ContainerName: "app", Term: "short_term", Engine: "cost", LastReported: newer},
-		{ClusterUUID: "c-old", Namespace: "ns-a", Workload: "w", WorkloadType: "deployment", ContainerName: "app", Term: "short_term", Engine: "cost", LastReported: older},
+		{ClusterUUID: "c-new", Namespace: "ns-b", Workload: "w", WorkloadType: "deployment", ContainerName: "app", Term: "short", Engine: "cost", LastReported: newer},
+		{ClusterUUID: "c-old", Namespace: "ns-a", Workload: "w", WorkloadType: "deployment", ContainerName: "app", Term: "short", Engine: "cost", LastReported: older},
 	}
 	results := assembleNativeResults(rows, "", false, money.DefaultCurrency)
 	if len(results) != 2 {

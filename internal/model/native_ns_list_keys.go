@@ -487,11 +487,19 @@ func applyNativeNSKeysPageSeek(query *gorm.DB, opts listoptions.ListOptions, sor
 				args = []interface{}{sortValue, sortValue, clusterUUID, namespace}
 			}
 		} else {
-			clause = fmt.Sprintf(
-				"((%s) > ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?)))",
-				sortExpr, sortExpr, tie,
-			)
-			args = []interface{}{sortValue, sortValue, clusterUUID, namespace}
+			if sortValue == nil {
+				clause = fmt.Sprintf(
+					"((%s) IS NULL AND %s > (?, ?)) OR (%s) IS NOT NULL",
+					sortExpr, tie, sortExpr,
+				)
+				args = []interface{}{clusterUUID, namespace}
+			} else {
+				clause = fmt.Sprintf(
+					"((%s) > ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?)))",
+					sortExpr, sortExpr, tie,
+				)
+				args = []interface{}{sortValue, sortValue, clusterUUID, namespace}
+			}
 		}
 		return query.Where(clause, args...)
 	}
@@ -524,11 +532,19 @@ func applyNativeNSPageSeekOnPageKeys(query *gorm.DB, opts listoptions.ListOption
 				args = []interface{}{sortValue, sortValue, clusterUUID, namespace}
 			}
 		} else {
-			clause = fmt.Sprintf(
-				"((%s) > ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?)))",
-				sortCol, sortCol, tie,
-			)
-			args = []interface{}{sortValue, sortValue, clusterUUID, namespace}
+			if sortValue == nil {
+				clause = fmt.Sprintf(
+					"((%s) IS NULL AND %s > (?, ?)) OR (%s) IS NOT NULL",
+					sortCol, tie, sortCol,
+				)
+				args = []interface{}{clusterUUID, namespace}
+			} else {
+				clause = fmt.Sprintf(
+					"((%s) > ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?)))",
+					sortCol, sortCol, tie,
+				)
+				args = []interface{}{sortValue, sortValue, clusterUUID, namespace}
+			}
 		}
 		return query.Where(clause, args...)
 	}
