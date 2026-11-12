@@ -217,11 +217,6 @@ func SleepCandidateWithCoverage(hcID, tier string, sums map[string]map[DayKey]Da
 		if !ok {
 			return nil // unknown day — never idle-by-absence
 		}
-		// #760: a weekday schedule's weekends are entirely outside the
-		// window — no in-window hours exist, so the producer emits no BH
-		// evidence and the BH-activity requirement is vacuous; the off leg
-		// still gates safety (the advice sleeps those hours).
-		dayApplicable := bhschedule.DayAllowed(d.UTC().Weekday(), sched.Days)
 		// #827: the coverage floor (the H-leg minimum-observation
 		// precedent) — a user workload observed for fewer than
 		// SleepMinCoverageFrac of a leg's possible hours makes the day
@@ -238,6 +233,30 @@ func SleepCandidateWithCoverage(hcID, tier string, sums map[string]map[DayKey]Da
 				bhPossible++
 			}
 		}
+		// #845: applicability derives from the classified possible hours
+		// — not a separate UTC-weekday check. The producer classifies in
+		// the schedule's LOCAL timezone, so a timezone-shifted schedule's
+		// BH hours can land on UTC days whose weekday the day list does
+		// not name, and leave named weekdays BH-free: a UTC-weekday check
+		// both demands BH evidence where no BH hours exist (the window
+		// reads unknown forever) and skips the gates where BH hours do
+		// exist. A day is applicable exactly when it carries BH hours;
+		// #760's weekends are the zero-BH-hours case — the off leg still
+		// gates safety (the advice sleeps those hours). Same-day UTC
+		// schedules agree with the weekday rule bucket-for-bucket;
+		// overnight schedules legitimately change on the post-midnight
+		// UTC day (a Mon–Fri 22:00–06:00 UTC schedule gives Saturday six
+		// BH buckets from Friday's shift while DayAllowed(Saturday) is
+		// false — the same lenient-direction repair, pinned by test).
+		// Sub-hour windows contained in one clock hour classify zero
+		// bucket starts, so the minute-granular intersection check keeps
+		// them applicable (#845 review P1). A disabled schedule keeps the
+		// BH gates on (the server-side nil contract; the server writer
+		// emits no rows when disabled, the CSV path off-only legs): such
+		// days read unknown — never advice-without-schedule.
+		dayApplicable := !sched.Enabled || bhPossible > 0 ||
+			bhschedule.DayIntersectsBusinessHours(d.UTC(), sched)
+
 		offPossible := 24 - bhPossible
 		minBHHours := int(math.Ceil(pol.MinCoverageFrac * float64(bhPossible)))
 		minOffHours := int(math.Ceil(pol.MinCoverageFrac * float64(offPossible)))

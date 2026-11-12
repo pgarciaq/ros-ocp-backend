@@ -658,3 +658,194 @@ func TestSleepCandidate_UnattestedScheduleIsSilent(t *testing.T) {
 	assert.Nil(t, got,
 		"evidence split under a different window must read unknown — never wrong-window advice (#831)")
 }
+
+// --- #845: timezone-shifted sleep applicability (offline parity) ---
+
+// shiftedLegs builds per-day evidence legs for a schedule whose BH hours
+// land on shifted UTC days: the BH leg exists only where the
+// classification finds BH hours (the writer's leg-split shape).
+// lowWeekday (if valid) marks UTC days whose user-workload BH leg sits
+// below the activity floor — present but idle, distinct from absent.
+// shiftedLegs seeds the standard active-in-hours / idle-outside user
+// signature (bh 300, off 0 — the bhFixture values) under a
+// timezone-shifted schedule; day-level variation rides lowWeekday
+// (present-but-idle BH leg).
+func shiftedLegs(sched bhschedule.Schedule, lowWeekday time.Weekday) (bhRows, offRows []types.KeyedDigest) {
+	end := time.Now().UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	mk := func(day time.Time, ns, wl string, usage int64, isBH bool) {
+		kd := types.KeyedDigest{
+			Key: types.ContainerKey{Namespace: ns, Workload: wl, WorkloadType: "Deployment", ContainerName: "c0"},
+			Row: types.DigestRow{BucketDate: day, CPUUsageP50MC: usage, CPUUsageP95MC: usage},
+		}
+		if isBH {
+			bhRows = append(bhRows, kd)
+		} else {
+			offRows = append(offRows, kd)
+		}
+	}
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		bhPossible := 0
+		for h := 0; h < 24; h++ {
+			if bhschedule.InBusinessHours(d.UTC().Add(time.Duration(h)*time.Hour), sched) {
+				bhPossible++
+			}
+		}
+		if bhPossible > 0 {
+			usage := int64(300)
+			if d.UTC().Weekday() == lowWeekday {
+				usage = 0 // below the 10 mC activity floor, leg still present
+			}
+			mk(d, "demo-app", "web", usage, true)
+			mk(d, "kube-system", "coredns", 2000, true)
+		}
+		mk(d, "demo-app", "web", 0, false)
+		mk(d, "kube-system", "coredns", 100, false)
+	}
+	return
+}
+
+// kiritimatiMidnight: Pacific/Kiritimati (+14) Mon–Fri 00:00–08:00 local
+// → BH Sun–Thu 10:00–18:00 UTC. Friday UTC: zero BH hours,
+// DayAllowed(Friday)=true — #845 direction 1.
+func kiritimatiMidnight() bhschedule.Schedule {
+	return bhschedule.Schedule{
+		Timezone:  "Pacific/Kiritimati",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "00:00", EndTime: "08:00", Enabled: true,
+	}
+}
+
+// kiritimatiDaytime: Pacific/Kiritimati (+14) Mon–Fri 09:00–17:00 local
+// → Sun 19:00–24:00 UTC (5 buckets), Mon–Thu (8 each), Fri 00:00–03:00
+// (3). Sunday UTC: real BH hours, DayAllowed(Sunday)=false — #845
+// direction 2.
+func kiritimatiDaytime() bhschedule.Schedule {
+	return bhschedule.Schedule{
+		Timezone:  "Pacific/Kiritimati",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "09:00", EndTime: "17:00", Enabled: true,
+	}
+}
+
+// TestSleepCandidate_TimezoneShiftedScheduleFires is #845's direction-1
+// offline repro: a fully observed +14 schedule must qualify — baseline:
+// the UTC-weekday check demands BH evidence on a zero-BH UTC day and the
+// window never qualifies.
+func TestSleepCandidate_TimezoneShiftedScheduleFires(t *testing.T) {
+	now := time.Now()
+	bh, off := shiftedLegs(kiritimatiMidnight(), -1)
+	got := SleepCandidate("hc-845-shift", TierNonProd, SleepSums(bh, off), kiritimatiMidnight(), DefaultSleepPolicy(), 2, nil, nil, now)
+	require.NotNil(t, got,
+		"a fully observed timezone-shifted schedule must qualify — applicability derives from the classified BH hours, not the UTC weekday (#845)")
+	assert.Equal(t, SleepVerdict, got.Verdict)
+}
+
+// TestSleepCandidate_TimezoneShiftedLenientDayRequiresBH is #845's
+// direction-2 offline repro: a +14 daytime schedule puts real BH hours on
+// Sunday UTC; a user workload idle during exactly those hours must break
+// the signature — baseline: DayAllowed(Sunday)=false skips the BH gates.
+func TestSleepCandidate_TimezoneShiftedLenientDayRequiresBH(t *testing.T) {
+	now := time.Now()
+	bh, off := shiftedLegs(kiritimatiDaytime(), time.Sunday)
+	got := SleepCandidate("hc-845-lenient", TierNonProd, SleepSums(bh, off), kiritimatiDaytime(), DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"a UTC day carrying classified BH hours must require BH activity — the UTC weekday must not skip the gate (#845)")
+}
+
+// TestSleepCandidate_DisabledScheduleOffOnlyIsSilent pins the offline
+// disabled contract (#845 owner decision): a disabled schedule classifies
+// zero BH hours, so the writer's evidence is off-only — the advice must
+// never fire. The defensive !Enabled guard keeps the BH gates ON, so the
+// missing BH leg reads unknown rather than off-leg-only qualification.
+func TestSleepCandidate_DisabledScheduleOffOnlyIsSilent(t *testing.T) {
+	now := time.Now()
+	disabled := kiritimatiMidnight()
+	disabled.Enabled = false
+	// The writer's shape for a disabled schedule: classification finds no
+	// BH hours anywhere, so legs are off-only.
+	bh, off := shiftedLegs(disabled, -1)
+	assert.Empty(t, bh, "fixture sanity: a disabled schedule produces no BH legs")
+	got := SleepCandidate("hc-845-disabled", TierNonProd, SleepSums(bh, off), disabled, DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got, "a disabled schedule must never advise — the BH gates stay on (advice-without-schedule)")
+}
+
+// utcOvernight: Mon–Fri 22:00–06:00 UTC gives Saturday six BH buckets
+// from Friday's post-midnight shift while DayAllowed(Saturday)=false
+// (#845 review P2).
+func utcOvernight() bhschedule.Schedule {
+	return bhschedule.Schedule{
+		Timezone:  "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "22:00", EndTime: "06:00", Enabled: true,
+	}
+}
+
+// utcSubHour: a same-day window contained in one clock hour classifies
+// zero top-of-hour bucket starts on every day while real business time
+// exists (#845 review P1).
+func utcSubHour() bhschedule.Schedule {
+	return bhschedule.Schedule{
+		Timezone:  "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "09:15", EndTime: "09:45", Enabled: true,
+	}
+}
+
+// TestSleepCandidate_OvernightSaturdayRequiresBH is the #845 review's
+// P2 repro (offline): the post-midnight UTC day of an overnight schedule
+// carries real BH hours; a user workload idle during exactly those
+// Saturday hours must break the signature. Baseline (pre-#845):
+// DayAllowed(Saturday)=false skipped the BH gates and the advice fired.
+func TestSleepCandidate_OvernightSaturdayRequiresBH(t *testing.T) {
+	now := time.Now()
+	bh, off := shiftedLegs(utcOvernight(), time.Saturday)
+	got := SleepCandidate("hc-845-ovn", TierNonProd, SleepSums(bh, off), utcOvernight(), DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"the post-midnight UTC day of an overnight schedule carries BH hours — the BH gates must apply (#845 review P2)")
+}
+
+// TestSleepCandidate_SubHourWindowOffOnlyIsSilent is the #845 review's
+// P1 control (offline): a sub-hour window classifies zero bucket starts,
+// so bucket-count applicability alone would qualify off-only idle
+// evidence — false sleep advice breaking the zombie partition. The
+// minute-granular intersection check keeps weekdays applicable; no BH
+// row can exist, so the #761 gate reads the window unknown.
+func TestSleepCandidate_SubHourWindowOffOnlyIsSilent(t *testing.T) {
+	now := time.Now()
+	bh, off := shiftedLegs(utcSubHour(), -1)
+	assert.Empty(t, bh, "fixture sanity: a sub-hour window produces no BH bucket starts")
+	got := SleepCandidate("hc-845-subhr", TierNonProd, SleepSums(bh, off), utcSubHour(), DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"a sub-hour window still has business hours — off-only idle evidence must read unknown, never sleep advice (#845 review P1)")
+}
+
+// TestSleepCandidate_ShiftedDayCoverageFloorIsUnknown is the #845
+// review's P2 repro (offline): a timezone-shifted applicable day with a
+// present, active BH leg below its coverage floor must read the day
+// unknown — the #827 floor applies to newly applicable days. Without
+// the pin, disabling the BH coverage-floor gate left every #845 test
+// passing (the reviewer's mutation).
+func TestSleepCandidate_ShiftedDayCoverageFloorIsUnknown(t *testing.T) {
+	now := time.Now()
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+	sched := kiritimatiMidnight()
+	bh, off := shiftedLegs(sched, -1)
+	// Full coverage everywhere except Sunday's BH leg: 2 of 8 possible
+	// hours, below the 0.5 floor of 4.
+	cov := DayCoverage{}
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		key := d.UTC().Format("2006-01-02")
+		if cov[key] == nil {
+			cov[key] = map[DayKey]LegCoverage{}
+		}
+		cov[key][DayKey{NS: "demo-app", WL: "web"}] = LegCoverage{BHHours: 8, OffHours: 16}
+		if d.UTC().Weekday() == time.Sunday {
+			cov[key][DayKey{NS: "demo-app", WL: "web"}] = LegCoverage{BHHours: 2, OffHours: 16}
+		}
+	}
+	got := SleepCandidateWithCoverage("hc-845-cov", TierNonProd, SleepSums(bh, off), cov, true, sched, DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"a shifted applicable day below its BH coverage floor must read unknown — the #827 floor applies to newly applicable days (#845 review P2)")
+}

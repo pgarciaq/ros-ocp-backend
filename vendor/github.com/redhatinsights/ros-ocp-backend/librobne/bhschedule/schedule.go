@@ -168,6 +168,28 @@ func ScheduleWeightForStream(intervalStart time.Time, schedule Schedule, allHour
 // whether the schedule's business-hours window applies to that day at all
 // (#760: a weekday schedule's weekends have no in-window hours; the sleep
 // predicate gates them on the off leg alone).
+// DayIntersectsBusinessHours reports whether any instant of the UTC day
+// starting at dayStart falls inside the schedule's business window. The
+// hour-bucket classification (InBusinessHours on bucket starts) misses
+// sub-hour windows contained within one clock hour — 09:15–09:45 contains
+// no top-of-hour mark, so every day classifies zero BH buckets while real
+// business time exists (#845 review P1: an applicability derived from
+// bucket counts alone would skip the BH gates and qualify off-only idle
+// evidence). This scan is minute-granular, matching the API's HH:MM
+// window boundaries. Use for applicability only — coverage floors stay
+// bucket-based (#827's lenient-by-construction choice, unchanged).
+func DayIntersectsBusinessHours(dayStart time.Time, schedule Schedule) bool {
+	if !schedule.Enabled {
+		return false
+	}
+	for m := 0; m < 1440; m++ {
+		if InBusinessHours(dayStart.Add(time.Duration(m)*time.Minute), schedule) {
+			return true
+		}
+	}
+	return false
+}
+
 func DayAllowed(weekday time.Weekday, days []string) bool {
 	return dayAllowed(weekday, days)
 }

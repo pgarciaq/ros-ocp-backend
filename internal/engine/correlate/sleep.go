@@ -255,11 +255,37 @@ func evalSleepSignature(days map[string]map[sleepKey]*sleepWorkloadDay, windowSt
 		if !ok {
 			return 0, 0, false, false
 		}
-		// #760: a weekday schedule's weekends are entirely outside the
-		// window — the BH-activity requirement does not apply (there are
-		// no business hours to be active in), but the off leg still gates
-		// safety: the advice sleeps those hours.
-		dayApplicable := sched == nil || bhschedule.DayAllowed(d.UTC().Weekday(), sched.Days)
+		// #845: applicability derives from the classified possible hours
+		// — the same classification the writer's leg split applies — not
+		// a separate UTC-weekday check. The producer classifies in the
+		// schedule's LOCAL timezone, so a timezone-shifted schedule's BH
+		// hours can land on UTC days whose weekday the day list does not
+		// name, and leave named weekdays BH-free: a UTC-weekday check
+		// both demands BH evidence where no BH hours exist (the window
+		// reads unknown forever) and skips the gates where BH hours do
+		// exist. A day is applicable exactly when it carries BH hours;
+		// #760's weekends are the zero-BH-hours case — the off leg still
+		// gates safety (the advice sleeps those hours). Same-day UTC
+		// schedules agree with the weekday rule bucket-for-bucket;
+		// overnight schedules legitimately change on the post-midnight
+		// UTC day (a Mon–Fri 22:00–06:00 UTC schedule gives Saturday six
+		// BH buckets from Friday's shift while DayAllowed(Saturday) is
+		// false — the same lenient-direction repair, pinned by test).
+		// Sub-hour windows contained in one clock hour classify zero
+		// bucket starts, so the minute-granular intersection check keeps
+		// them applicable (#845 review P1). Nil schedule keeps the BH
+		// gates on (defense in depth under the cycle's nil early-return):
+		// the writer emits no rows for a disabled/absent schedule, so
+		// such days read unknown — never advice-without-schedule.
+		bhPossible := 0
+		for h := 0; h < 24; h++ {
+			if bhschedule.InBusinessHours(d.UTC().Add(time.Duration(h)*time.Hour), bs) {
+				bhPossible++
+			}
+		}
+		dayApplicable := sched == nil || bhPossible > 0 ||
+			bhschedule.DayIntersectsBusinessHours(d.UTC(), bs)
+
 		// #827: the coverage floor — each leg's observed hours must meet
 		// SleepMinCoverageFrac of the leg's possible hours for that day,
 		// rounded up (the H-leg minimum-observation precedent). Unknown
@@ -277,12 +303,6 @@ func evalSleepSignature(days map[string]map[sleepKey]*sleepWorkloadDay, windowSt
 		// loader's COALESCE reads as 0 — pre-#826 rows are then unknown
 		// via the p95 rule, #826-window rows (p95 present, hours absent)
 		// unknown via this floor; no separate legacy skip exists.
-		bhPossible := 0
-		for h := 0; h < 24; h++ {
-			if bhschedule.InBusinessHours(d.UTC().Add(time.Duration(h)*time.Hour), bs) {
-				bhPossible++
-			}
-		}
 		offPossible := 24 - bhPossible
 		minBHHours := int(math.Ceil(minCoverageFrac * float64(bhPossible)))
 		minOffHours := int(math.Ceil(minCoverageFrac * float64(offPossible)))

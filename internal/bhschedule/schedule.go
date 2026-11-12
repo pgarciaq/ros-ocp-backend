@@ -18,6 +18,14 @@ func AllHoursSchedule() Schedule {
 }
 
 // InBusinessHours reports whether intervalStart falls inside the schedule window.
+// DayIntersectsBusinessHours reports whether any instant of the UTC day
+// starting at dayStart falls inside the schedule's business window —
+// minute-granular, so sub-hour windows that contain no top-of-hour bucket
+// start still count (#845). See librobne/bhschedule.
+func DayIntersectsBusinessHours(dayStart time.Time, schedule Schedule) bool {
+	return libbh.DayIntersectsBusinessHours(dayStart, schedule)
+}
+
 // DayAllowed reports whether the weekday is in the schedule's day list
 // (librobne wrapper; #760).
 func DayAllowed(weekday time.Weekday, days []string) bool {

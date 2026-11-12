@@ -1275,3 +1275,262 @@ func TestSleepCandidate_PartialFingerprintWindowReadsUnknown(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, fired, "a stale-fingerprint row must unattest its workload-day — an attested sibling cannot mask it (#831, the #826 completeness rule one level up)")
 }
+
+// --- #845: timezone-shifted sleep applicability ---
+
+// kiritimatiMidnight is #845's direction-1 schedule: Pacific/Kiritimati
+// (+14) Mon–Fri 00:00–08:00 local puts the BH window on Sun–Thu
+// 10:00–18:00 UTC. Friday UTC carries zero BH hours while
+// DayAllowed(Friday)=true — the UTC-weekday check wrongly demands BH
+// evidence there, and the window never qualifies.
+func kiritimatiMidnight() bhschedule.Schedule {
+	return bhschedule.Schedule{
+		Timezone:  "Pacific/Kiritimati",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "00:00", EndTime: "08:00", Enabled: true,
+	}
+}
+
+// kiritimatiDaytime is #845's direction-2 schedule: Pacific/Kiritimati
+// (+14) Mon–Fri 09:00–17:00 local puts BH hours on Sun 19:00–24:00 UTC
+// (5 buckets), Mon–Thu (8 each), and Fri 00:00–03:00 (3). Sunday UTC
+// carries real BH hours while DayAllowed(Sunday)=false — the UTC-weekday
+// check wrongly skips the BH gates there.
+func kiritimatiDaytime() bhschedule.Schedule {
+	return bhschedule.Schedule{
+		Timezone:  "Pacific/Kiritimati",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "09:00", EndTime: "17:00", Enabled: true,
+	}
+}
+
+// seedShiftedSleepEvidence writes #760-style evidence legs for a schedule
+// whose BH hours land on shifted UTC days: the BH leg exists only on days
+// the classification finds BH hours (the writer's leg-split shape), and
+// observed hours mirror the classification (full coverage). lowWeekday
+// (if valid) marks UTC days whose user-workload BH leg sits below the
+// activity floor — distinct from absent, so the two gate mechanisms
+// cannot mask each other.
+func seedShiftedSleepEvidence(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc string, sched bhschedule.Schedule, bhVal, offVal int64, lowWeekday, underCoverWeekday time.Weekday) {
+	t.Helper()
+	start, _ := sleepWindow()
+	fingerprint := bhschedule.Fingerprint(sched)
+	for i := 0; i < 14; i++ {
+		day := start.AddDate(0, 0, i)
+		bhPossible := 0
+		for h := 0; h < 24; h++ {
+			if bhschedule.InBusinessHours(day.UTC().Add(time.Duration(h)*time.Hour), sched) {
+				bhPossible++
+			}
+		}
+		offPossible := 24 - bhPossible
+		rows := []struct {
+			ns  string
+			wl  string
+			bh  int64
+			off int64
+		}{
+			{"demo-app", "web", bhVal, offVal},
+			{"kube-system", "coredns", 2000, 100},
+		}
+		for _, r := range rows {
+			var bh, off, off95 *int64
+			var bhH, offH *int16
+			if bhPossible > 0 {
+				v := r.bh
+				if r.ns == "demo-app" && day.UTC().Weekday() == lowWeekday {
+					v = 0 // below the 10 mC activity floor, leg still present
+				}
+				bh = &v
+				h := int16(bhPossible)
+				if r.ns == "demo-app" && day.UTC().Weekday() == underCoverWeekday && bhPossible >= 4 {
+					h = 2 // below the 0.5 coverage floor, leg still measured
+				}
+				bhH = &h
+			}
+			v := r.off
+			off = &v
+			off95 = &v
+			h := int16(offPossible)
+			offH = &h
+			_, err := pool.Exec(ctx, `
+				INSERT INTO hcp_sleep_evidence (
+					org_id, cluster_uuid, namespace, workload, workload_type,
+					container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc,
+					bh_observed_hours, off_observed_hours, schedule_fingerprint
+				) VALUES ($1,$2,$3,$4,'Deployment','c0',$5,$6,$7,$8,$9,$10,$11)
+				ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date)
+				DO UPDATE SET bh_cpu_p50_mc = EXCLUDED.bh_cpu_p50_mc,
+					off_cpu_p50_mc = EXCLUDED.off_cpu_p50_mc,
+					off_cpu_p95_mc = EXCLUDED.off_cpu_p95_mc,
+					bh_observed_hours = EXCLUDED.bh_observed_hours,
+					off_observed_hours = EXCLUDED.off_observed_hours,
+					schedule_fingerprint = EXCLUDED.schedule_fingerprint`,
+				orgID, hc, r.ns, r.wl, day.Format("2006-01-02"), bh, off, off95, bhH, offH, fingerprint)
+			require.NoError(t, err)
+		}
+	}
+}
+
+// shiftedSleepFixture assembles the #845 shape: a timezone-shifted
+// cluster schedule plus classification-faithful evidence.
+// shiftedSleepFixture seeds the standard active-in-hours / idle-outside
+// user signature (bh 300, off 0 — the bhSignatureHosted values) under a
+// timezone-shifted schedule; day-level variation rides lowWeekday
+// (present-but-idle BH leg) and underCoverWeekday (BH observed hours
+// below the coverage floor).
+func shiftedSleepFixture(t *testing.T, orgID, hc string, sched bhschedule.Schedule, lowWeekday, underCoverWeekday time.Weekday) *pgxpool.Pool {
+	t.Helper()
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	seedShiftedSleepEvidence(t, ctx, pool, orgID, hc, sched, 300, 0, lowWeekday, underCoverWeekday)
+	seedSleepSnapshot(t, ctx, pool, orgID, hc, hcTierNonProd, time.Now().UTC().Add(-time.Hour))
+	_, err := pool.Exec(ctx, `
+		INSERT INTO business_hours_schedules (
+			org_id, cluster_uuid, namespace, timezone, days, start_time, end_time, enabled
+		) VALUES ($1,$2::uuid,'',$3,ARRAY['monday','tuesday','wednesday','thursday','friday'],$4,$5,TRUE)
+		ON CONFLICT (org_id, cluster_uuid, namespace) DO UPDATE SET enabled = TRUE`,
+		orgID, hc, sched.Timezone, sched.StartTime, sched.EndTime)
+	require.NoError(t, err)
+	seedNodepoolRollup(t, ctx, pool, orgID, hc)
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM hcp_sleep_evidence WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM manifest_hcp_snapshots WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM hcp_correlation_advisories WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM business_hours_schedules WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM hosted_nodepool_rollups WHERE org_id = $1`, orgID)
+	})
+	return pool
+}
+
+// TestSleepCandidate_TimezoneShiftedScheduleFires is #845's direction-1
+// repro (server): a +14 schedule whose BH hours occupy Sun–Thu UTC. A
+// fully observed window must qualify — baseline: the UTC-weekday check
+// demands BH evidence on Friday UTC (zero BH hours), the #761 gate reads
+// every user-workload day unknown, and the advice never fires.
+func TestSleepCandidate_TimezoneShiftedScheduleFires(t *testing.T) {
+	org := testutil.TestOrgID + "-s-845-shift"
+	pool := shiftedSleepFixture(t, org, sHC5, kiritimatiMidnight(), -1, -1)
+	ctx := context.Background()
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 1, fired,
+		"a fully observed timezone-shifted schedule must qualify — applicability derives from the classified BH hours, not the UTC weekday (#845)")
+}
+
+// TestSleepCandidate_TimezoneShiftedLenientDayRequiresBH is #845's
+// direction-2 repro (server): a +14 daytime schedule puts real BH hours
+// on Sunday UTC. A user workload idle during exactly those Sunday hours
+// must break the signature — baseline: DayAllowed(Sunday)=false skips
+// the BH-activity gate and the advice fires anyway.
+func TestSleepCandidate_TimezoneShiftedLenientDayRequiresBH(t *testing.T) {
+	org := testutil.TestOrgID + "-s-845-lenient"
+	pool := shiftedSleepFixture(t, org, sHC6, kiritimatiDaytime(), time.Sunday, -1)
+	ctx := context.Background()
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fired,
+		"a UTC day carrying classified BH hours must require BH activity — the UTC weekday must not skip the gate (#845)")
+	assert.Empty(t, sleepAdvisories(t, ctx, pool, org))
+}
+
+// TestEvalSleepSignature_NilScheduleOffOnlyNeverMatches pins the nil
+// disjunct (#845 review): with no resolved schedule the BH gates stay
+// ON, so off-only idle evidence (the writer's shape for a schedule-less
+// cluster) reads unknown — never advice-without-schedule. The cycle-level
+// guard (resolveSleepSchedule nil → early return) is pinned by
+// TestSleepCandidate_NoScheduleSilent; this pins the eval-level defense.
+func TestEvalSleepSignature_NilScheduleOffOnlyNeverMatches(t *testing.T) {
+	start, end := sleepWindow()
+	days := map[string]map[sleepKey]*sleepWorkloadDay{}
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		days[d.Format("2006-01-02")] = map[sleepKey]*sleepWorkloadDay{
+			{ns: "demo-app", wl: "web"}: {
+				offCPU: 0, offMeasured: true, offObservedHours: 24, scheduleAttested: true,
+			},
+		}
+	}
+	_, _, match, known := evalSleepSignature(days, start, end, 10, 10, 0.5, nil, nil, nil)
+	assert.False(t, match, "a nil schedule must never match — the BH gates stay on")
+	assert.False(t, known, "off-only user evidence under a nil schedule reads unknown, not zero-activity")
+}
+
+// utcOvernight is the overnight UTC shape for the #845 review's P2:
+// Mon–Fri 22:00–06:00 gives Saturday six BH buckets from Friday's
+// post-midnight shift while DayAllowed(Saturday)=false — the pre-#845
+// weekday check skipped the BH gates there.
+func utcOvernight() bhschedule.Schedule {
+	return bhschedule.Schedule{
+		Timezone:  "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "22:00", EndTime: "06:00", Enabled: true,
+	}
+}
+
+// utcSubHour is the #845 review's P1 shape: a same-day window contained
+// in one clock hour classifies zero top-of-hour bucket starts on every
+// day, while real business time exists. The API accepts it (HH:MM
+// granularity).
+func utcSubHour() bhschedule.Schedule {
+	return bhschedule.Schedule{
+		Timezone:  "UTC",
+		Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "09:15", EndTime: "09:45", Enabled: true,
+	}
+}
+
+// TestSleepCandidate_OvernightSaturdayRequiresBH is the #845 review's P2
+// repro (server): the post-midnight UTC day of an overnight schedule
+// carries real BH hours attributed to the previous local day's shift —
+// a user workload idle during exactly those Saturday hours must break
+// the signature. Baseline (pre-#845): DayAllowed(Saturday)=false skipped
+// the BH gates and the advice fired.
+func TestSleepCandidate_OvernightSaturdayRequiresBH(t *testing.T) {
+	org := testutil.TestOrgID + "-s-845-ovn"
+	pool := shiftedSleepFixture(t, org, sHC7, utcOvernight(), time.Saturday, -1)
+	ctx := context.Background()
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fired,
+		"the post-midnight UTC day of an overnight schedule carries BH hours — the BH gates must apply (#845 review P2)")
+	assert.Empty(t, sleepAdvisories(t, ctx, pool, org))
+}
+
+// TestSleepCandidate_SubHourWindowOffOnlyIsSilent is the #845 review's
+// P1 control (server): a sub-hour window classifies zero bucket starts,
+// so bucket-count applicability alone would mark every day
+// non-applicable and qualify off-only idle evidence — false sleep
+// advice breaking the zombie partition. The minute-granular
+// intersection check keeps weekdays applicable; no BH row can exist, so
+// the #761 gate reads the window unknown. Green on the pre-#845 code
+// too (DayAllowed demanded the same evidence); discriminates dropping
+// the intersection fallback.
+func TestSleepCandidate_SubHourWindowOffOnlyIsSilent(t *testing.T) {
+	org := testutil.TestOrgID + "-s-845-subhr"
+	pool := shiftedSleepFixture(t, org, sHC8, utcSubHour(), -1, -1)
+	ctx := context.Background()
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fired,
+		"a sub-hour window still has business hours — off-only idle evidence must read unknown, never sleep advice (#845 review P1)")
+	assert.Empty(t, sleepAdvisories(t, ctx, pool, org))
+}
+
+// TestSleepCandidate_ShiftedDayCoverageFloorIsUnknown is the #845
+// review's P2 repro (server): a timezone-shifted applicable day with a
+// present, active BH leg below its coverage floor must read the day
+// unknown. Without the pin, disabling the BH coverage-floor gate left
+// every #845 test passing (the reviewer's mutation).
+func TestSleepCandidate_ShiftedDayCoverageFloorIsUnknown(t *testing.T) {
+	org := testutil.TestOrgID + "-s-845-cov"
+	// Sunday under Kiritimati midnight: 8 possible BH hours, floor 4 —
+	// the fixture seeds 2 observed BH hours on the user workload.
+	pool := shiftedSleepFixture(t, org, sHC5, kiritimatiMidnight(), -1, time.Sunday)
+	ctx := context.Background()
+	fired, err := RunSleepCandidateCycle(ctx, pool)
+	require.NoError(t, err)
+	assert.Equal(t, 0, fired,
+		"a shifted applicable day below its BH coverage floor must read unknown — the #827 floor applies to newly applicable days (#845 review P2)")
+	assert.Empty(t, sleepAdvisories(t, ctx, pool, org))
+}
