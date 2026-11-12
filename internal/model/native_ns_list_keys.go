@@ -198,7 +198,6 @@ func applyDBTagFiltersToNSKeys(query *gorm.DB, orgID string, filters []TagFilter
 func isNumericNSSort(sortExpr string) bool {
 	numericSuffixes := []string{
 		"_cents", "_millicores", "_kib", "_bytes", "_days", "_pct",
-		"_current", // legacy request columns (cpu_request_current, memory_request_current) — #843 review F1
 	}
 	for _, s := range numericSuffixes {
 		if strings.HasSuffix(sortExpr, s) {
@@ -291,7 +290,7 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 	}
 	pageLimit := limit + 1
 
-	sortExpr := nativeNSPageSortExpr(opts.OrderBy)
+	sortExpr, nsSortFilter := nativeNSSortExpr(opts.OrderBy)
 	orderHow := opts.OrderHow
 	if orderHow == "" {
 		orderHow = listoptions.OrderDesc
@@ -327,7 +326,19 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 	if keysOnlySort {
 		pageSortExpr = remapNSSortExprToOrgKeys(sortExpr)
 	} else {
-		pageKeys = pageKeys.Joins(nativeNSKeysNRSJoin)
+		if nsSortFilter != "" {
+			// #844: the variation aliases encode a term/engine — the
+			// sort value comes from the matching row. A LEFT JOIN keeps
+			// namespaces lacking the selected term (sorted as NULL —
+			// the review's P2: the engine legitimately skips terms with
+			// insufficient data; an inner join would drop them while
+			// the count includes them).
+			leftJoin := strings.Replace(nativeNSKeysNRSJoin, "JOIN", "LEFT JOIN", 1)
+			pageKeys = pageKeys.Joins(leftJoin)
+			pageKeys = pageKeys.Where(nsSortFilter)
+		} else {
+			pageKeys = pageKeys.Joins(nativeNSKeysNRSJoin)
+		}
 		pageSortExpr = remapNSSortExprToNRS(sortExpr)
 	}
 

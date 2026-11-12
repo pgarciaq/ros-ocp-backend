@@ -178,7 +178,13 @@ func getNativeNamespaceRecommendationsDistinct(db *gorm.DB, orgID string, opts l
 	}
 	pageLimit := limit + 1
 
-	sortExpr := nativeNSPageSortExpr(opts.OrderBy)
+	// #844 review P2: apply the alias translation to the DISTINCT path
+	// too — stale-inclusive requests (filter[stale]=true/only) bypass
+	// the keys path and sort legacy columns here.
+	sortExpr, nsSortFilter := nativeNSSortExpr(opts.OrderBy)
+	if nsSortFilter != "" {
+		query = query.Where(nsSortFilter)
+	}
 	orderHow := opts.OrderHow
 	if orderHow == "" {
 		orderHow = listoptions.OrderDesc

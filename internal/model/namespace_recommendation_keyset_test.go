@@ -348,12 +348,12 @@ func TestGetNativeNamespaceRecommendations_LegacyRequestSortNumeric(t *testing.T
 	}
 	require.NoError(t, engine.WriteNamespaceRecommendations(ctx, pool, recs))
 	require.NoError(t, model.RefreshOrgNamespaceKeys(ctx, pool, testutil.TestOrgID))
-	// Seed the legacy column with values whose text and numeric order differ.
+	// Seed the NATIVE column (the alias translates to it after #844).
 	for _, spec := range []struct {
 		ns string
 		v  int64
 	}{{"ns-a", 2}, {"ns-b", 10}, {"ns-c", 100}} {
-		_, err := pool.Exec(ctx, `UPDATE namespace_recommendation_sets SET cpu_request_current = $1 WHERE namespace_name = $2 AND org_id = $3`, spec.v, spec.ns, testutil.TestOrgID)
+		_, err := pool.Exec(ctx, `UPDATE namespace_recommendation_sets SET current_cpu_request_millicores = $1 WHERE namespace_name = $2 AND org_id = $3`, spec.v, spec.ns, testutil.TestOrgID)
 		require.NoError(t, err)
 	}
 
@@ -371,5 +371,134 @@ func TestGetNativeNamespaceRecommendations_LegacyRequestSortNumeric(t *testing.T
 		order = append(order, r.Project)
 	}
 	assert.Equal(t, []string{"ns-c", "ns-b", "ns-a"}, order,
-		"legacy request columns must sort numerically — the _current suffix is now detected (#843 review F1)")
+		"the cpu_request_current alias must sort the native column numerically after #844's translation")
+}
+
+// TestGetNativeNamespaceRecommendations_RequestSortAliasTranslation is
+// #844's RED (branch-review finding 5): the namespace sort aliases
+// (cpu_request_current, memory_request_current, cpu_variation_short_cost,
+// etc.) target LEGACY columns the native writer never populates — sorting
+// by them returns NULL-ordered garbage. The fix translates them to native
+// columns (current_cpu_request_millicores, variation_*_pct on the
+// term/engine row the alias encodes).
+func TestGetNativeNamespaceRecommendations_RequestSortAliasTranslation(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.DB = testutil.OpenTestGORM(pool)
+	t.Cleanup(func() { database.DB = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	var recs []namespace.NamespaceRec
+	for _, ns := range []string{"ns-a", "ns-b", "ns-c"} {
+		recs = append(recs, namespace.NamespaceRec{
+			OrgID:           testutil.TestOrgID,
+			ClusterUUID:     testutil.TestClusterUUID,
+			Namespace:       ns,
+			Term:            "short",
+			Engine:          "cost",
+			RecCPURequestMC: 100,
+		})
+	}
+	require.NoError(t, engine.WriteNamespaceRecommendations(ctx, pool, recs))
+	require.NoError(t, model.RefreshOrgNamespaceKeys(ctx, pool, testutil.TestOrgID))
+
+	// Seed native-column values whose text and numeric order differ
+	// (proving both the alias translation AND the numeric cast).
+	for _, spec := range []struct {
+		ns string
+		v  int64
+	}{{"ns-a", 2}, {"ns-b", 10}, {"ns-c", 100}} {
+		_, err := pool.Exec(ctx, `UPDATE namespace_recommendation_sets SET current_cpu_request_millicores = $1 WHERE namespace_name = $2 AND org_id = $3`, spec.v, spec.ns, testutil.TestOrgID)
+		require.NoError(t, err)
+	}
+
+	// Sort by the legacy alias — must hit the NATIVE column.
+	queryParams := map[string]interface{}{"ns.stale = ?": false}
+	opts := listoptions.ListOptions{
+		Limit:    10,
+		OrderBy:  "namespace_recommendation_sets.cpu_request_current",
+		OrderHow: listoptions.OrderDesc,
+	}
+	page, err := model.GetNativeNamespaceRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
+	require.NoError(t, err)
+	require.Len(t, page.Results, 3)
+	var order []string
+	for _, r := range page.Results {
+		order = append(order, r.Project)
+	}
+	assert.Equal(t, []string{"ns-c", "ns-b", "ns-a"}, order,
+		"the cpu_request_current alias must target current_cpu_request_millicores and sort numerically (#844)")
+}
+
+// TestGetNativeNamespaceRecommendations_VariationSortAliasTranslation is
+// #844's variation RED: the variation aliases encode a term/engine
+// selection — the sort value must come from the matching row, not the
+// legacy per-term column.
+func TestGetNativeNamespaceRecommendations_VariationSortAliasTranslation(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.DB = testutil.OpenTestGORM(pool)
+	t.Cleanup(func() { database.DB = nil })
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'test-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	var recs []namespace.NamespaceRec
+	for _, ns := range []string{"ns-a", "ns-z"} {
+		for _, engine := range []string{"cost", "performance"} {
+			recs = append(recs, namespace.NamespaceRec{
+				OrgID:           testutil.TestOrgID,
+				ClusterUUID:     testutil.TestClusterUUID,
+				Namespace:       ns,
+				Term:            "short",
+				Engine:          engine,
+				RecCPURequestMC: 100,
+			})
+		}
+	}
+	require.NoError(t, engine.WriteNamespaceRecommendations(ctx, pool, recs))
+	require.NoError(t, model.RefreshOrgNamespaceKeys(ctx, pool, testutil.TestOrgID))
+
+	// The cost-engine rows carry DIFFERENT variation values than the
+	// performance-engine rows — sorting by cpu_variation_short_cost must
+	// select the COST row's value (the alias encodes engine=cost).
+	_, err = pool.Exec(ctx, `
+		UPDATE namespace_recommendation_sets SET variation_cpu_request_pct = 50.0
+		WHERE namespace_name = 'ns-a' AND org_id = $1 AND engine = 'cost'`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		UPDATE namespace_recommendation_sets SET variation_cpu_request_pct = 90.0
+		WHERE namespace_name = 'ns-z' AND org_id = $1 AND engine = 'cost'`, testutil.TestOrgID)
+	require.NoError(t, err)
+	// The performance rows carry the OPPOSITE order — if the filter
+	// dropped, the sort would reverse.
+	_, err = pool.Exec(ctx, `
+		UPDATE namespace_recommendation_sets SET variation_cpu_request_pct = 90.0
+		WHERE namespace_name = 'ns-a' AND org_id = $1 AND engine = 'performance'`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		UPDATE namespace_recommendation_sets SET variation_cpu_request_pct = 50.0
+		WHERE namespace_name = 'ns-z' AND org_id = $1 AND engine = 'performance'`, testutil.TestOrgID)
+	require.NoError(t, err)
+
+	queryParams := map[string]interface{}{"ns.stale = ?": false}
+	opts := listoptions.ListOptions{
+		Limit:    10,
+		OrderBy:  "namespace_recommendation_sets.cpu_variation_short_cost_pct",
+		OrderHow: listoptions.OrderDesc,
+	}
+	page, err := model.GetNativeNamespaceRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
+	require.NoError(t, err)
+	require.Len(t, page.Results, 2)
+	assert.Equal(t, "ns-z", page.Results[0].Project,
+		"cpu_variation_short_cost must select the COST row's variation (90 > 50 → ns-z first) — the alias encodes engine=cost (#844)")
+	assert.Equal(t, "ns-a", page.Results[1].Project)
 }

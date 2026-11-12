@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -11,12 +12,64 @@ import (
 	"gorm.io/gorm"
 )
 
-// nativeNSPageSortExpr returns the ORDER BY expression for namespace list pagination.
-func nativeNSPageSortExpr(orderByDBCol string) string {
+// nsVariationOrderByRe parses variation sort aliases
+// (cpu_variation_short_cost → resource=cpu, term=short, engine=cost).
+var nsVariationOrderByRe = regexp.MustCompile(
+	`^(cpu|memory)_variation_(short|medium|long)_(cost|performance)$`,
+)
+
+// nsVariationTermSuffix maps alias term names to the DB term values —
+// the engine emits "short", "medium", "long" (librobne/engine/defaults.go),
+// NOT the kruizeplugin API constants ("short_term" etc.). The container
+// path's variation sorts have the same mismatch (pre-existing, filed).
+var nsVariationTermSuffix = map[string]string{
+	"short":  "short",
+	"medium": "medium",
+	"long":   "long",
+}
+
+// nativeNSSortExpr returns the ORDER BY expression and an optional ns
+// WHERE clause (term+engine) for per-term variation sorts on native
+// relational rows (#844 — mirrors the container's
+// nativeContainerSortExpr). The legacy sort aliases
+// (cpu_request_current, cpu_variation_short_cost, etc.) target columns
+// the native writer never populates; this translates them to the
+// native columns, selecting the term/engine row the alias encodes.
+func nativeNSSortExpr(orderByDBCol string) (sortExpr string, nsFilter string) {
 	if orderByDBCol == "" {
 		orderByDBCol = listoptions.DefaultNsRecsDBColumn
 	}
-	return remapNativeNSOrderBy(orderByDBCol)
+	for apiKey, dbCol := range listoptions.NsAllowedOrderBy {
+		if dbCol != orderByDBCol {
+			continue
+		}
+		if term, engine, resource, ok := nsVariationOrderByParts(apiKey); ok {
+			pctCol := "ns.variation_cpu_request_pct"
+			if resource == "memory" {
+				pctCol = "ns.variation_memory_request_pct"
+			}
+			return pctCol, fmt.Sprintf("nrs.term = '%s' AND nrs.engine = '%s'", term, engine)
+		}
+		switch apiKey {
+		case "cpu_request_current":
+			return "ns.current_cpu_request_millicores", ""
+		case "memory_request_current":
+			return "ns.current_memory_request_kib", ""
+		}
+		break
+	}
+	return remapNativeNSOrderBy(orderByDBCol), ""
+}
+
+func nsVariationOrderByParts(apiKey string) (term, engine, resource string, ok bool) {
+	m := nsVariationOrderByRe.FindStringSubmatch(apiKey)
+	if m == nil {
+		return "", "", "", false
+	}
+	resource = m[1]
+	term = nsVariationTermSuffix[m[2]]
+	engine = m[3]
+	return term, engine, resource, true
 }
 
 // nativeNSDistinctOnOrder is the ORDER BY required by PostgreSQL DISTINCT ON for namespace pages.
