@@ -73,6 +73,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Ascending namespace cursors no longer strand on NULL sort values ([#850](https://github.com/pgarciaq/ros-ocp-backend/issues/850)):**
+  the namespace list sorts ascending with NULLS FIRST, but the ASC cursor
+  seek compared `sortCol > anchor` — with a NULL anchor (a page boundary
+  inside the NULL block) that predicate is never true, so pagination
+  stopped after the NULL rows and never reached the non-NULL rows that
+  follow. All three namespace seek sites (the keys-page seek, the
+  page-subquery seek, and the stale-inclusive DISTINCT fallback) now
+  special-case a NULL anchor: continue within the NULL block by
+  tiebreaker, then jump to the non-NULL rows. The container path is
+  unaffected (it orders NULLS LAST in ASC, making NULL anchors terminal).
+  Found while fixing #843's numeric cursor walk.
+- **Container variation sorts use the engine's term values ([#852](https://github.com/pgarciaq/ros-ocp-backend/issues/852)):**
+  the container list's 12 variation sort aliases filtered the joined
+  recommendation row on the kruizeplugin API constants
+  (`short_term`/`medium_term`/`long_term`), but the engine writes
+  `short`/`medium`/`long` (librobne/engine/defaults.go) — every variation
+  sort matched zero rows and returned an empty list. The filter now uses
+  the DB term values (the identical namespace-side bug was fixed in
+  #844). The same cycle also stopped variation sorts from dropping
+  containers that lack the selected term row (LEFT JOIN, matching #844)
+  and aligned the seek tie columns with the ORDER BY tie columns
+  (cluster-first, previously the mismatch could skip tied rows across
+  clusters).
 - **Namespace sort aliases now target populated native columns ([#844](https://github.com/pgarciaq/ros-ocp-backend/issues/844)):**
   the namespace list's request and variation sort aliases
   (`cpu_request_current`, `cpu_variation_short_cost`, etc.) targeted
