@@ -73,6 +73,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Namespace sort aliases now target populated native columns ([#844](https://github.com/pgarciaq/ros-ocp-backend/issues/844)):**
+  the namespace list's request and variation sort aliases
+  (`cpu_request_current`, `cpu_variation_short_cost`, etc.) targeted
+  legacy columns the native writer never populates — sorting by them
+  returned NULL-ordered garbage. The aliases now translate to native
+  columns (`current_cpu_request_millicores`,
+  `variation_*_pct` on the term/engine row the alias encodes), with
+  a LEFT JOIN so namespaces lacking the selected term sort as NULL
+  rather than disappearing. The stale-inclusive DISTINCT path applies
+  the same translation. Found by the phase17 branch review; the
+  identical term-constant bug on the container path is filed
+  separately (#852).
 - **Namespace numeric sorts no longer order lexicographically ([#843](https://github.com/pgarciaq/ros-ocp-backend/issues/843)):**
   the namespace list's page-sort key was cast to text before ordering,
   so numeric sorts with different digit lengths compared as strings —
