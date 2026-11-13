@@ -165,6 +165,13 @@ type SleepEvidence struct {
 type LegCoverage struct {
 	BHHours  int16
 	OffHours int16
+
+	// Attested (#831/#847): the workload-day's evidence rows all carry
+	// the currently resolved schedule's fingerprint. User-workload-
+	// scoped gate — platform rows never gate (the server's shape). A
+	// pair ABSENT from cov carries no attestation info — the gate
+	// skips (nil-coverage callers evaluate as attested).
+	Attested bool
 }
 
 // DayCoverage maps day → (namespace, workload) → per-leg observed hours —
@@ -180,21 +187,22 @@ type DayCoverage map[string]map[DayKey]LegCoverage
 // use SleepCandidateWithCoverage when the caller can supply observation
 // hours or reads stored evidence (#827, #831).
 func SleepCandidate(hcID, tier string, sums map[string]map[DayKey]DaySum, sched bhschedule.Schedule, pol SleepPolicy, workerNodes int, syncedExact map[string]bool, syncedPrefixes []string, now time.Time) *Advisory {
-	return SleepCandidateWithCoverage(hcID, tier, sums, nil, true, sched, pol, workerNodes, syncedExact, syncedPrefixes, now)
+	return SleepCandidateWithCoverage(hcID, tier, sums, nil, sched, pol, workerNodes, syncedExact, syncedPrefixes, now)
 }
 
 // SleepCandidateWithCoverage is SleepCandidate with the #827 observation
-// coverage input (per-leg observed hours keyed by (day, ns, wl)) and the
-// #831 schedule-attestation input: scheduleAttested is false when any
-// stored evidence row was split under a window other than the one this
-// evaluation resolves — the day reads unknown, never wrong-window advice
-// (the owner-approved silence-over-wrong trade). The CSV mode is always
-// attested (split and evaluation share the current schedule); the DB mode
-// computes it from the rows' fingerprints.
-func SleepCandidateWithCoverage(hcID, tier string, sums map[string]map[DayKey]DaySum, cov DayCoverage, scheduleAttested bool, sched bhschedule.Schedule, pol SleepPolicy, workerNodes int, syncedExact map[string]bool, syncedPrefixes []string, now time.Time) *Advisory {
-	if !scheduleAttested {
-		return nil
-	}
+// coverage input (per-leg observed hours keyed by (day, ns, wl)) carrying
+// the #831/#847 schedule attestation per workload-day: an unattested USER
+// workload-day (evidence rows split under a window other than the one this
+// evaluation resolves) reads unknown, never wrong-window advice (the
+// owner-approved silence-over-wrong trade) — user-workload-scoped like the
+// coverage gate, matching the server; a stale PLATFORM row never gates
+// (#847 parity). The CSV mode builds coverage with Attested true (split
+// and evaluation share the current schedule); the DB mode AND-collapses
+// the rows' fingerprints in its coverage assembly. Pairs absent from cov
+// carry no attestation info — the gate skips them (nil-coverage callers
+// evaluate as attested, the pre-#827 shape).
+func SleepCandidateWithCoverage(hcID, tier string, sums map[string]map[DayKey]DaySum, cov DayCoverage, sched bhschedule.Schedule, pol SleepPolicy, workerNodes int, syncedExact map[string]bool, syncedPrefixes []string, now time.Time) *Advisory {
 	if tier != TierNonProd {
 		return nil
 	}
@@ -288,6 +296,18 @@ func SleepCandidateWithCoverage(hcID, tier string, sums map[string]map[DayKey]Da
 					return nil
 				}
 				if int(c.OffHours) < minOffHours {
+					return nil
+				}
+				// #831/#847: the schedule-attestation gate, user-workload-
+				// scoped like the floor above — a USER workload-day whose
+				// evidence rows were split under a different window reads
+				// unknown, never wrong-window advice (the owner-approved
+				// silence-over-wrong trade). PLATFORM rows never gate:
+				// the server excludes them before this gate, and one
+				// stale platform row must not silence rebuilt user
+				// evidence (the #847 parity fix — the window-wide
+				// boolean this replaces broke that parity).
+				if !c.Attested {
 					return nil
 				}
 			}

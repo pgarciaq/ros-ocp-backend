@@ -21,6 +21,7 @@ import (
 	modeltypes "github.com/redhatinsights/ros-ocp-backend/internal/model/types"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/advisory"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/namespace"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
@@ -1319,20 +1320,33 @@ func TestWriteReadSleepEvidenceHoursRoundTrip(t *testing.T) {
 	// First write: full coverage, attested to schedule fingerprint A.
 	const fpA = "fp-schedule-a"
 	const fpB = "fp-schedule-b"
-	readBack := func(fp string) (bh, off, legacy []types.KeyedDigest, hours []pgdigest.EvidenceHours, attested bool) {
+	readRows5 := func(fp string) (bh, off, legacy []types.KeyedDigest, hours []pgdigest.EvidenceHours) {
 		t.Helper()
 		var readErr error
-		bh, off, legacy, hours, attested, readErr = pgdigest.ReadSleepEvidence(ctx, pool, org, cluster,
+		bh, off, legacy, hours, readErr = pgdigest.ReadSleepEvidence(ctx, pool, org, cluster,
 			day.AddDate(0, 0, -1), day.AddDate(0, 0, 1), fp)
 		require.NoError(t, readErr)
 		return
 	}
-	require.NoError(t, pgdigest.WriteSleepEvidence(ctx, pool, org, cluster, mk(300, 0), mk(0, 0), hoursFor(8, 16), fpA))
-	if _, _, _, _, attested := readBack(fpA); !attested {
-		t.Error("rows written under fingerprint A must read attested against A (#831 review F1)")
+	// #847: attestation is per-row on EvidenceHours — the round-trip
+	// asserts it per row rather than a window-wide boolean.
+	readRows := func(fp string) []pgdigest.EvidenceHours {
+		t.Helper()
+		_, _, _, hours, readErr := pgdigest.ReadSleepEvidence(ctx, pool, org, cluster,
+			day.AddDate(0, 0, -1), day.AddDate(0, 0, 1), fp)
+		require.NoError(t, readErr)
+		return hours
 	}
-	if _, _, _, _, attested := readBack(fpB); attested {
-		t.Error("rows written under fingerprint A must read UNattested against B (#831 review F1)")
+	require.NoError(t, pgdigest.WriteSleepEvidence(ctx, pool, org, cluster, mk(300, 0), mk(0, 0), hoursFor(8, 16), fpA))
+	for _, h := range readRows(fpA) {
+		if !h.Attested {
+			t.Errorf("rows written under fingerprint A must read attested against A (#831 review F1): %+v", h)
+		}
+	}
+	for _, h := range readRows(fpB) {
+		if h.Attested {
+			t.Errorf("rows written under fingerprint A must read UNattested against B (#831 review F1): %+v", h)
+		}
 	}
 	// A pre-#827 legacy sibling row: p50s only — no p95, no hours.
 	_, err := pool.Exec(ctx, `
@@ -1344,8 +1358,9 @@ func TestWriteReadSleepEvidenceHoursRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	// The legacy sibling row (inserted below without a fingerprint)
-	// unattests any window it shares — asserted after that insert.
-	_, _, legacy, hours, _ := readBack("some-fingerprint")
+	// shares the window — its rows read alongside the written ones.
+	_, _, legacy, hoursRows := readRows5("some-fingerprint")
+	hours := hoursRows
 	require.Len(t, hours, 2)
 	byContainer := map[string]pgdigest.EvidenceHours{}
 	for _, h := range hours {
@@ -1359,22 +1374,32 @@ func TestWriteReadSleepEvidenceHoursRoundTrip(t *testing.T) {
 	assert.Equal(t, int16(0), byContainer["c1"].OffHours)
 	require.Len(t, legacy, 1,
 		"the legacy row (p95 NULL) still routes to the legacy slice for the #761 gate")
-	// The NULL-fingerprint legacy sibling unattests the shared window.
-	if _, _, _, _, attested := readBack(fpA); attested {
-		t.Error("a NULL-fingerprint row sharing the window must unattest it (#831)")
+	// The NULL-fingerprint legacy sibling reads unattested on its own
+	// rows — workload-grain, so only the (demo-app, web) workload-day is
+	// affected once collapsed (#847).
+	for _, h := range readRows(fpA) {
+		if h.ContainerName == "c1" && h.Attested {
+			t.Error("a NULL-fingerprint row must read unattested (#831)")
+		}
 	}
 	assert.Equal(t, "c1", legacy[0].Key.ContainerName)
 	// The workload-grain collapse: the sparse legacy sibling makes the
 	// workload-day read 0 coverage — the gate bites in DB mode.
-	cov := coverageFromHoursRows(hours)
-	assert.Equal(t, advisory.LegCoverage{BHHours: 0, OffHours: 0},
-		cov[day.Format("2006-01-02")][advisory.DayKey{NS: "demo-app", WL: "web"}])
+	// #847: the workload-day AND-collapse — read against fpA so the two
+	// rows DIFFER (c0 attested, the NULL-fingerprint c1 not): the AND must
+	// read false — an attested sibling must not mask a stale row (the
+	// server's NOT bool_or shape).
+	covA := coverageFromHoursRows(readRows(fpA))
+	assert.Equal(t, advisory.LegCoverage{BHHours: 0, OffHours: 0, Attested: false},
+		covA[day.Format("2006-01-02")][advisory.DayKey{NS: "demo-app", WL: "web"}])
+	_ = hours
 
 	// Replacement write with sparse coverage must REPLACE the hours AND
 	// the fingerprint — a stale fingerprint on replaced evidence would
 	// falsely attest it to the old window (#831 review F1).
 	require.NoError(t, pgdigest.WriteSleepEvidence(ctx, pool, org, cluster, mk(300, 0), mk(0, 0), hoursFor(2, 2), fpB))
-	_, _, _, hours, _ = readBack("some-fingerprint")
+	_, _, _, hoursRows2 := readRows5("some-fingerprint")
+	hours = hoursRows2
 	byContainer = map[string]pgdigest.EvidenceHours{}
 	for _, h := range hours {
 		byContainer[h.ContainerName] = h
@@ -1382,4 +1407,145 @@ func TestWriteReadSleepEvidenceHoursRoundTrip(t *testing.T) {
 	assert.Equal(t, int16(2), byContainer["c0"].BHHours,
 		"a replacement upsert must replace the hours, not retain stale full coverage (F1)")
 	assert.Equal(t, int16(2), byContainer["c0"].OffHours)
+}
+
+// TestSleepAttestationParity_StalePlatformRow is #847's RED (the close
+// criterion): user workload evidence complete and attested to the
+// current schedule, one platform-namespace row stale — the offline
+// advisory must FIRE (the server excludes platform workloads before
+// the attestation gate). Baseline: the reader's window-wide boolean
+// reads false over the stale platform row and the advisory is silent.
+func TestSleepAttestationParity_StalePlatformRow(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	org := "robne-847-parity"
+	cluster := "dddddddd-2222-2222-2222-222222222222"
+
+	sched := bhschedule.Schedule{
+		Timezone: "UTC", Days: []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "09:00", EndTime: "17:00", Enabled: true,
+	}
+	const fpCurrent = "fp-847-current"
+	const fpStale = "fp-847-stale"
+
+	// #847 review P4: ONE timestamp for seeding and evaluation — separate
+	// time.Now() calls can cross UTC midnight and shift the window.
+	now := time.Now()
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+
+	mkLegs := func(ns, wl, cn string, bh, off int64) (bhL, offL []types.KeyedDigest, hours []pgdigest.EvidenceHours) {
+		for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+			key := types.ContainerKey{Namespace: ns, Workload: wl, WorkloadType: "Deployment", ContainerName: cn}
+			bhL = append(bhL, types.KeyedDigest{Key: key, Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: bh, CPUUsageP95MC: bh}})
+			offL = append(offL, types.KeyedDigest{Key: key, Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: off, CPUUsageP95MC: off}})
+			hours = append(hours, pgdigest.EvidenceHours{
+				Namespace: ns, Workload: wl, WorkloadType: "Deployment", ContainerName: cn,
+				Day: d, BHHours: 8, OffHours: 16,
+			})
+		}
+		return bhL, offL, hours
+	}
+
+	// The user workload: busy in hours, idle outside — fully attested.
+	userBH, userOff, userHours := mkLegs("demo-app", "web", "c0", 300, 0)
+	require.NoError(t, pgdigest.WriteSleepEvidence(ctx, pool, org, cluster, userBH, userOff, userHours, fpCurrent))
+	// Platform liveness rows: also attested.
+	platBH, platOff, platHours := mkLegs("kube-system", "coredns", "c0", 2000, 100)
+	require.NoError(t, pgdigest.WriteSleepEvidence(ctx, pool, org, cluster, platBH, platOff, platHours, fpCurrent))
+
+	// One stale platform row: re-ingested under an OLD schedule — full
+	// legs and hours, wrong fingerprint.
+	staleDay := start.AddDate(0, 0, 7)
+	_, err := pool.Exec(ctx, `
+		INSERT INTO hcp_sleep_evidence (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, bucket_date, bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc,
+			bh_observed_hours, off_observed_hours, schedule_fingerprint
+		) VALUES ($1,$2::uuid,'kube-system','old-sync','Deployment','c9',$3,500,50,50,8,16,$4)`,
+		org, cluster, staleDay, fpStale)
+	require.NoError(t, err)
+
+	bh, off, offLegacy, hoursRows, err := pgdigest.ReadSleepEvidence(ctx, pool, org, cluster, start, end, fpCurrent)
+	require.NoError(t, err)
+	cov := coverageFromHoursRows(hoursRows)
+	// The collapse must attest the USER workload-days and unattest the
+	// stale platform row's workload-day — the gate scopes to users.
+	userAttested := cov[staleDay.Format("2006-01-02")][advisory.DayKey{NS: "demo-app", WL: "web"}].Attested
+	staleAttested := cov[staleDay.Format("2006-01-02")][advisory.DayKey{NS: "kube-system", WL: "old-sync"}].Attested
+	assert.True(t, userAttested, "the user workload-day must read attested")
+	assert.False(t, staleAttested, "the stale platform row must read unattested (its own workload-day)")
+	sums := advisory.SleepSumsAll(bh, off, offLegacy)
+	got := advisory.SleepCandidateWithCoverage("hc-847", advisory.TierNonProd, sums, cov, sched,
+		advisory.DefaultSleepPolicy(), 2, nil, nil, now)
+	require.NotNil(t, got,
+		"a stale PLATFORM row must not silence the offline advisory — the server excludes platform workloads before the attestation gate (#847)")
+	assert.Equal(t, advisory.SleepVerdict, got.Verdict)
+}
+
+// TestSleepAttestationParity_CoverageOnlyUserRowIsUnknown is #847
+// review P3's regression: a USER workload row with ALL value legs NULL
+// (coverage only) defines its workload-day — the server's loader groups
+// by (day, ns, wl) with COUNT(*), so such a row reads unknown for user
+// workloads. The offline reader must preserve the workload-day in sums
+// (via the presence-only offLegacy route), never drop it from the
+// gates. Baseline: the row vanished from the sums and the advisory
+// fired over an unattested, unmeasured user workload-day.
+func TestSleepAttestationParity_CoverageOnlyUserRowIsUnknown(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	org := "robne-847-coverage-only"
+	cluster := "dddddddd-3333-3333-3333-333333333333"
+
+	sched := bhschedule.Schedule{
+		Timezone: "UTC", Days: []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "09:00", EndTime: "17:00", Enabled: true,
+	}
+	const fpCurrent = "fp-847-cov-current"
+
+	now := time.Now()
+	end := now.UTC().Truncate(24 * time.Hour)
+	start := end.AddDate(0, 0, -14)
+
+	mkLegs := func(ns, wl, cn string, bh, off int64) (bhL, offL []types.KeyedDigest, hours []pgdigest.EvidenceHours) {
+		for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+			key := types.ContainerKey{Namespace: ns, Workload: wl, WorkloadType: "Deployment", ContainerName: cn}
+			bhL = append(bhL, types.KeyedDigest{Key: key, Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: bh, CPUUsageP95MC: bh}})
+			offL = append(offL, types.KeyedDigest{Key: key, Row: types.DigestRow{BucketDate: d, CPUUsageP50MC: off, CPUUsageP95MC: off}})
+			hours = append(hours, pgdigest.EvidenceHours{
+				Namespace: ns, Workload: wl, WorkloadType: "Deployment", ContainerName: cn,
+				Day: d, BHHours: 8, OffHours: 16,
+			})
+		}
+		return bhL, offL, hours
+	}
+
+	// Qualifying, attested user evidence.
+	userBH, userOff, userHours := mkLegs("demo-app", "web", "c0", 300, 0)
+	require.NoError(t, pgdigest.WriteSleepEvidence(ctx, pool, org, cluster, userBH, userOff, userHours, fpCurrent))
+
+	// A coverage-only USER row: all value legs NULL, hours present, stale
+	// fingerprint — the shape WriteSleepEvidence can produce from an
+	// hours-only entry.
+	ghostDay := start.AddDate(0, 0, 3)
+	_, err := pool.Exec(ctx, `
+		INSERT INTO hcp_sleep_evidence (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, bucket_date, bh_observed_hours, off_observed_hours, schedule_fingerprint
+		) VALUES ($1,$2::uuid,'demo-app','ghost','Deployment','c0',$3,2,2,'fp-847-stale')`,
+		org, cluster, ghostDay)
+	require.NoError(t, err)
+
+	bh, off, offLegacy, hoursRows, err := pgdigest.ReadSleepEvidence(ctx, pool, org, cluster, start, end, fpCurrent)
+	require.NoError(t, err)
+	cov := coverageFromHoursRows(hoursRows)
+	sums := advisory.SleepSumsAll(bh, off, offLegacy)
+	// The ghost workload-day must be PRESENT in the sums (the server's
+	// COUNT(*) grouping) — presence-only, unmeasured.
+	_, ghostPresent := sums[ghostDay.Format("2006-01-02")][advisory.DayKey{NS: "demo-app", WL: "ghost"}]
+	require.True(t, ghostPresent, "a coverage-only row must preserve its workload-day in the sums (#847 review P3)")
+	got := advisory.SleepCandidateWithCoverage("hc-847-cov", advisory.TierNonProd, sums, cov, sched,
+		advisory.DefaultSleepPolicy(), 2, nil, nil, now)
+	assert.Nil(t, got,
+		"a coverage-only USER workload-day reads unknown — the server never advises over it (#847 review P3)")
 }

@@ -19,7 +19,13 @@ import (
 // read alongside the value legs for the CLI's coverage input, and written
 // by the CLI's DB mode alongside the legs (the hours must ride the same
 // upsert as the values — a write without hours would leave NULL coverage
-// that the read treats as unobserved).
+// that the read treats as unobserved). Attested (#831/#847) is per-ROW:
+// the row's schedule fingerprint matches the currently resolved schedule.
+// The workload-day AND-collapse happens in the CLI's coverage assembly
+// (the same collapse as the hours MIN) — mirroring the server's
+// NOT bool_or(IS DISTINCT FROM) — and the attestation GATE is
+// user-workload-scoped in the advisory (platform rows never gate, the
+// server's shape).
 type EvidenceHours struct {
 	Namespace     string
 	Workload      string
@@ -28,14 +34,15 @@ type EvidenceHours struct {
 	Day           time.Time
 	BHHours       int16
 	OffHours      int16
+	Attested      bool
 }
 
 // ReadSleepEvidence loads the sleep evidence legs for the CLI's DB mode.
 // scheduleFingerprint (#831) is the CURRENTLY resolved schedule's identity;
-// the returned attested flag is true only when EVERY row in the window
-// carries it (NULL pre-#831 rows read unattested) — the caller suppresses
-// the advisory on mismatch, mirroring the server's gate.
-func ReadSleepEvidence(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time, scheduleFingerprint string) (bh, off, offLegacy []types.KeyedDigest, hours []EvidenceHours, attested bool, err error) {
+// each row's match rides EvidenceHours.Attested (#847: workload-grain, not
+// a window-wide boolean — a stale PLATFORM row must not unattest USER
+// evidence; the advisory gates user workloads only, the server's shape).
+func ReadSleepEvidence(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time, scheduleFingerprint string) (bh, off, offLegacy []types.KeyedDigest, hours []EvidenceHours, err error) {
 	rows, err := q.Query(ctx, `
 		SELECT namespace, workload, workload_type, container_name, bucket_date,
 			bh_cpu_p50_mc, off_cpu_p50_mc, off_cpu_p95_mc,
@@ -45,11 +52,9 @@ func ReadSleepEvidence(ctx context.Context, q Querier, orgID, clusterUUID string
 		  AND bucket_date >= $3 AND bucket_date < $4`,
 		orgID, clusterUUID, start.Format("2006-01-02"), end.Format("2006-01-02"))
 	if err != nil {
-		return nil, nil, nil, nil, false, err
+		return nil, nil, nil, nil, err
 	}
 	defer rows.Close()
-	attested = true
-	rowCount := 0
 	for rows.Next() {
 		var ns, wl, wt, cn string
 		var day time.Time
@@ -57,15 +62,14 @@ func ReadSleepEvidence(ctx context.Context, q Querier, orgID, clusterUUID string
 		var bhH, offH *int16
 		var fp *string
 		if err := rows.Scan(&ns, &wl, &wt, &cn, &day, &bhP50, &offP50, &offP95, &bhH, &offH, &fp); err != nil {
-			return nil, nil, nil, nil, false, err
+			return nil, nil, nil, nil, err
 		}
-		rowCount++
-		// #831: any row not matching the current fingerprint (including
-		// NULL pre-#831 rows) unattests the whole window — a re-ingested
-		// sibling cannot mask a stale row.
-		if fp == nil || *fp != scheduleFingerprint {
-			attested = false
-		}
+		// #831/#847: per-row attestation — a row not matching the current
+		// fingerprint (including NULL pre-#831 rows) reads unattested; the
+		// workload-day AND-collapse happens in the CLI's coverage assembly
+		// and the gate is user-workload-scoped (a stale PLATFORM row must
+		// not unattest USER evidence).
+		rowAttested := fp != nil && *fp == scheduleFingerprint
 		// #827: observed hours for EVERY row, COALESCEd to 0 when the
 		// columns are NULL (pre-#827 rows) — a missing measurement is 0
 		// observed hours, never "no information" that skips the floor:
@@ -80,7 +84,7 @@ func ReadSleepEvidence(ctx context.Context, q Querier, orgID, clusterUUID string
 		if offH != nil {
 			o = *offH
 		}
-		hours = append(hours, EvidenceHours{Namespace: ns, Workload: wl, WorkloadType: wt, ContainerName: cn, Day: day, BHHours: b, OffHours: o})
+		hours = append(hours, EvidenceHours{Namespace: ns, Workload: wl, WorkloadType: wt, ContainerName: cn, Day: day, BHHours: b, OffHours: o, Attested: rowAttested})
 		key := types.ContainerKey{
 			Namespace: ns, Workload: wl, WorkloadType: wt, ContainerName: cn,
 		}
@@ -102,10 +106,20 @@ func ReadSleepEvidence(ctx context.Context, q Querier, orgID, clusterUUID string
 				Key: key,
 				Row: types.DigestRow{BucketDate: day, CPUUsageP50MC: *offP50},
 			})
+		} else if bhP50 == nil {
+			// #847 review P3: a row with ALL value legs NULL (coverage
+			// only — hours present, no measurements) still defines its
+			// workload-day. The server's loader groups by (day, ns, wl)
+			// with COUNT(*): such a row makes the workload-day present
+			// with both legs unmeasured → unknown for user workloads.
+			// Emit it to offLegacy (presence-only, OffMeasured=false) so
+			// the offline sums preserve the workload-day — never dropped
+			// from the gates, matching the server.
+			offLegacy = append(offLegacy, types.KeyedDigest{
+				Key: key,
+				Row: types.DigestRow{BucketDate: day},
+			})
 		}
 	}
-	if rowCount == 0 {
-		attested = false // no evidence at all — nothing attests the window
-	}
-	return bh, off, offLegacy, hours, attested, rows.Err()
+	return bh, off, offLegacy, hours, rows.Err()
 }

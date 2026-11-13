@@ -1762,7 +1762,9 @@ func TestCsvContainerHours(t *testing.T) {
 	}
 	requireLen := func(ns, wl, wt, cn string, bhH, offH int16) {
 		t.Helper()
-		want := pgdigest.EvidenceHours{Namespace: ns, Workload: wl, WorkloadType: wt, ContainerName: cn, Day: day, BHHours: bhH, OffHours: offH}
+		// #847: the CSV path is inherently attested (split and
+		// evaluation share the current schedule).
+		want := pgdigest.EvidenceHours{Namespace: ns, Workload: wl, WorkloadType: wt, ContainerName: cn, Day: day, BHHours: bhH, OffHours: offH, Attested: true}
 		if _, ok := byKey[want]; !ok {
 			t.Fatalf("missing %+v in %v", want, got)
 		}

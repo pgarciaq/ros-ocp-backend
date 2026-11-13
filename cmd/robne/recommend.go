@@ -555,17 +555,18 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 					return out, err
 				}
 			}
-			attested, err := false, error(nil)
 			// #831 review F3: attest (and read) exactly the sleep
 			// evaluation window — the digest lookback above spans up to
 			// 90 days, and a stale row outside the sleep window would
 			// suppress advice long after the sleep-relevant evidence
 			// rebuilt. Same window the advisory iterates (policy days,
-			// UTC-midnight truncated).
+			// UTC-midnight truncated). #847: attestation rides the hours
+			// rows (workload-grain, AND-collapsed in the coverage
+			// assembly) — not a window-wide boolean.
 			sleepPol := sleepPolicyFromYAML(fl.cfg.SleepAdvisory)
 			sleepEnd := now.UTC().Truncate(24 * time.Hour)
 			sleepStart := sleepEnd.AddDate(0, 0, -sleepPol.WindowDays)
-			bhLegs, offLegs, offLegacyLegs, hoursRows, attested, err := pgdigest.ReadSleepEvidence(ctx, pool, fl.orgID, fl.clusterID, sleepStart, sleepEnd, bhschedule.Fingerprint(fl.bhSchedule))
+			bhLegs, offLegs, offLegacyLegs, hoursRows, err := pgdigest.ReadSleepEvidence(ctx, pool, fl.orgID, fl.clusterID, sleepStart, sleepEnd, bhschedule.Fingerprint(fl.bhSchedule))
 			if err != nil {
 				return out, err
 			}
@@ -573,7 +574,6 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 			fl.sleepOffLegs = offLegs
 			fl.sleepOffLegacyLegs = offLegacyLegs
 			fl.sleepCoverage = coverageFromHoursRows(hoursRows)
-			fl.scheduleAttested = attested
 		}
 	} else {
 		out.ClusterID = fl.clusterID
@@ -874,11 +874,6 @@ type fileLoad struct {
 	sleepBHLegs        []types.KeyedDigest
 	sleepOffLegs       []types.KeyedDigest
 	sleepOffLegacyLegs []types.KeyedDigest
-	// scheduleAttested (#831): true when every stored evidence row was
-	// split under the currently resolved schedule (the CSV path sets it
-	// true — split and evaluation share the schedule; the DB path
-	// computes it from the rows' fingerprints).
-	scheduleAttested bool
 	// sleepContainerHours (#827): per-container-day observed-hour counts —
 	// the DB write's hours input.
 	sleepContainerHours []pgdigest.EvidenceHours
@@ -1135,7 +1130,6 @@ func loadBusinessHoursDigests(fl *fileLoad, csvLoaded csv.LoadResult) error {
 	// itself rides the DB write.
 	fl.sleepContainerHours = csvContainerHours(csvLoaded.Rows, s)
 	fl.sleepCoverage = coverageFromHoursRows(fl.sleepContainerHours)
-	fl.scheduleAttested = true
 	if pluginEnabled(fl.plugins, "container") || pluginEnabled(fl.plugins, "quota") || pluginEnabled(fl.plugins, "cluster-quota") {
 		digests, _, err := csv.DailyDigestsWeighted(csvLoaded.Rows, weightFn)
 		if err != nil {
@@ -1919,6 +1913,9 @@ func csvContainerHours(rows []csv.Row, sched bhschedule.Schedule) []pgdigest.Evi
 			Day:      parseDayUTC(k.day),
 			BHHours:  int16(len(bhSeen[k])),  //nolint:gosec // G115: hour buckets, ≤24
 			OffHours: int16(len(offSeen[k])), //nolint:gosec // G115: hour buckets, ≤24
+			// #831/#847: the CSV path is inherently attested — the split
+			// and the evaluation share the current schedule.
+			Attested: true,
 		})
 	}
 	for k := range bhSeen {
@@ -1951,12 +1948,17 @@ func coverageFromHoursRows(rows []pgdigest.EvidenceHours) advisory.DayCoverage {
 		}
 		dk := advisory.DayKey{NS: r.Namespace, WL: r.Workload}
 		if _, ok := out[day][dk]; !ok {
-			out[day][dk] = advisory.LegCoverage{BHHours: r.BHHours, OffHours: r.OffHours}
+			out[day][dk] = advisory.LegCoverage{BHHours: r.BHHours, OffHours: r.OffHours, Attested: r.Attested}
 			continue
 		}
 		c := out[day][dk]
 		c.BHHours = min(c.BHHours, r.BHHours)
 		c.OffHours = min(c.OffHours, r.OffHours)
+		// #831/#847: the workload-day attestation AND-collapse — the same
+		// shape as the server's NOT bool_or(IS DISTINCT FROM) over the
+		// workload-day's container rows; a stale sibling cannot be masked
+		// by a re-ingested one.
+		c.Attested = c.Attested && r.Attested
 		out[day][dk] = c
 	}
 	return out
