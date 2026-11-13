@@ -65,8 +65,11 @@ func TestSleepCandidate_DeclaredAndBHSignatureFires(t *testing.T) {
 	assert.Equal(t, int64(300), got.Details["bh_active_peak_cpu_mc"])
 	assert.Equal(t, int64(0), got.Details["outside_bh_peak_cpu_mc"])
 	assert.Equal(t, 2, got.Details["worker_node_count"])
-	// Mon-fri 09:00-17:00: 16 outside-hours/day * 5 days = 80/week * 2 nodes.
-	assert.Equal(t, 160.0, got.Details["reclaim_node_hours_per_week"])
+	// #848: the weekly complement — Mon-fri 09:00-17:00 has 40 BH
+	// hours/week; the sleep window is the remaining 168-40 = 128
+	// hours/week (non-scheduled days are slept too — weekend activity
+	// is a veto) * 2 nodes.
+	assert.Equal(t, 256.0, got.Details["reclaim_node_hours_per_week"])
 	assert.Equal(t, "non-prod", got.Details["declared_tier"])
 	require.NotEmpty(t, got.Evidence)
 }
@@ -144,13 +147,44 @@ func TestSleepCandidate_SyncedExclusionsShared(t *testing.T) {
 	assert.Nil(t, got)
 }
 
+// TestWeeklyOutsideHours (#848): the weekly complement — 168 minus the
+// week's business hours. Non-scheduled days are slept in full (their
+// activity is a veto), so they count toward the reclaim; each
+// scheduled day contributes exactly its window (overnight wrap
+// attributes the post-midnight portion to the scheduled day's shift).
 func TestWeeklyOutsideHours_MidnightCrossing(t *testing.T) {
-	s := testSchedule()
-	s.StartTime = "22:00"
-	s.EndTime = "06:00"
-	// 8 inside-hours (22:00-06:00 crossing midnight), 16 outside per
-	// day * 5 days = 80.
-	assert.InDelta(t, 80.0, weeklyOutsideHours(s), 0.001)
+	weekday := testSchedule() // Mon-Fri 09:00-17:00: 40 BH/week
+	assert.InDelta(t, 128.0, weeklyOutsideHours(weekday), 0.001,
+		"Mon-Fri 09:00-17:00: 168-40 = 128 sleep hours/week")
+
+	overnight := testSchedule()
+	overnight.StartTime = "22:00"
+	overnight.EndTime = "06:00" // 8h window: 40 BH/week
+	assert.InDelta(t, 128.0, weeklyOutsideHours(overnight), 0.001,
+		"Mon-Fri 22:00-06:00: 8 inside-hours/shift * 5 = 40 BH; 168-40 = 128")
+
+	alldays := testSchedule()
+	alldays.Days = []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+	assert.InDelta(t, 112.0, weeklyOutsideHours(alldays), 0.001,
+		"7-day 09:00-17:00: 56 BH; 168-56 = 112")
+
+	nodays := testSchedule()
+	nodays.Days = nil
+	assert.InDelta(t, 168.0, weeklyOutsideHours(nodays), 0.001,
+		"no business hours at all: the full week is the sleep window")
+
+	// #848 review P2: duplicate day entries pass API/CLI validation
+	// while classification treats the list as a set — the count must
+	// be distinct days, never list entries (entry-counting at a
+	// near-24h window went negative).
+	dupes := testSchedule()
+	dupes.Days = []string{"monday", "monday", "monday", "monday", "monday", "monday", "monday", "monday"}
+	assert.InDelta(t, 160.0, weeklyOutsideHours(dupes), 0.001,
+		"eight monday entries are ONE distinct day: 168-8 = 160 (one 8h window), never negative")
+	dupes.StartTime = "00:00"
+	dupes.EndTime = "23:59"
+	assert.InDelta(t, 144.0167, weeklyOutsideHours(dupes), 0.001,
+		"near-24h window with duplicate entries: 168-23.983 = 144.017, never -23.87")
 }
 
 // nightOnlyFixture is #761's (V15-11) offline repro shape: the BH-signature

@@ -264,8 +264,10 @@ func TestSleepCandidate_DeclaredAndBHSignatureFires(t *testing.T) {
 	assert.Contains(t, mustContainSignal(t, signals, "declared_tier:"), hcTierNonProd)
 	assert.Contains(t, mustContainSignal(t, signals, "bh_active_peak_mc:"), "300")
 	assert.Contains(t, mustContainSignal(t, signals, "worker_nodes:"), "2")
-	// Schedule mon-fri 09:00-17:00 UTC: 16 outside-hours/day * 5 = 80/week.
-	assert.Contains(t, mustContainSignal(t, signals, "reclaim_node_hours_per_week:"), "160")
+	// #848: the weekly complement — Mon-fri 09:00-17:00 UTC has 40
+	// BH hours/week; the sleep window is 168-40 = 128 hours/week
+	// (non-scheduled days are slept too) * 2 nodes.
+	assert.Contains(t, mustContainSignal(t, signals, "reclaim_node_hours_per_week:"), "256")
 }
 
 // Review Focus 2: the overnight-quiet-prod trap — declaration does not
@@ -1533,4 +1535,32 @@ func TestSleepCandidate_ShiftedDayCoverageFloorIsUnknown(t *testing.T) {
 	assert.Equal(t, 0, fired,
 		"a shifted applicable day below its BH coverage floor must read unknown — the #827 floor applies to newly applicable days (#845 review P2)")
 	assert.Empty(t, sleepAdvisories(t, ctx, pool, org))
+}
+
+// TestWeeklyOutsideHours (#848): the server twin of the offline table —
+// the weekly complement with distinct-day counting (duplicate day
+// entries pass API validation while classification treats the list as
+// a set; entry-counting at a near-24h window went negative).
+func TestWeeklyOutsideHours(t *testing.T) {
+	hhmm := func(v string) int {
+		var h, m int
+		n, err := fmt.Sscanf(v, "%d:%d", &h, &m)
+		if err != nil || n != 2 {
+			t.Fatalf("bad HH:MM fixture %q: %v", v, err)
+		}
+		return h*60 + m
+	}
+	mk := func(days []string, start, end string) sleepSchedule {
+		return sleepSchedule{Timezone: "UTC", Days: days, StartMin: hhmm(start), EndMin: hhmm(end)}
+	}
+	weekday := []string{"monday", "tuesday", "wednesday", "thursday", "friday"}
+	assert.InDelta(t, 128.0, mk(weekday, "09:00", "17:00").weeklyOutsideHours(), 0.001,
+		"Mon-Fri 09:00-17:00: 168-40 = 128")
+	assert.InDelta(t, 128.0, mk(weekday, "22:00", "06:00").weeklyOutsideHours(), 0.001,
+		"overnight: 8h window × 5 = 40 BH; 168-40 = 128")
+	dupes := []string{"monday", "monday", "monday", "monday", "monday", "monday", "monday", "monday"}
+	assert.InDelta(t, 160.0, mk(dupes, "09:00", "17:00").weeklyOutsideHours(), 0.001,
+		"eight monday entries are ONE distinct day: 168-8 = 160 (one 8h window), never negative")
+	assert.InDelta(t, 144.0167, mk(dupes, "00:00", "23:59").weeklyOutsideHours(), 0.001,
+		"near-24h window with duplicates: 168-23.983 = 144.017, never -23.87")
 }

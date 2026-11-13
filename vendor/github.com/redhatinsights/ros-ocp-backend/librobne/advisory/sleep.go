@@ -376,7 +376,19 @@ func weeklyOutsideHours(s bhschedule.Schedule) float64 {
 	if window <= 0 {
 		window += 24 * 60
 	}
-	return float64(len(s.Days)) * float64(24*60-window) / 60.0
+	// #848: the weekly COMPLEMENT — non-scheduled days count in full
+	// (their hours are part of the proposed sleep window; weekend
+	// activity is a veto). Each scheduled day contributes exactly its
+	// window (overnight wrap attributes to the scheduled day's shift;
+	// identical per-day windows never overlap). See the server twin.
+	// #848 review P2: count DISTINCT days — duplicates pass API/CLI
+	// validation while classification treats the list as a set;
+	// entry-counting could push the complement negative.
+	distinct := make(map[string]struct{}, len(s.Days))
+	for _, d := range s.Days {
+		distinct[d] = struct{}{}
+	}
+	return float64(7*24*60-len(distinct)*window) / 60.0
 }
 
 func sleepEvidenceStrings(ev SleepEvidence, sched bhschedule.Schedule) []string {

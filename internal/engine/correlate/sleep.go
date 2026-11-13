@@ -42,13 +42,29 @@ type sleepSchedule struct {
 }
 
 // weeklyOutsideHours is the non-business hours per week for the reclaim
-// estimate. Windows crossing midnight (end <= start) wrap.
+// estimate — the weekly COMPLEMENT: 168 minus the week's business hours.
+// Non-scheduled days count in full: their hours are part of the proposed
+// sleep window (weekend activity is evaluated as a veto, #848). Each
+// scheduled day contributes exactly its window (windows crossing
+// midnight — end <= start — wrap, the post-midnight portion attributing
+// to the scheduled day's shift; identical per-day windows never overlap),
+// so weekly business hours = len(Days) × window exactly; the complement
+// is always non-negative (equal start/end is rejected upstream, so
+// window < 24h).
 func (s sleepSchedule) weeklyOutsideHours() float64 {
 	window := s.EndMin - s.StartMin
 	if window <= 0 {
 		window += 24 * 60
 	}
-	return float64(len(s.Days)) * float64(24*60-window) / 60.0
+	// #848 review P2: count DISTINCT days — the API accepts duplicate
+	// day entries (no dedupe on validation) while classification treats
+	// the list as a set; entry-counting could push the complement
+	// negative (8 × monday at a near-24h window).
+	distinct := make(map[string]struct{}, len(s.Days))
+	for _, d := range s.Days {
+		distinct[d] = struct{}{}
+	}
+	return float64(7*24*60-len(distinct)*window) / 60.0
 }
 
 func (s sleepSchedule) describe() string {
