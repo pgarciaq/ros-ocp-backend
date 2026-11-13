@@ -73,6 +73,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **A stale platform row no longer silences the offline sleep advisory ([#847](https://github.com/pgarciaq/ros-ocp-backend/issues/847)):**
+  the robne CLI's schedule attestation (#831) was one window-wide
+  boolean over every evidence row — so a single platform-namespace row
+  with an old or NULL schedule fingerprint kept the offline advisory
+  silent even after the user workloads' evidence had fully rebuilt,
+  while the server (which excludes platform workloads before the
+  attestation gate) kept advising — a server/offline parity break.
+  Attestation is now workload-grain, riding the coverage input: the DB
+  reader reports it per row, the CLI AND-collapses it per
+  workload-day (the server's semantics), and the advisory gates USER
+  workloads only. The CSV path is inherently attested. Found by the
+  phase17 branch review.
 - **Populated downgrades fail loud with remediation instead of raw constraint errors ([#846](https://github.com/pgarciaq/ros-ocp-backend/issues/846)):**
   down-migrations that re-create narrower unique constraints failed
   mid-rollback with a raw PostgreSQL error on any populated database
