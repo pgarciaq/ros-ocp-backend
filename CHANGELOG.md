@@ -73,6 +73,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Populated downgrades fail loud with remediation instead of raw constraint errors ([#846](https://github.com/pgarciaq/ros-ocp-backend/issues/846)):**
+  down-migrations that re-create narrower unique constraints failed
+  mid-rollback with a raw PostgreSQL error on any populated database
+  (the empty-schema roundtrip never caught it), and one restored the
+  wrong contract entirely — 113-down destroyed the five-column
+  term-inclusive PVC key its up-migration's predecessor established
+  and added a four-column constraint that cannot hold legal multi-term
+  rows. 113-down now restores the actual predecessor contract; every
+  narrowing down-migration (000012 accounts, 000028 workload/container,
+  000064 PVC terms, 000125 quota names, 000185 VM business-hours
+  digests, 000189 cross-org GPU rows) begins with a guard that counts
+  the collision groups and refuses with the count and deliberate-dedup
+  remediation — never deleting data silently. 185-down's silent
+  deletion of business-hours digest rows is replaced by the guard
+  carrying the exact deterministic cleanup statement (the
+  business-hours schedule configuration is not affected). Policy
+  documented in `migrations/README.md`; populated downgrade coverage in
+  `migration_down_populated_test.go`. Found by the phase17 branch
+  review.
 - **Timezone-shifted sleep schedules no longer suppressed by UTC weekday checks ([#845](https://github.com/pgarciaq/ros-ocp-backend/issues/845)):**
   the non-prod sleep evaluator decided whether a UTC day requires
   business-hours evidence using that UTC day's weekday, but evidence is
