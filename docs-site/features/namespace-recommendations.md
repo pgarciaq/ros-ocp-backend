@@ -74,7 +74,7 @@ See [Dual engine (cost vs performance)](dual-engine.md).
 
 | Concern | Detail |
 |---------|--------|
-| List filters | `filter[cluster]`, `filter[project]` (alias `filter[namespace]`), `filter[idle_state]`, `filter[stale]`, `filter[engine]`, `filter[tag:*]` |
+| List filters | `filter[cluster]`, `filter[project]` (alias `filter[namespace]`), `filter[idle_state]`, `filter[stale]`, `filter[engine]`, `filter[category]`, `filter[tag:*]` |
 | List sorting | `order_by`: `cluster`, `project`, `last_reported`, and 12 `*_variation_*` columns |
 | History only | `filter[term]` (`short_term` / `medium_term` / `long_term`), `filter[engine]` |
 | CSV | Not supported on the namespace list endpoint (`?format=csv` returns **406** — use JSON list or container-list CSV with `filter[project]`) |

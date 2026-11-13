@@ -4166,7 +4166,12 @@
                 "memory_variation_medium_cost",
                 "memory_variation_medium_performance",
                 "memory_variation_long_cost",
-                "memory_variation_long_performance"
+                "memory_variation_long_performance",
+                "estimated_monthly_savings",
+                "idle_state",
+                "idle_duration_days",
+                "estimated_monthly_waste",
+                "category"
               ],
               "example": "last_reported"
             }
@@ -4193,6 +4198,115 @@
               "type": "string"
             },
             "description": "Filter by tag key:value (example: filter[tag:environment]=production)"
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Keyset pagination cursor from the previous response's meta.next_page.after. Sort changes discard a stale cursor and restart from page 1."
+          },
+          {
+            "name": "filter[project]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by project (namespace) name, partial match. filter[namespace] is an alias."
+          },
+          {
+            "name": "filter[namespace]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alias for filter[project]."
+          },
+          {
+            "name": "filter[cluster]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by cluster UUID (exact) or alias (partial match)."
+          },
+          {
+            "name": "filter[engine]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cost",
+                "performance"
+              ]
+            },
+            "description": "Include only this engine per term. When omitted, both cost and performance are returned."
+          },
+          {
+            "name": "filter[term]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "short",
+                "medium",
+                "long",
+                "short_term",
+                "medium_term",
+                "long_term"
+              ]
+            },
+            "description": "Filter nested recommendation terms in list responses. Accepts short, medium, long (short_term aliases accepted)."
+          },
+          {
+            "name": "filter[stale]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "description": "Include stale recommendations: true returns only stale, false (default) excludes them."
+          },
+          {
+            "name": "filter[idle_state]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "idle",
+                "zombie",
+                "active"
+              ]
+            },
+            "description": "Filter by aggregated idle state, comma-separated for multiple values."
+          },
+          {
+            "name": "filter[category]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "zombie",
+                "idle",
+                "undersized",
+                "oversized",
+                "optimized"
+              ]
+            },
+            "description": "Filter by namespace category (includes activity states), comma-separated for multiple values."
           }
         ],
         "responses": {
