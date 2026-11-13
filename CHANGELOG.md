@@ -73,6 +73,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **The weekly sleep reclaim estimate now counts non-scheduled days ([#848](https://github.com/pgarciaq/ros-ocp-backend/issues/848)):**
+  both the server and robne computed the reclaim as scheduled days ×
+  outside-hours-within-each-day — omitting weekends entirely, although
+  those hours are part of the proposed sleep window (weekend activity
+  is evaluated as a veto). A Mon–Fri 09:00–17:00 schedule reported 80
+  sleep hours/week instead of 128; two workers reported 160 instead of
+  256 node-hours/week — a 37.5% underestimate. The estimate is now the
+  weekly complement (168 minus the week's business hours), matching
+  the documented contract and ADR-0348 §7. Found by the phase17 branch
+  review.
 - **A stale platform row no longer silences the offline sleep advisory ([#847](https://github.com/pgarciaq/ros-ocp-backend/issues/847)):**
   the robne CLI's schedule attestation (#831) was one window-wide
   boolean over every evidence row — so a single platform-namespace row

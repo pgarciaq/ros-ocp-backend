@@ -202,7 +202,8 @@ capacity only — the control plane keeps running**; the pause mechanism
 is never framed as the saving (it pauses reconciliation, not the control
 plane); waking takes ~20 minutes of full reprovision, not a quick
 rejoin; the estimate is node-hours per week (worker nodes × non-business
-hours), never dollars. Design record:
+hours of the week — including non-scheduled days, which are part of the
+sleep window), never dollars. Design record:
 [ADR-0348](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0348-w8-nonprod-sleep-advisory.md);
 status and the orchestration roadmap on the
 [planned-features page](../planned-features/hosted-control-plane-fleet-optimization.md).
