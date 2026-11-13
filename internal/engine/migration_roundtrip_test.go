@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -52,7 +53,9 @@ func TestMigrationRoundtrip(t *testing.T) {
 	require.NoError(t, srcErr)
 	require.NoError(t, dbErr)
 
-	// Step 2: Migrate down to version 25 (reverses 044 through 026).
+	// Step 2: Migrate down to version 25 (reverses everything above 25 —
+	// 26 through latest — on the EMPTY schema; populated downgrade
+	// behavior is covered by migration_down_populated_test.go).
 	m, err = migrate.New("file://"+migrationsDir, connStr)
 	require.NoError(t, err)
 	require.NoError(t, m.Migrate(25))
@@ -110,6 +113,23 @@ func TestMigrationRoundtrip_BusinessHours(t *testing.T) {
 	`, clusterUUID, bucketDate)
 	require.NoError(t, err)
 
+	// #846: 067-down must REFUSE over business_hours rows (the
+	// fail-loud policy) — never delete silently. The guard fires before
+	// any statement, leaving the database dirty at 66 with the schema
+	// intact at 67.
+	downErr := migrateTo(t, connStr, 66)
+	require.Error(t, downErr, "067 down must not silently delete business_hours rows")
+	assert.True(t, strings.HasPrefix(downErr.Error(), "migration failed: downgrade 000067 blocked"),
+		"the guard's message must lead the error (got: %.200s)", downErr.Error())
+
+	// Deliberate cleanup, then the documented recovery: force the
+	// SOURCE version (67) and re-run.
+	_, err = pool.Exec(ctx, `
+		DELETE FROM daily_container_digests
+		WHERE org_id = 'org-roundtrip' AND schedule_type = 'business_hours'
+	`)
+	require.NoError(t, err)
+	forceVersion(t, connStr, 67)
 	runMigrationsTo(t, connStr, 66)
 
 	var countAfterDown int
@@ -117,7 +137,7 @@ func TestMigrationRoundtrip_BusinessHours(t *testing.T) {
 		SELECT count(*) FROM daily_container_digests WHERE org_id = 'org-roundtrip'
 	`).Scan(&countAfterDown)
 	require.NoError(t, err)
-	assert.Equal(t, 1, countAfterDown, "067 down must delete business_hours rows before dropping column")
+	assert.Equal(t, 1, countAfterDown, "after deliberate cleanup the all_hours row survives")
 	assert.False(t, columnExists(t, pool, "daily_container_digests", "schedule_type"))
 
 	runMigrationsUp(t, connStr)

@@ -299,3 +299,55 @@ uses plain `DROP INDEX IF EXISTS` / `CREATE UNIQUE INDEX`). Down re-adds
 `schedule_type DEFAULT 'all_hours'` and the old unique; it does not restore
 deleted BH rows.
 
+
+## Narrowing down-migrations (#846)
+
+A down-migration that re-creates a **narrower** unique constraint (or
+drops a column whose values distinguish rows) cannot run over data the
+up-migration made legal — PostgreSQL refuses to build the constraint,
+and a rollback fails mid-chain with the database left dirty. The
+empty-schema roundtrip test cannot catch this: it seeds nothing.
+
+**Policy (owner decisions 2026-11-12/13): fail loud, never delete
+silently.** Every narrowing down-migration begins with a guard — a
+`DO` block counting the collision groups and raising an exception that
+names the migration, the count, and the remediation. The operator
+decides deliberately what survives, deduplicates, and re-runs. NULLs
+never collide (Postgres UNIQUE treats NULLs as distinct); guards count
+non-null keys only.
+
+Two shapes exist:
+
+- **Indeterminate survivors** (`000012` accounts, `000028`
+  workload/container, `000064` PVC terms, `000125` quota names,
+  `000189` cross-org GPU rows): which row should survive is a data
+  decision no migration may make — the guard refuses with the count.
+- **Deterministic migration-born data** (`000067` container/namespace
+  digests, `000182` node digests, `000183` GPU digests, `000185` VM
+  digests — the business-hours streams): the data the predecessor
+  cannot represent is exactly identified, and the guard's message
+  carries the exact cleanup statement — the operator runs it
+  deliberately, then re-runs the downgrade. Deleting a `daily_vm_digests`
+  row cascades to its `vm_gpu_device_digests` and `vm_pvc_digests`
+  children. Historical BH digests return only where the raw reports
+  are still retained and a reship is run — re-applying the up-migration
+  alone changes schema only.
+
+**Recovery after a guard fires.** golang-migrate marks the database
+**dirty at the TARGET version before executing** the down file, so the
+failed retry returns `ErrDirty` even after cleanup. The guard is the
+file's first statement and the file runs in one transaction, so a
+guard failure has executed nothing and the schema is intact at the
+source version. Recovery (also stated in each guard's message): run
+the cleanup, force the SOURCE version, then re-run the downgrade:
+
+```bash
+migrate -path migrations -database "postgres://..." force <source-version>
+```
+
+`000113`-down restores the actual predecessor contract (the five-column
+term key `000064`-up established) and is populated-safe by
+construction; the four-column contract belongs to `000064`-down.
+
+Populated downgrade coverage: `internal/engine/migration_down_populated_test.go`
+seeds the collision shapes and asserts each guard's message.

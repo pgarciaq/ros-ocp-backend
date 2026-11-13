@@ -1,3 +1,18 @@
+-- Downgrade policy (migrations/README.md, "Narrowing down-migrations"):
+-- refuse over indeterminate survivors — never delete silently.
+DO $$
+DECLARE collisions BIGINT;
+BEGIN
+    SELECT COUNT(*) INTO collisions FROM (
+        SELECT 1 FROM quota_recommendation_sets
+        GROUP BY org_id, cluster_uuid, namespace
+        HAVING COUNT(*) > 1
+    ) d;
+    IF collisions > 0 THEN
+        RAISE EXCEPTION 'downgrade 000125 blocked: % namespace(es) have multiple quota_recommendation_sets rows (quota_name granularity this migration introduced); the 3-column contract cannot be restored over them. Deduplicate deliberately (decide which quota row survives); then force the source version (migrate force 125 — a failed downgrade leaves the database dirty at 124, having executed nothing) and re-run', collisions;
+    END IF;
+END $$;
+
 DROP INDEX IF EXISTS idx_quota_rec_history_lookup_v2;
 ALTER TABLE quota_recommendation_history DROP COLUMN IF EXISTS quota_name;
 

@@ -565,7 +565,10 @@ func TestMigration_FilesExistAndOrdered(t *testing.T) {
 }
 
 // BH-INT-040.
-func TestMigration_067Down_DeletesBusinessHoursRowsBeforeDropColumn(t *testing.T) {
+// #846: 067-down refuses over business_hours rows (the fail-loud
+// policy) instead of deleting them silently; after deliberate cleanup
+// and forcing the source version, the downgrade proceeds.
+func TestMigration_067Down_RefusesThenProceedsAfterCleanup(t *testing.T) {
 	connStr := setupMigratePostgres(t)
 	runMigrationsUp(t, connStr)
 	require.Equal(t, latestMigrationVersion, migrationVersion(t, connStr))
@@ -591,6 +594,19 @@ func TestMigration_067Down_DeletesBusinessHoursRowsBeforeDropColumn(t *testing.T
 		require.NoError(t, err)
 	}
 
+	// The guard refuses; nothing executed, the schema is intact at 67.
+	downErr := migrateTo(t, connStr, 66)
+	require.Error(t, downErr, "067 down must not silently delete business_hours rows")
+	assert.True(t, strings.HasPrefix(downErr.Error(), "migration failed: downgrade 000067 blocked"),
+		"the guard's message must lead the error (got: %.200s)", downErr.Error())
+
+	// Deliberate cleanup, then the documented recovery.
+	_, err = pool.Exec(ctx, `
+		DELETE FROM daily_container_digests
+		WHERE org_id = 'org-067-down' AND schedule_type = 'business_hours'
+	`)
+	require.NoError(t, err)
+	forceVersion(t, connStr, 67)
 	runMigrationsTo(t, connStr, 66)
 
 	var count int
@@ -598,7 +614,7 @@ func TestMigration_067Down_DeletesBusinessHoursRowsBeforeDropColumn(t *testing.T
 		SELECT count(*) FROM daily_container_digests WHERE org_id = $1
 	`, "org-067-down").Scan(&count)
 	require.NoError(t, err)
-	assert.Equal(t, 1, count, "067 down must delete business_hours rows; only all_hours row remains")
+	assert.Equal(t, 1, count, "after deliberate cleanup only the all_hours row remains")
 	assert.False(t, columnExists(t, pool, "daily_container_digests", "schedule_type"))
 	pkCols := queryPrimaryKeyColumns(t, pool, "daily_container_digests")
 	assert.NotContains(t, pkCols, "schedule_type")

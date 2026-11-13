@@ -1,6 +1,24 @@
 -- Reverse the Phase 2 relational column changes to recommendation_sets.
 -- This drops the new PK, re-adds the old UUID PK, and removes denormalized columns.
 
+-- Downgrade policy (migrations/README.md, "Narrowing down-migrations"):
+-- refuse over indeterminate survivors — never delete silently. NULL
+-- values do not collide (Postgres UNIQUE treats NULLs as distinct), so
+-- the guard counts rows with the full key present only.
+DO $$
+DECLARE collisions BIGINT;
+BEGIN
+    SELECT COUNT(*) INTO collisions FROM (
+        SELECT 1 FROM recommendation_sets
+        WHERE workload_id IS NOT NULL AND container_name IS NOT NULL
+        GROUP BY workload_id, container_name
+        HAVING COUNT(*) > 1
+    ) d;
+    IF collisions > 0 THEN
+        RAISE EXCEPTION 'downgrade 000028 blocked: % workload/container pair(s) have multiple rows; the UQ_Recommendation constraint cannot be restored over them. Deduplicate deliberately (decide which row survives); then force the source version (migrate force 28 — a failed downgrade leaves the database dirty at 27, having executed nothing) and re-run', collisions;
+    END IF;
+END $$;
+
 ALTER TABLE recommendation_sets DROP CONSTRAINT IF EXISTS recommendation_sets_pkey;
 
 -- Restore legacy NOT NULL constraints.
