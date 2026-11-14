@@ -98,6 +98,19 @@ Rejected: W0+W1 ship without W2 (MVP ladder).
 - Full evidence + locked rules: #583 design-lock comment. No new ADR (findings, not decisions).
 - Locked floor values (W1.1 #584): relative 70% of window-median current request (median resists single-bucket redeploy drops; 1-row short window falls back to absolute) + absolute 100m CPU / 128MiB memory, `max` of both on cost and perf, uniform strict set. Replica recs suppressed for HCP groups (statefulsetMinReplicas=1 would let idle-etcd recs destroy quorum). CLI wired from payload manifest (Path 1); server path #590. Internal routing only; no API value yet.
 
+## Update (2026-11-14, #793 — the settings/terms correction)
+
+The line above names `hcp` as a settings/terms key per the "one
+identifier everywhere" convention. That convention's terms-side
+application was an artifact of the #630 scaffold registering a full
+TermProvider contrary to its own design line ("supports_terms:false
+v1 reusing container windows") and ADR-0346's classification of the
+fleet-capacity advisory as term-less. The trait is removed (#793):
+`hcp` is NOT a settings/terms key — the terms endpoint rejects
+`recommendation_type=hcp` like the other term-less plugins. The
+identifier convention holds for the recommendation routes; the terms
+surface follows ADR-0346's per-plugin term-bearing classification.
+
 ## Update (2026-09-29, #626/#630 — plugin identifier; decision text above immutable)
 
 - The "dedicated plugin label" anticipated above is **`hcp`**, not `controlplane`:

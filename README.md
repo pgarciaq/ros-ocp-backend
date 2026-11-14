@@ -39,7 +39,7 @@ ros-ocp-backend uses a plugin architecture for recommendation domains. Plugins a
 | `quota` | APIProvider + RetentionProvider | Enabled | Namespace ResourceQuota right-sizing (tighten/raise quota vs container totals) |
 | `cluster-quota` | CSVIngestor + APIProvider + RetentionProvider | Enabled | ClusterResourceQuota recommendations |
 | `vm` | CSVIngestor + APIProvider + RetentionProvider | Enabled | OpenShift Virtualization VM sizing (short/medium/long terms) |
-| `hcp` | IngestHook + TermProvider | Enabled | HyperShift HCP observability: HCP-namespace row counts + pinned-inventory tripwire (no writes, no routes; guardrails apply at recommend time) |
+| `hcp` | IngestHook + CSVIngestor + APIProvider | Enabled | HyperShift HCP: fleet-capacity (#392), advisories (#717), HCP detail (the native container-family path); term-less by design (ADR-0346, #793) |
 | `kruize` | Legacy engine | **Disabled** | Legacy Kruize-based recommendations (mutually exclusive) |
 
 **Configuration:**

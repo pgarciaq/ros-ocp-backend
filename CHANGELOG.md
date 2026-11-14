@@ -73,6 +73,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **The terms settings endpoint no longer offers an inert HCP knob ([#793](https://github.com/pgarciaq/ros-ocp-backend/issues/793)):**
+  the HCP plugin scaffold (#630) registered a full TermProvider despite
+  its own design line ("supports_terms:false v1 reusing container
+  windows") and ADR-0346's classification of the fleet-capacity
+  advisory as term-less (snapshot-series model). The terms handler's
+  trait walk therefore accepted `recommendation_type=hcp` on
+  `GET/PUT/DELETE /settings/terms` — storing values whose only reader was an unfiltered plot-window
+  query (percentile_bands read the org's term rows without a
+  recommendation_type filter — a leftover hcp row could shift plot
+  points; now scoped to the container family's rows). The trait is
+  removed:
+  `recommendation_type=hcp` now returns 400 like the other term-less
+  plugins (quota, cluster-quota, snapshot). HCP recommendation
+  endpoints and their term projection are unchanged. robne was already
+  correct (its exclusion follows ADR-0346) — the parity break's
+  polarity was the server's stray scaffold artifact.
 - **Business-hours manifests no longer fail staging on the Kafka path ([#858](https://github.com/pgarciaq/ros-ocp-backend/issues/858)):**
   the staged batch's sample-count accounting counted INPUT rows, but
   rows inside an enabled business-hours schedule stage TWICE (an
