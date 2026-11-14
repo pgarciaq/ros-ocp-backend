@@ -1,9 +1,12 @@
 package kafka
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -219,5 +222,55 @@ func BenchmarkPartitionKey_FmtSprintf(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		_ = fmt.Sprintf("%s:%d", "platform.upload.announce", 0)
+	}
+}
+
+// TestLogKafkaMessageReceived_NoRaceAcrossPartitionGoroutines is #804's
+// RED: the sampling block (every 100th message) is entered by exactly
+// one goroutine per multiple, but consecutive multiples' blocks can
+// overlap across the partition goroutines that share the counters —
+// the raw *batchStart read/write was a data race per the Go memory
+// model. The detector flags unsynchronized cross-goroutine access
+// regardless of wall-clock overlap, so 8 goroutines × 300 messages
+// (24 sampling events spread across them) trips it on the old code.
+func TestLogKafkaMessageReceived_NoRaceAcrossPartitionGoroutines(t *testing.T) {
+	if !raceEnabled {
+		t.Skip("requires the race detector: go test -race ./internal/kafka/")
+	}
+	// #804 review P3-1: scheduling luck is not detection — with the
+	// default GOMAXPROCS the pre-fix race tripped only ~2/30 runs. On a
+	// single P the cooperative preemption points inside the sampling
+	// block (the time.Since / log.Infof calls) make the conflicting
+	// read/write interleaving deterministic.
+	prev := runtime.GOMAXPROCS(1)
+	t.Cleanup(func() { runtime.GOMAXPROCS(prev) })
+
+	var msgCount uint64
+	batchStart := newBatchStart()
+	var logBuf bytes.Buffer
+	log := logrus.NewEntry(logrus.New())
+	log.Logger.SetOutput(&logBuf)
+	log.Logger.SetLevel(logrus.InfoLevel)
+
+	var wg sync.WaitGroup
+	for g := 0; g < 8; g++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 300; j++ {
+				logKafkaMessageReceived(log, &msgCount, batchStart, &kafka.Message{})
+			}
+		}()
+	}
+	wg.Wait()
+	if msgCount != 2400 {
+		t.Fatalf("expected 2400 counted messages, got %d", msgCount)
+	}
+	// #804 review P3-3: the sampling behavior itself — exactly one INFO
+	// line per 100 messages (24 events), never zero (a disabled sampling
+	// block must fail this test, not just the race check).
+	sampled := strings.Count(logBuf.String(), "Processed 100 kafka messages in")
+	if sampled != 24 {
+		t.Fatalf("expected 24 sampled log events, got %d", sampled)
 	}
 }

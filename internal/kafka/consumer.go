@@ -108,7 +108,7 @@ func consumeMessagesUntilCancelled(ctx context.Context, reader kafkaReader, cons
 
 func consumeMessagesSequentialUntilCancelled(ctx context.Context, reader kafkaReader, consumer *kafka.Consumer, handler func(msg *kafka.Message, consumer_object *kafka.Consumer), log *logrus.Entry) {
 	var msgCount uint64
-	batchStart := time.Now()
+	batchStart := newBatchStart()
 	for {
 		select {
 		case <-ctx.Done():
@@ -119,7 +119,7 @@ func consumeMessagesSequentialUntilCancelled(ctx context.Context, reader kafkaRe
 
 		msg, err := reader.ReadMessage(time.Second)
 		if err == nil {
-			logKafkaMessageReceived(log, &msgCount, &batchStart, msg)
+			logKafkaMessageReceived(log, &msgCount, batchStart, msg)
 			handler(msg, consumer)
 			continue
 		}
@@ -156,7 +156,7 @@ func consumeMessagesParallelUntilCancelled(
 	sem := make(chan struct{}, maxConcurrent)
 	var partitions sync.Map // partitionLockKey -> chan *kafka.Message
 	var msgCount uint64
-	batchStart := time.Now()
+	batchStart := newBatchStart()
 
 	// The dispatcher reads messages and routes each to its partition's queue,
 	// spawning that partition's goroutine on first sight. On exit (ctx
@@ -181,7 +181,7 @@ func consumeMessagesParallelUntilCancelled(
 				q := qIface.(chan *kafka.Message)
 				if !loaded {
 					wg.Add(1)
-					go servePartitionQueue(q, consumer, handler, log, sem, &msgCount, &batchStart, &wg)
+					go servePartitionQueue(q, consumer, handler, log, sem, &msgCount, batchStart, &wg)
 				}
 				select {
 				case q <- msg:
@@ -227,7 +227,7 @@ func servePartitionQueue(
 	log *logrus.Entry,
 	sem chan struct{},
 	msgCount *uint64,
-	batchStart *time.Time,
+	batchStart *atomic.Pointer[time.Time],
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
@@ -330,12 +330,32 @@ func StartConsumer(ctx context.Context, kafka_topic string, handler MessageHandl
 	drainInFlightHandlers(log, &inFlight)
 }
 
-func logKafkaMessageReceived(log *logrus.Entry, msgCount *uint64, batchStart *time.Time, msg *kafka.Message) {
+// newBatchStart creates the shared batch-start holder for a consumer's
+// message-count sampling (#804: the holder must be atomic — the sampling
+// block runs on the partition goroutines, and consecutive multiples'
+// blocks can overlap).
+func newBatchStart() *atomic.Pointer[time.Time] {
+	var p atomic.Pointer[time.Time]
+	t0 := time.Now()
+	p.Store(&t0)
+	return &p
+}
+
+func logKafkaMessageReceived(log *logrus.Entry, msgCount *uint64, batchStart *atomic.Pointer[time.Time], msg *kafka.Message) {
 	log.Debugf("Message received from kafka %s (len=%d)", msg.TopicPartition, len(msg.Value))
 	n := atomic.AddUint64(msgCount, 1)
 	if n%kafkaMessageSampleInterval == 0 {
-		elapsed := time.Since(*batchStart)
-		log.Infof("Processed %d kafka messages in %s", kafkaMessageSampleInterval, elapsed.Round(time.Millisecond))
-		*batchStart = time.Now()
+		// #804: msgCount is atomic, so exactly one goroutine enters per
+		// multiple — but the goroutine holding n=200 can enter before
+		// n=100's block finishes: the raw *time.Time read/write raced
+		// across partition goroutines. The atomic pointer makes each
+		// access race-free; nil-safe (a zero holder reads as "no start").
+		start := batchStart.Load()
+		if start != nil {
+			elapsed := time.Since(*start)
+			log.Infof("Processed %d kafka messages in %s", kafkaMessageSampleInterval, elapsed.Round(time.Millisecond))
+		}
+		now := time.Now()
+		batchStart.Store(&now)
 	}
 }

@@ -64,6 +64,8 @@ jobs:
         run: make lint
       - name: Run unit tests
         run: make test
+      - name: Race-detector regressions (kafka concurrency core, #804)
+        run: go test -race ./internal/kafka/ -count=1
       - name: Check Build
         run: make build
       - name: Check robne build (blessed CGO=0 path)
