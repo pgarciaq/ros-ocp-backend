@@ -73,6 +73,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Business-hours manifests no longer fail staging on the Kafka path ([#858](https://github.com/pgarciaq/ros-ocp-backend/issues/858)):**
+  the staged batch's sample-count accounting counted INPUT rows, but
+  rows inside an enabled business-hours schedule stage TWICE (an
+  all-hours sample and a business-hours sample) — the finalize
+  integrity check read back more than was accounted and hard-failed
+  a perfectly intact staging table, after digest chunks had already
+  committed, deterministically on every retry: BH-enabled manifests
+  crossing the staging threshold could never complete. The accounting
+  now counts the actual staged rows, cumulatively across the staging
+  chunk flushes. The integrity check also gained a pre-count pass
+  that fails before any digest chunk commits for loss detectable at
+  finalize entry — loss occurring during the finalize itself is still
+  caught by the streaming check, after chunks may have committed
+  (the manifest retry re-processes from scratch).
 - **The streaming ingest paths no longer fragment container-day digests when the flush knob is set ([#822](https://github.com/pgarciaq/ros-ocp-backend/issues/822)):**
   with `ROS_INGEST_FLUSH_BATCH_SIZE` set to a finite value, the
   per-file streaming paths flushed digests mid-CSV at the group-count
