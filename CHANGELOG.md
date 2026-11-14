@@ -73,6 +73,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **The Kafka message-sampling log no longer races across partition goroutines ([#804](https://github.com/pgarciaq/ros-ocp-backend/issues/804)):**
+  the "Processed N kafka messages in X" sampling (every 100th
+  message) shared its batch-start timestamp across the per-partition
+  consumer goroutines with unsynchronized read/write — consecutive
+  sampling events could overlap, producing a torn timestamp and a
+  nonsense elapsed duration in the log line (and a `-race` failure).
+  The batch start is now an atomic pointer. A race-detector regression
+  test (GOMAXPROCS-pinned for deterministic detection) runs in a new
+  dedicated CI step — `make test` does not enable the race detector.
 - **The weekly sleep reclaim estimate now counts non-scheduled days ([#848](https://github.com/pgarciaq/ros-ocp-backend/issues/848)):**
   both the server and robne computed the reclaim as scheduled days ×
   outside-hours-within-each-day — omitting weekends entirely, although
