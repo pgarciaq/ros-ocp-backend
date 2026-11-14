@@ -1,6 +1,6 @@
 # Known Limitations
 
-> **Last verified:** 2026-08-31
+> **Last verified:** 2026-11-14
 
 Current product and operational caveats for the native recommendation engine.
 This is **not** a full feature-status matrix.
@@ -30,6 +30,13 @@ This is **not** a full feature-status matrix.
 | Unparsable Kafka messages log full payload | May include `org_id`, URLs, presigned query strings — [#82](https://github.com/pgarciaq/ros-ocp-backend/issues/82) | Medium — policy-dependent |
 | GPU summary `timeslicing.count` vs list | Summary counts telemetry triples; list is actionable rows — intentional | Document for UI |
 | Custom image mixes `vendor/` and `./librobne` from different commits | Parent tests / hermetic builds can compile yesterday’s engine; product `Dockerfile` excludes `vendor/` via `.dockerignore` | Low — [#510](https://github.com/pgarciaq/ros-ocp-backend/issues/510); [Integrating librobne](architecture/librobne.md#vendor-vs-replace-image-builds) |
+| List results differ from pre-November 2026 deployments | Corrected behaviors: previously-ignored `filter[category]` / `filter[engine]` now apply (counts change), variation sorts return data, ascending pagination no longer strands mid-list, numeric sorts order numerically | By design — corrections toward the documented contract ([#841](https://github.com/pgarciaq/ros-ocp-backend/issues/841)–[#844](https://github.com/pgarciaq/ros-ocp-backend/issues/844), [#850](https://github.com/pgarciaq/ros-ocp-backend/issues/850), [#852](https://github.com/pgarciaq/ros-ocp-backend/issues/852)) |
+| Sleep advisory reclaim estimate grew (~60% on weekday schedules) | The node-hours/week estimate now counts non-scheduled days (weekends are part of the sleep window) — output differs from pre-November advisories | By design — correction toward the documented contract ([#848](https://github.com/pgarciaq/ros-ocp-backend/issues/848)) |
+| Sleep advisories appear for schedules that previously never qualified | Timezone-shifted weekly schedules now evaluate correctly; the robne CLI recovers despite stale platform evidence rows | By design ([#845](https://github.com/pgarciaq/ros-ocp-backend/issues/845), [#847](https://github.com/pgarciaq/ros-ocp-backend/issues/847)) |
+| Sleep advisory can over-trust sparse rotation patterns | A workload fleet rotating one active hour per container can still receive high-confidence sleep advice (the off-peak statistic's known residual); the hour-grain coverage fix is adopted but not yet implemented | Medium — [#835](https://github.com/pgarciaq/ros-ocp-backend/issues/835) |
+| Page ordering can reorder across DST boundaries | A timestamp text-cast in the page sort can mis-order results in a DST-transition week | Low — [#851](https://github.com/pgarciaq/ros-ocp-backend/issues/851) |
+| Populated downgrades refuse over duplicate rows | Rolling back migrations on a database whose data the older contract cannot hold now fails with remediation guidance instead of silently deleting | By design — the rollback safety policy ([#846](https://github.com/pgarciaq/ros-ocp-backend/issues/846); see the upgrade runbook) |
+| Tag grain differs from Cost Management | Multi-value tags collapse to one value; the DB mode reads a per-run tag snapshot; tag warnings scope by cluster while Koku scopes by project/node too | Medium — [#814](https://github.com/pgarciaq/ros-ocp-backend/issues/814), [#815](https://github.com/pgarciaq/ros-ocp-backend/issues/815), [#834](https://github.com/pgarciaq/ros-ocp-backend/issues/834) |
 
 ---
 
@@ -46,6 +53,9 @@ This is **not** a full feature-status matrix.
 | Materialize GPU time-slicing recommendations | [#29](https://github.com/pgarciaq/ros-ocp-backend/issues/29) |
 | Retire / dual-write Kruize path | [#352](https://github.com/pgarciaq/ros-ocp-backend/issues/352) (and children) |
 | Java / JVM recommendations | [#340](https://github.com/pgarciaq/ros-ocp-backend/issues/340) |
+| Stream-path digest flush can replace a complete container-day with a fragment | [#822](https://github.com/pgarciaq/ros-ocp-backend/issues/822) |
+| Kafka commit protocol: failed-but-uncommitted reports can be acked by later commits | [#803](https://github.com/pgarciaq/ros-ocp-backend/issues/803) |
+| Hour-grain activity coverage for the sleep advisory (the #835 fix) | [#835](https://github.com/pgarciaq/ros-ocp-backend/issues/835) |
 
 Query-performance methodology: [Query Performance](https://pgarciaq.github.io/ros-ocp-backend/query-performance/).
 
