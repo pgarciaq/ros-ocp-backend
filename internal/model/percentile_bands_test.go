@@ -623,3 +623,52 @@ func TestAssembleAllTermNamespacePercentileBandsBH_NilWhenNoData(t *testing.T) {
 	plot := bhPlots["short_term"]
 	assert.Nil(t, plot, "should be nil when only all_hours data exists")
 }
+
+// TestAssemblePercentileBands_ForeignPluginTermRowsIgnored is #793's
+// review-P2 regression: the plot-window resolution must read ONLY the
+// container family's term rows. The query previously read the org's
+// rows without a recommendation_type filter — a foreign plugin's row
+// (e.g., a leftover inert hcp row from the removed knob) leaked into
+// the plot windows and shifted plot points (a scratch test showed
+// short-term changing from 1 to 2 buckets).
+func TestAssemblePercentileBands_ForeignPluginTermRowsIgnored(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	key := ContainerKey{
+		OrgID: testutil.TestOrgID, ClusterUUID: testutil.TestClusterUUID,
+		Namespace: testutil.TestNamespace, Workload: testutil.TestWorkload,
+		WorkloadType: testutil.TestWorkloadType, ContainerName: testutil.TestContainer,
+	}
+
+	// Three days of digests: the default short_term window (24h) sees
+	// ONE daily bucket; a shifted window (e.g., 3 days via a leaked
+	// foreign term row) would see THREE — the discriminator.
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	for d := 0; d < 3; d++ {
+		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+			BucketDate: today.AddDate(0, 0, -d), OrgID: key.OrgID, ClusterUUID: key.ClusterUUID,
+			Namespace: key.Namespace, Workload: key.Workload, WorkloadType: key.WorkloadType,
+			ContainerName: key.ContainerName,
+			CPUUsageP50MC: 990, CPUUsageP95MC: 1000, CPUUsageP99MC: 1008, CPUUsageMaxMC: 1015,
+			MemUsageP50KiB: 2048 * 1024, MemUsageP95KiB: 2048*1024 + 512,
+			MemUsageP99KiB: 2048*1024 + 900, MemUsageMaxKiB: 2048*1024 + 1024,
+		})
+	}
+
+	// A foreign plugin's term row for the same org — the removed inert
+	// hcp knob's leftover shape. It must NOT shift the container plots.
+	_, err := pool.Exec(ctx, `
+		INSERT INTO org_recommendation_terms (org_id, term_ord, window_days, recommendation_type)
+		VALUES ($1, 1, 3, 'hcp')`, key.OrgID)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM org_recommendation_terms WHERE org_id = $1 AND recommendation_type = 'hcp'`, key.OrgID)
+	})
+
+	plot, err := AssemblePercentileBands(ctx, pool, key, "short_term", key.OrgID)
+	require.NoError(t, err)
+	require.NotNil(t, plot)
+	assert.Equal(t, 2, plot.DataPoints,
+		"a foreign plugin's term row must not shift the container plot windows — the default 24h window spans [yesterday, today] over 3 seeded days (#793 review P2)")
+}

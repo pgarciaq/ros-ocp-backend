@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
@@ -16,15 +15,20 @@ func TestHCPPlugin_traitAssertions(t *testing.T) {
 	t.Parallel()
 
 	var (
-		_ plugin.Plugin       = (*HCPPlugin)(nil)
-		_ plugin.IngestHook   = (*HCPPlugin)(nil)
-		_ plugin.APIProvider  = (*HCPPlugin)(nil)
-		_ plugin.TermProvider = (*HCPPlugin)(nil)
-		_ plugin.CSVIngestor  = (*HCPPlugin)(nil)
+		_ plugin.Plugin      = (*HCPPlugin)(nil)
+		_ plugin.IngestHook  = (*HCPPlugin)(nil)
+		_ plugin.APIProvider = (*HCPPlugin)(nil)
+		_ plugin.CSVIngestor = (*HCPPlugin)(nil)
 	)
 
 	// #638 owns the routes; the W4 capacity CSV (#392) is claimed here.
 	p := &HCPPlugin{}
+
+	// #793: the HCP plugin is term-less by design (ADR-0346) — the
+	// scaffold's stray TermProvider was removed. The negative assertion
+	// pins it: re-adding the trait would re-open the inert knob.
+	assert.NotImplements(t, (*plugin.TermProvider)(nil), p,
+		"hcp must not implement TermProvider — term-less by design (ADR-0346, #793)")
 	assert.Equal(t, []string{"hcp-capacity"}, p.SupportedCSVTypes(),
 		"hcp claims exactly the W4 fleet-capacity snapshot type")
 	_, ok := any(p).(plugin.RetentionProvider)
@@ -38,16 +42,10 @@ func TestHCPPlugin_identity(t *testing.T) {
 	assert.Equal(t, "hcp", p.Name())
 	assert.Equal(t, []string{"container"}, p.Requires())
 	assert.Equal(t, []string{"container"}, p.HookAfterCSVTypes())
-	assert.Equal(t, 90, p.MaxWindowDays())
-
-	terms := p.DefaultTerms()
-	require.Len(t, terms, 3)
-	assert.Equal(t, "short", terms[0].Name)
-	assert.Equal(t, 1, terms[0].WindowDays)
-	assert.Equal(t, "medium", terms[1].Name)
-	assert.Equal(t, 7, terms[1].WindowDays)
-	assert.Equal(t, "long", terms[2].Name)
-	assert.Equal(t, 15, terms[2].WindowDays)
+	// #793: the term-table assertions (MaxWindowDays 90, DefaultTerms
+	// 1/7/15) were removed with the trait — the plugin is term-less by
+	// design (ADR-0346); the negative NotImplements assertion in
+	// TestHCPPlugin_traitAssertions pins it.
 }
 
 func TestHCPPlugin_enabledByDefault(t *testing.T) {

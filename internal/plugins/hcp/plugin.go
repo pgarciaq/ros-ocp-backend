@@ -13,8 +13,14 @@
 //   - [plugin.CSVIngestor] — claims "hcp-capacity" CSV type
 //     (ros-openshift-hcp-capacity-): W4 fleet-capacity snapshots (#392),
 //     parsed and persisted as history rows by internal/ingestion
-//   - [plugin.TermProvider] — configurable short/medium/long terms (max 90 days,
-//     same 1/7/15 defaults as other fast-moving plugins, independent rows)
+//   - Term-less by design (ADR-0346): the fleet-capacity advisory is a
+//     snapshot-series model — no term windows. The HCP detail's term
+//     projection rides the native container-family machinery (the
+//     container terms); the advisories use correlator policy windows
+//     (#630's design line: "supports_terms:false v1 reusing container
+//     windows"). The scaffold's stray TermProvider (#793) made the terms
+//     endpoint accept recommendation_type=hcp — a knob no computation
+//     read; removed.
 //
 // HistoryRetentionProvider (#701): hcp_capacity_history is swept by the
 // core history sweep at the days cutoff via this declaration — by
@@ -160,13 +166,3 @@ func (p *HCPPlugin) AfterIngest(ctx context.Context, pool *pgxpool.Pool, rows []
 	}
 	return nil
 }
-
-func (p *HCPPlugin) DefaultTerms() []plugin.TermConfig {
-	return []plugin.TermConfig{
-		{Name: "short", WindowDays: 1, MinDataDays: 1, DecayHalfLifeHours: 0},
-		{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168},
-		{Name: "long", WindowDays: 15, MinDataDays: 7, DecayHalfLifeHours: 360},
-	}
-}
-
-func (p *HCPPlugin) MaxWindowDays() int { return 90 }

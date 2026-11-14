@@ -350,3 +350,46 @@ func TestGetCapabilities(t *testing.T) {
 	assert.True(t, termPlugins["node"], "node plugin should support terms")
 	assert.True(t, termPlugins["namespace"], "namespace plugin should support terms")
 }
+
+// TestGetTermSettings_HCPUnsupported is #793's RED: the terms settings
+// endpoint must reject recommendation_type=hcp — the HCP plugin is
+// term-less by design (ADR-0346: the fleet-capacity advisory is a
+// snapshot-series model; #630's design line: "supports_terms:false v1
+// reusing container windows"). The scaffold's stray TermProvider made
+// the trait walk accept hcp — a knob storing values no computation
+// reads (the HCP detail rides the container terms; the advisories use
+// correlator policy windows). Baseline: the endpoint returns 200 and
+// echoes the scaffolded defaults.
+func TestGetTermSettings_HCPUnsupported(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	app, identity := setupTermsApp(t)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/settings/terms?recommendation_type=hcp", nil)
+	req.Header.Set("X-Rh-Identity", identity)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code,
+		"hcp is term-less by design (ADR-0346) — the terms endpoint must reject it, not offer an inert knob (#793); body: %s", rec.Body.String())
+}
+
+// Control: the other term-less plugins already reject — quota is the
+// existing behavior the hcp fix aligns with.
+func TestGetTermSettings_QuotaUnsupported(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	app, identity := setupTermsApp(t)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/settings/terms?recommendation_type=quota", nil)
+	req.Header.Set("X-Rh-Identity", identity)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code,
+		"quota is term-less (threshold-based) — the existing term-less rejection (#793 control)")
+}

@@ -108,10 +108,16 @@ func loadTermWindows(ctx context.Context, pool *pgxpool.Pool, orgID string) (map
 		return defaultTermWindows, nil
 	}
 
+	// #793 review P2: filter to the CONTAINER family's rows. The query
+	// previously read the org's term rows WITHOUT a recommendation_type
+	// filter — any other plugin's rows (including the removed inert hcp
+	// knob's) leaked into the plot-window resolution, shifting plot
+	// points. The plots serve the container-family detail; only the
+	// container rows are theirs.
 	rows, err := pool.Query(ctx,
 		`SELECT term_ord, window_days
 		 FROM org_recommendation_terms
-		 WHERE org_id = $1
+		 WHERE org_id = $1 AND recommendation_type = 'container'
 		 ORDER BY term_ord`, orgID)
 	if err != nil {
 		return nil, err
