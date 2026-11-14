@@ -73,6 +73,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **The streaming ingest paths no longer fragment container-day digests when the flush knob is set ([#822](https://github.com/pgarciaq/ros-ocp-backend/issues/822)):**
+  with `ROS_INGEST_FLUSH_BATCH_SIZE` set to a finite value, the
+  per-file streaming paths flushed digests mid-CSV at the group-count
+  threshold — and because the threshold crossed on the row creating
+  the Nth group, any container-day (or namespace-day) spanning that
+  boundary had its first fragment REPLACED by its last: the digest
+  ended up with percentiles from the last fragment only, silently
+  losing the earlier samples. The same shape applied to
+  `hcp_sleep_evidence` (an understated off leg could weaken the sleep
+  advisory's safety gate). The stream paths now ignore the knob
+  entirely — one complete batch write per CSV (the default behavior;
+  the knob remains meaningful for the staged path, where its flush is
+  safe). No default-configuration exposure: the knob defaults to
+  disabled.
 - **The Kafka message-sampling log no longer races across partition goroutines ([#804](https://github.com/pgarciaq/ros-ocp-backend/issues/804)):**
   the "Processed N kafka messages in X" sampling (every 100th
   message) shared its batch-start timestamp across the per-partition
