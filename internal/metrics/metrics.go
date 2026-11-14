@@ -103,14 +103,14 @@ var (
 	IngestFlushTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "rosocp_ingest_flush_total",
-			Help: "Total incremental digest-group flush operations during streaming ingest",
+			Help: "Total digest batch writes during ingest (one per streaming CSV at EOF; one per staged spill)",
 		},
 	)
 
 	IngestFlushDuration = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "rosocp_ingest_flush_duration_seconds",
-			Help:    "Duration of incremental digest-group flush operations during streaming ingest",
+			Help:    "Duration of digest batch writes during ingest (streaming EOF write or staged spill)",
 			Buckets: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120},
 		},
 	)
@@ -252,7 +252,8 @@ func SetIngestGroupsInMemory(count int) {
 	IngestGroupsInMemory.Set(float64(count))
 }
 
-// ObserveIngestFlush records duration for an incremental digest-group flush.
+// ObserveIngestFlush records the duration of a digest batch write
+// (the streaming EOF write, or a staged spill on the batch path).
 func ObserveIngestFlush(start time.Time) {
 	IngestFlushDuration.Observe(time.Since(start).Seconds())
 }

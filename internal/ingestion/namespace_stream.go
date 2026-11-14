@@ -13,10 +13,6 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
 
-func namespaceDigestGroupCount(all, bh map[NamespaceDigestKey][]NamespaceMetricRow) int {
-	return len(all) + len(bh)
-}
-
 func namespaceUsageDedupeKey(row NamespaceMetricRow) string {
 	return row.Namespace + "|" + row.IntervalStart.UTC().Format(time.RFC3339Nano)
 }
@@ -88,38 +84,6 @@ func ensureNamespaceDigestPartitionsForKeys(ctx context.Context, pool *pgxpool.P
 	EnsureNamespaceDigestPartitions(ctx, pool, keys)
 }
 
-func flushNamespaceDigestGroupBatch(
-	ctx context.Context,
-	pool *pgxpool.Pool,
-	groupedAll, groupedBH map[NamespaceDigestKey][]NamespaceMetricRow,
-	scheduleCache *bhschedule.Cache,
-	orgID, clusterUUID string,
-) error {
-	if len(groupedAll) == 0 && len(groupedBH) == 0 {
-		return nil
-	}
-	grouped := mergeNamespaceDigestGroups(groupedAll, groupedBH)
-	start := time.Now()
-	defer func() {
-		metrics.ObserveIngestFlush(start)
-		metrics.IncIngestFlushTotal()
-	}()
-
-	ensureNamespaceDigestPartitionsForKeys(ctx, pool, grouped)
-	if err := WithDeadlockRetry("flush_namespace_digest_groups", func() error {
-		return upsertNamespaceDigests(ctx, pool, grouped, scheduleCache)
-	}); err != nil {
-		return err
-	}
-
-	clear(groupedAll)
-	clear(groupedBH)
-
-	logging.ForOrg(orgID, clusterUUID).Infof(
-		"ProcessNamespaceCSVToDigests: flushed %d digest groups (incremental)", len(grouped))
-	return nil
-}
-
 func accumulateNamespaceQuotaRow(
 	aggs map[namespaceQuotaDigestKey]*namespaceQuotaDigestAgg,
 	row NamespaceMetricRow,
@@ -179,8 +143,6 @@ func parseAndDigestNamespaceCSVStream(
 	groupedBH := make(map[NamespaceDigestKey][]NamespaceMetricRow)
 	quotaAggs := make(map[namespaceQuotaDigestKey]*namespaceQuotaDigestAgg)
 	dedupeSeen := make(map[string]struct{})
-	digestBatchesFlushed := 0
-	flushBatchSize := ingestFlushBatchSize()
 
 	var scheduleCache *bhschedule.Cache
 	if BusinessHoursAggregationEnabled() {
@@ -203,12 +165,10 @@ func parseAndDigestNamespaceCSVStream(
 		appendNamespaceBusinessHoursRow(groupedBH, row, orgID, clusterUUID, scheduleCache)
 		accumulateNamespaceQuotaRow(quotaAggs, row, orgID, clusterUUID)
 
-		if namespaceDigestGroupCount(groupedAll, groupedBH) >= flushBatchSize {
-			if err := flushNamespaceDigestGroupBatch(ctx, pool, groupedAll, groupedBH, scheduleCache, orgID, clusterUUID); err != nil {
-				return fmt.Errorf("incremental namespace digest flush: %w", err)
-			}
-			digestBatchesFlushed++
-		}
+		// #822 (owner decision 2026-11-14, option a): no mid-stream
+		// flush — the stream paths do NOT honor
+		// ROS_INGEST_FLUSH_BATCH_SIZE (staged-path-only); the mid-stream
+		// flush replaced complete namespace-day digests with fragments.
 		return nil
 	})
 	if err != nil {
@@ -224,10 +184,19 @@ func parseAndDigestNamespaceCSVStream(
 	logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{
 		"stream_elapsed": streamElapsed,
 	}).Infof(
-		"ProcessNamespaceCSVToDigests: %d rows -> %d digest groups at EOF (incremental flushes: %d)",
-		rowCount, len(grouped), digestBatchesFlushed)
+		"ProcessNamespaceCSVToDigests: %d rows -> %d digest groups at EOF", rowCount, len(grouped))
 
 	upsertStart := time.Now()
+	// #822: the ingest-flush metrics ride the single EOF batch write
+	// (success-gated; the section includes the quota writes on this
+	// path — a deliberate sub-phase overlapping the parse timer).
+	eofWriteOK := false
+	defer func() {
+		if eofWriteOK {
+			metrics.ObserveIngestFlush(upsertStart)
+			metrics.IncIngestFlushTotal()
+		}
+	}()
 
 	if len(grouped) > 0 {
 		ensureNamespaceDigestPartitionsForKeys(ctx, pool, grouped)
@@ -248,5 +217,6 @@ func parseAndDigestNamespaceCSVStream(
 		"upsert_elapsed": time.Since(upsertStart).Round(time.Millisecond),
 		"total_elapsed":  time.Since(startTime).Round(time.Millisecond),
 	}).Infof("ProcessNamespaceCSVToDigests: upserted %d digests", len(grouped))
+	eofWriteOK = true
 	return nil
 }

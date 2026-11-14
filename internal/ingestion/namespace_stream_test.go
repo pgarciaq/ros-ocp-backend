@@ -35,7 +35,7 @@ func buildMultiNamespaceCSV(namespaceCount int) string {
 	return b.String()
 }
 
-func TestNamespaceIncrementalDigestFlush_TriggersWhenBatchSizeExceeded(t *testing.T) {
+func TestNamespaceStreamFlushKnobIgnored_SingleEOFFlushDespiteGroupCount(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")
 	}
@@ -58,7 +58,8 @@ func TestNamespaceIncrementalDigestFlush_TriggersWhenBatchSizeExceeded(t *testin
 	require.NoError(t, err)
 
 	after := counterValue(t, metrics.IngestFlushTotal)
-	assert.Greater(t, after-before, float64(0), "expected at least one incremental digest flush")
+	assert.Equal(t, float64(1), after-before,
+		"exactly one batch write at EOF — the knob no longer triggers mid-stream flushes (#822)")
 
 	var count int
 	require.NoError(t, pool.QueryRow(ctx,
@@ -66,7 +67,7 @@ func TestNamespaceIncrementalDigestFlush_TriggersWhenBatchSizeExceeded(t *testin
 	assert.Equal(t, 5, count, "all namespace-day digests should be persisted")
 }
 
-func TestNamespaceIncrementalDigestFlush_SmallPayloadFlushesAtEOFOnly(t *testing.T) {
+func TestNamespaceStreamFlushKnobIgnored_SmallPayloadSingleEOFFlush(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")
 	}
@@ -89,7 +90,8 @@ func TestNamespaceIncrementalDigestFlush_SmallPayloadFlushesAtEOFOnly(t *testing
 	require.NoError(t, err)
 
 	after := counterValue(t, metrics.IngestFlushTotal)
-	assert.Equal(t, before, after, "small payloads below batch threshold should not incremental-flush during streaming")
+	assert.Equal(t, float64(1), after-before,
+		"exactly one batch write at EOF — same as any payload size (#822)")
 
 	var count int
 	require.NoError(t, pool.QueryRow(ctx,
@@ -110,4 +112,65 @@ func TestForEachNamespaceCSVRow_DoesNotMaterializeFullSlice(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 3, count)
 	assert.Equal(t, 3, seen)
+}
+
+// TestNamespaceStreamFlushKnobIgnored_NamespaceDayNotFragmented is
+// #822's namespace twin: with the knob set finite (2), a namespace-day
+// spanning the would-be flush boundary must NOT be fragmented — the
+// digest must carry all its samples. Owner decision 2026-11-14
+// (option a): the stream paths do not honor ROS_INGEST_FLUSH_BATCH_SIZE.
+func TestNamespaceStreamFlushKnobIgnored_NamespaceDayNotFragmented(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+
+	t.Setenv("ROS_INGEST_FLUSH_BATCH_SIZE", "2")
+	config.ResetForTest()
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-822-ns-frag-" + t.Name()
+	clusterUUID := testutil.TestClusterUUID
+
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM daily_namespace_digests WHERE org_id = $1`, orgID)
+	})
+
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg\n")
+	row := func(hour, ns, usage string) {
+		b.WriteString(strings.Join([]string{
+			fmt.Sprintf("2026-04-01 %s:00:00 +0000 UTC", hour),
+			fmt.Sprintf("2026-04-01 %s:59:00 +0000 UTC", hour),
+			ns, "0.500", usage, "1073741824", "536870912",
+		}, ","))
+		b.WriteString("\n")
+	}
+	// ns-frag's first fragment: 3 low-usage hours.
+	for h := 0; h < 3; h++ {
+		row(fmt.Sprintf("%02d", h), "ns-frag", "0.100")
+	}
+	// A second group — crosses the threshold (2), firing the mid-stream
+	// flush on the current code.
+	row("10", "ns-other", "0.100")
+	// ns-frag's second fragment: 3 high-usage hours.
+	for h := 3; h < 6; h++ {
+		row(fmt.Sprintf("%02d", h), "ns-frag", "0.900")
+	}
+
+	err := parseAndDigestNamespaceCSVStream(ctx, pool, strings.NewReader(b.String()), orgID, clusterUUID)
+	require.NoError(t, err)
+
+	var sampleCount int
+	var p50 int64
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT sample_count, cpu_usage_p50_mc FROM daily_namespace_digests
+		 WHERE org_id = $1 AND namespace = 'ns-frag' AND schedule_type = 'all_hours'`,
+		orgID).Scan(&sampleCount, &p50))
+	assert.Equal(t, 6, sampleCount,
+		"the namespace-day's digest must carry ALL its samples — a fragment replacement loses the first half (#822)")
+	// digest.PercentileFromSorted: idx = int(0.5 × 5) = 2 → sorted[2]
+	// = 100mc; the last-fragment digest (3×900mc) would read 900mc.
+	assert.Equal(t, int64(100), p50,
+		"p50 over 3×100mc + 3×900mc is sorted[2]=100mc — not the last fragment's 900mc (#822)")
 }

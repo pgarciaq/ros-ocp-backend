@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -123,48 +122,6 @@ func digestGroupCount(all, bh map[DigestKey][]metricSample) int {
 	return len(all) + len(bh)
 }
 
-func ingestFlushBatchSize() int {
-	size := config.GetConfig().IngestFlushBatchSize
-	if size <= 0 {
-		return math.MaxInt32
-	}
-	return size
-}
-
-func flushDigestGroupBatch(
-	ctx context.Context,
-	pool *pgxpool.Pool,
-	groupedAll, groupedBH map[DigestKey][]metricSample,
-	scheduleCache *bhschedule.Cache,
-	orgID, clusterUUID string,
-) error {
-	if len(groupedAll) == 0 && len(groupedBH) == 0 {
-		return nil
-	}
-	grouped := mergeDigestGroups(groupedAll, groupedBH)
-	start := time.Now()
-	defer func() {
-		metrics.ObservePipelinePhase(metrics.PhaseWriteDigests, start)
-		metrics.ObserveIngestFlush(start)
-		metrics.IncIngestFlushTotal()
-	}()
-
-	if err := ensureDigestPartitionsForKeys(ctx, pool, grouped); err != nil {
-		return fmt.Errorf("digest partitions: %w", err)
-	}
-	if err := upsertContainerDigests(ctx, pool, grouped, scheduleCache); err != nil {
-		return err
-	}
-
-	clear(groupedAll)
-	clear(groupedBH)
-	metrics.SetIngestGroupsInMemory(0)
-
-	logging.ForOrg(orgID, clusterUUID).Infof(
-		"ProcessCSVToDigests: flushed %d digest groups (incremental)", len(grouped))
-	return nil
-}
-
 func parseAndDigestCSVStream(
 	ctx context.Context,
 	pool *pgxpool.Pool,
@@ -174,8 +131,6 @@ func parseAndDigestCSVStream(
 ) error {
 	groupedAll := make(map[DigestKey][]metricSample, defaultGroupedAllCapacity)
 	groupedBH := make(map[DigestKey][]metricSample, defaultGroupedBHCapacity)
-	digestBatchesFlushed := 0
-	flushBatchSize := ingestFlushBatchSize()
 	var gpuAccum *gpuStreamAccumulator
 	var gpuBHAccum *gpuStreamAccumulator
 	var nodeAccum map[NodeDayKey]*NodeDayAccumulator
@@ -224,13 +179,16 @@ func parseAndDigestCSVStream(
 		appendGroupedRow(groupedAll, row, orgID, clusterUUID, ScheduleTypeAllHours, nil)
 		appendBusinessHoursRow(groupedBH, row, orgID, clusterUUID, scheduleCache)
 
-		groupCount := digestGroupCount(groupedAll, groupedBH)
-		if groupCount >= flushBatchSize {
-			if err := flushDigestGroupBatch(ctx, pool, groupedAll, groupedBH, scheduleCache, orgID, clusterUUID); err != nil {
-				return fmt.Errorf("incremental digest flush: %w", err)
-			}
-			digestBatchesFlushed++
-		}
+		// #822 (owner decision 2026-11-14, option a): no mid-stream
+		// flush — the stream paths do NOT honor
+		// ROS_INGEST_FLUSH_BATCH_SIZE (staged-path-only). The mid-stream
+		// flush replaced complete container-day digests with fragments:
+		// the threshold crossed on the row creating the Nth group, so
+		// that group flushed partial and its remaining rows REPLACED it
+		// at the next flush (replacement upserts). Stream-path memory is
+		// bounded by the input size (ROS_CSV_MAX_BODY_BYTES caps a file
+		// at 500 MiB; digest grouping compresses samples, though BH
+		// dual-streaming duplicates them) — not a fixed heap bound.
 
 		if gpuAccum != nil {
 			gpuAccum.add(row)
@@ -254,15 +212,28 @@ func parseAndDigestCSVStream(
 	}
 
 	grouped := mergeDigestGroups(groupedAll, groupedBH)
-	useSingleIngestTx := singleIngestTxEligible(rowCount, len(grouped), digestBatchesFlushed)
+	useSingleIngestTx := singleIngestTxEligible(rowCount, len(grouped), 0)
 	metrics.SetIngestGroupsInMemory(len(grouped))
 	streamElapsed := time.Since(startTime).Round(time.Millisecond)
 	logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{
 		"stream_elapsed": streamElapsed,
-	}).Infof("ProcessCSVToDigests: %d rows -> %d digest groups at EOF (incremental flushes: %d)",
-		rowCount, len(grouped), digestBatchesFlushed)
+	}).Infof("ProcessCSVToDigests: %d rows -> %d digest groups at EOF", rowCount, len(grouped))
 
 	upsertStart := time.Now()
+	// #822: the ingest-flush metrics now ride the single EOF batch write
+	// (the successor of the removed mid-stream flush measurement). The
+	// section includes the GPU/node writes on the multi-write path (the
+	// single-tx path commits them together by design) — a deliberate
+	// sub-phase overlapping the enclosing parse timer. Success-gated: a
+	// failed write does not count as a flush.
+	eofWriteOK := false
+	defer func() {
+		if eofWriteOK {
+			metrics.ObservePipelinePhase(metrics.PhaseWriteDigests, upsertStart)
+			metrics.ObserveIngestFlush(upsertStart)
+			metrics.IncIngestFlushTotal()
+		}
+	}()
 
 	if err := ensureDigestPartitionsForKeys(ctx, pool, grouped); err != nil {
 		return fmt.Errorf("digest partitions: %w", err)
@@ -338,5 +309,6 @@ func parseAndDigestCSVStream(
 			"ProcessCSVToDigests: upserted %d hourly node digests", len(hourlyMap))
 	}
 
+	eofWriteOK = true
 	return nil
 }
