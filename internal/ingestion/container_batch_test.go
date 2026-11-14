@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
@@ -428,4 +430,182 @@ func TestContainerBatch_StagingThresholdStillLossless(t *testing.T) {
 		`SELECT count(*) FROM container_metric_samples_staging WHERE manifest_id = $1`,
 		"manifest-batch-stage").Scan(&staged))
 	assert.Equal(t, 0, staged, "successful finalize deletes the manifest's staged rows")
+}
+
+// TestContainerBatch_BHStagedAccountingSucceeds is #858's RED: with a
+// business-hours schedule active, rows inside the BH window stage
+// TWICE (an all-hours sample and a business-hours sample), but the
+// staging bookkeeping counted INPUT rows — the finalize integrity
+// check read back more than was accounted and hard-failed, after
+// digest chunks had already committed. Deterministic on every retry:
+// the manifest could never complete. Baseline: Flush returns
+// "staged sample count mismatch" for a perfectly intact staging table.
+func TestContainerBatch_BHStagedAccountingSucceeds(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-858-bh-" + t.Name()
+	clusterUUID := testutil.TestClusterUUID
+
+	t.Setenv("ROS_INGEST_FLUSH_BATCH_SIZE", "2")
+	config.ResetForTest()
+	_ = config.GetConfig()
+
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM business_hours_schedules WHERE org_id = $1`, orgID)
+	})
+
+	// A cluster-scope Mon–Fri 08:00–17:00 New York schedule. 2026-10-26
+	// is a Monday; 14:00 UTC = 10:00 EDT — inside the window, so each
+	// row stages twice (all_hours + business_hours).
+	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
+		OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "",
+		Timezone: "America/New_York", Days: []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "08:00", EndTime: "17:00", OffHoursWeight: 0.0, Enabled: true,
+	}))
+
+	batch, err := NewContainerDigestBatch(ctx, pool, orgID, clusterUUID, "m-858-bh", ParseDigestOptions{})
+	require.NoError(t, err)
+
+	twoContainerBHFile := csvHeader + "\n" +
+		"2026-10-26T14:00:00Z,2026-10-26T14:59:59Z,ns-1,pod-1,wl-1,Deployment,ctr-1,1.0,2.0,1.0,0.0,1048576.0,2097152.0,1048576.0,1048576.0,0\n" +
+		"2026-10-26T14:00:00Z,2026-10-26T14:59:59Z,ns-1,pod-2,wl-1,Deployment,ctr-2,1.0,2.0,1.0,0.0,1048576.0,2097152.0,1048576.0,1048576.0,0\n"
+	_, err = batch.AddFile(ctx, strings.NewReader(twoContainerBHFile))
+	require.NoError(t, err)
+	require.Positive(t, batch.digestBatchesStaged, "the two-group threshold must have staged")
+
+	flushErr := batch.Flush(ctx)
+	require.NoError(t, flushErr,
+		"an intact staging table must finalize — the BH double-stage was miscounted as staging loss (#858)")
+
+	// Both streams' digests must exist for the BH-window container-day.
+	for _, scheduleType := range []string{"all_hours", "business_hours"} {
+		var count int
+		require.NoError(t, pool.QueryRow(ctx,
+			`SELECT sample_count FROM daily_container_digests
+			 WHERE org_id = $1 AND container_name = 'ctr-1' AND schedule_type = $2`,
+			orgID, scheduleType).Scan(&count))
+		assert.Equal(t, 1, count, "the %s digest must carry its staged sample", scheduleType)
+	}
+}
+
+// TestContainerBatch_StagedLossFailsBeforeAnyDigestCommit is #858's
+// partial-commit property: a staged-count mismatch must fail the flush
+// BEFORE any digest row commits (the pre-count). Baseline: the check
+// ran after the streaming finalize's chunk commits — a mismatch left
+// partially-committed digests behind.
+func TestContainerBatch_StagedLossFailsBeforeAnyDigestCommit(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-858-precount-" + t.Name()
+
+	t.Setenv("ROS_INGEST_FLUSH_BATCH_SIZE", "2")
+	config.ResetForTest()
+	_ = config.GetConfig()
+
+	batch, err := NewContainerDigestBatch(ctx, pool, orgID, testutil.TestClusterUUID, "m-858-pre", ParseDigestOptions{})
+	require.NoError(t, err)
+
+	twoContainerFile := csvHeader + "\n" +
+		containerHourRow("08", "2.0") +
+		"2026-10-25T08:00:00Z,2026-10-25T08:59:59Z,ns-1,pod-2,wl-1,Deployment,ctr-2,1.0,2.0,1.0,0.0,1048576.0,2097152.0,1048576.0,1048576.0,0\n"
+	_, err = batch.AddFile(ctx, strings.NewReader(twoContainerFile))
+	require.NoError(t, err)
+	require.Equal(t, 1, batch.digestBatchesStaged, "the two-group threshold must have staged")
+
+	// Simulate partial staging loss (a Postgres restart truncates SOME
+	// rows — one of the two staged samples vanishes).
+	_, err = pool.Exec(ctx, `
+		DELETE FROM container_metric_samples_staging WHERE ctid IN (
+			SELECT ctid FROM container_metric_samples_staging WHERE manifest_id = $1 LIMIT 1
+		)`, "m-858-pre")
+	require.NoError(t, err)
+
+	flushErr := batch.Flush(ctx)
+	require.Error(t, flushErr, "a staged-count mismatch must fail the flush")
+	assert.Contains(t, flushErr.Error(), "staged sample count mismatch",
+		"the failure must name the staging-loss mechanism")
+
+	var digestRows int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT count(*) FROM daily_container_digests WHERE org_id = $1`, orgID).Scan(&digestRows))
+	assert.Equal(t, 0, digestRows,
+		"the mismatch must fail BEFORE any digest row commits — no partial digests behind a failed flush (#858)")
+}
+
+// TestContainerBatch_StagedAccountingAcrossChunkFlushes is #858's
+// review-P1 regression: the staging accounting must accumulate across
+// the 1,000-row chunk flushes — the first fix counted only the final
+// partial chunk (`queued` resets per chunk), so a staging pass of
+// 1,001 rows accounted 1 and the finalize integrity check failed an
+// intact table. The shape: ONE container-day carrying N minute-level
+// samples (group 1) plus one row of a second container (crosses the
+// knob=2 group threshold) — a single staging pass of N+1 rows that
+// crosses the chunk boundary at 1,000.
+func TestContainerBatch_StagedAccountingAcrossChunkFlushes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	for _, tc := range []struct {
+		name string
+		rows int
+		bh   bool
+	}{
+		{"999 rows, no BH", 999, false},
+		{"1000 rows, no BH", 1000, false},
+		{"1001 rows, no BH", 1001, false},
+		{"2400 rows, no BH", 2400, false},
+		{"1001 rows with BH", 1001, true},
+		{"2400 rows with BH", 2400, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pool := testutil.SetupTestDB(t)
+			ctx := context.Background()
+			orgID := "org-858-chunk-" + t.Name()
+			clusterUUID := testutil.TestClusterUUID
+
+			t.Setenv("ROS_INGEST_FLUSH_BATCH_SIZE", "2")
+			config.ResetForTest()
+			_ = config.GetConfig()
+
+			if tc.bh {
+				require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
+					OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "",
+					Timezone: "America/New_York", Days: []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+					StartTime: "08:00", EndTime: "17:00", OffHoursWeight: 0.0, Enabled: true,
+				}))
+				t.Cleanup(func() {
+					_, _ = pool.Exec(ctx, `DELETE FROM business_hours_schedules WHERE org_id = $1`, orgID)
+				})
+			}
+			t.Cleanup(func() {
+				_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
+			})
+
+			batch, err := NewContainerDigestBatch(ctx, pool, orgID, clusterUUID, "m-858-chunk", ParseDigestOptions{})
+			require.NoError(t, err)
+
+			// Group 1: one container-day with tc.rows minute-level samples
+			// (2026-10-26 is a Monday; 14:00–15:00 UTC = 10:00–11:00 EDT,
+			// inside the BH window when enabled). Then one row of a second
+			// container-day crosses the knob=2 group threshold mid-file —
+			// the staging pass carries tc.rows + 1 rows.
+			var b strings.Builder
+			b.WriteString(csvHeader)
+			b.WriteString("\n")
+			day := time.Date(2026, 10, 26, 14, 0, 0, 0, time.UTC)
+			for i := 0; i < tc.rows; i++ {
+				ts := day.Add(time.Duration(i) * time.Minute)
+				fmt.Fprintf(&b, "%s,%s,ns-1,pod-1,wl-1,Deployment,ctr-1,1.0,2.0,1.0,0.0,1048576.0,2097152.0,1048576.0,1048576.0,0\n",
+					ts.Format("2006-01-02T15:04:05Z"), ts.Add(time.Minute).Format("2006-01-02T15:04:59Z"))
+			}
+			fmt.Fprintf(&b, "2026-10-26T14:00:00Z,2026-10-26T14:59:59Z,ns-1,pod-2,wl-1,Deployment,ctr-2,1.0,2.0,1.0,0.0,1048576.0,2097152.0,1048576.0,1048576.0,0\n")
+			_, err = batch.AddFile(ctx, strings.NewReader(b.String()))
+			require.NoError(t, err)
+			require.Positive(t, batch.digestBatchesStaged, "the two-group threshold must have staged")
+
+			require.NoError(t, batch.Flush(ctx),
+				"the accounting must hold across chunk flushes for a %d-row staging pass (BH=%v)", tc.rows+1, tc.bh)
+		})
+	}
 }

@@ -195,6 +195,10 @@ func (b *ContainerDigestBatch) stageDigestGroups(ctx context.Context) error {
 	grouped := mergeDigestGroups(b.groupedAll, b.groupedBH)
 	batch := &pgx.Batch{}
 	queued := 0
+	// #858 review P1: `queued` RESETS after each 1000-row chunk flush —
+	// the accounting must accumulate separately, or only the final
+	// partial chunk is counted (a 1,001-row stage would account 1).
+	staged := 0
 	stageErr := func() error {
 		for key, samples := range grouped {
 			for _, s := range samples {
@@ -216,6 +220,7 @@ func (b *ContainerDigestBatch) stageDigestGroups(ctx context.Context) error {
 					s.OOMCount, s.RestartCount,
 					s.WorkloadPodCount, s.DesiredReplicas, s.AvailableReplicas)
 				queued++
+				staged++
 				if queued >= 1000 {
 					if err := flushQueuedBatch(ctx, b.pool, batch, queued); err != nil {
 						return err
@@ -237,7 +242,16 @@ func (b *ContainerDigestBatch) stageDigestGroups(ctx context.Context) error {
 		}
 		return stageErr
 	}
-	b.stagedSamples += b.memSamples
+	// #858: count the ACTUAL staged rows (`staged`, cumulative across
+	// chunk flushes) — every input row
+	// stages as all-hours, and rows inside an enabled business-hours
+	// schedule stage a SECOND business-hours sample. The previous
+	// input-row accounting (memSamples) undercounted BH-enabled staging,
+	// so the finalize integrity check read back more than was accounted
+	// and hard-failed a perfectly intact staging table (deterministically,
+	// after digest chunks had committed). memSamples keeps its separate
+	// role: the input-sample staging threshold.
+	b.stagedSamples += staged
 	b.memSamples = 0
 	clear(b.groupedAll)
 	clear(b.groupedBH)
@@ -355,6 +369,20 @@ func (b *ContainerDigestBatch) Flush(ctx context.Context) error {
 // flushing mid-key would split its samples across two replacement upserts
 // (#758 review finding).
 func (b *ContainerDigestBatch) finalizeStagedGroups(ctx context.Context) error {
+	// #858: the pre-count — the same integrity check as the streaming
+	// count below, run BEFORE the finalize commits any digest chunk, so
+	// a mismatch leaves no partial digests behind a failed flush.
+	var preCount int
+	if err := b.pool.QueryRow(ctx,
+		`SELECT count(*) FROM container_metric_samples_staging WHERE manifest_id = $1`,
+		b.manifestID).Scan(&preCount); err != nil {
+		return fmt.Errorf("pre-count staged samples: %w", err)
+	}
+	if preCount != b.stagedSamples {
+		return fmt.Errorf("staged sample count mismatch: wrote %d, staged %d (staging lost — retrying)",
+			b.stagedSamples, preCount)
+	}
+
 	rows, err := b.pool.Query(ctx, `
 		SELECT org_id, cluster_uuid, namespace, workload, workload_type, container_name,
 			bucket_date, schedule_type, interval_start, pod,
@@ -436,8 +464,9 @@ func (b *ContainerDigestBatch) finalizeStagedGroups(ctx context.Context) error {
 	// Staged-row count verification (#758 review finding): an UNLOGGED
 	// table truncates on a Postgres restart while the worker may survive —
 	// finalizing against silently-missing staged rows would mark files done
-	// with incomplete data. Any mismatch is a hard error (transient → the
-	// manifest retry re-processes from scratch).
+	// with incomplete data. Catches loss occurring DURING the finalize
+	// (which the #858 pre-count above cannot). Any mismatch is a hard
+	// error (transient → the manifest retry re-processes from scratch).
 	if read != b.stagedSamples {
 		return fmt.Errorf("staged sample count mismatch: wrote %d, read back %d (staging lost — retrying)",
 			b.stagedSamples, read)
