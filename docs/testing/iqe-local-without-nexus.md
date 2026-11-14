@@ -288,3 +288,73 @@ user source checkouts as part of cleanup.
   requirement metadata and CI filtering.
 - [Spike #698](https://github.com/pgarciaq/ros-ocp-backend/issues/698) —
   feasibility evidence and the current test result.
+
+## Local API target (no cluster) — validated 2026-11-14
+
+The SNO port-forward is not required: the runner can target a **local
+rosocp API**. Validated with the read-only list tests
+(`test_container_filter_engine`, `test_namespace_filter_engine` both
+PASSED against a locally-run API seeded via SQL).
+
+### Stand up the target
+
+```bash
+podman run -d --name iqe-local-pg -p 15432:5432 -e POSTGRES_PASSWORD=postgres postgres:16-alpine
+make build   # bin/rosocp
+DB_HOST=localhost DB_PORT=15432 DB_USER=postgres DB_PASSWORD=postgres \
+  bin/rosocp db migrate up
+DB_HOST=localhost DB_PORT=15432 DB_USER=postgres DB_PASSWORD=postgres \
+  API_PORT=8000 bin/rosocp start api   # background
+```
+
+Seed the IQE tenant (org `1234567`) via SQL: `rh_accounts`, `clusters`,
+`org_container_keys` + `recommendation_sets`, `org_namespace_keys` +
+`namespace_recommendation_sets`. For the engine-filter and
+variation-sort tests the seed needs **both engines and all three
+terms** per identity, and the per-row `variation_cpu_request_pct` /
+`variation_memory_request_pct` columns (the list's nested
+`variation.requests.*.amount` serializes from those, not the
+precomputed `*_variation_*` alias columns used for sorting).
+
+### Configuration differences from the SNO run
+
+- **Env name must be `cost_onprem`** (`ENV_FOR_DYNACONF=cost_onprem`):
+  the tests' `_requires_ros_native` guard skips unless the env name is
+  in `("cost_onprem", "stage", "stage_proxy", "clowder_smoke")`. Rename
+  the YAML sections accordingly (`cost_onprem:` not `local:`).
+- **The plugin host override must target `service_objects.koku.config`**
+  in `cost_management.local.yaml` — the plugin default's
+  `hostname: "@jinja {{ main.get('ONPREM_KOKU_HOSTNAME') }}"` renders
+  to the literal string `None` when the var is unset and SHADOWS any
+  `main.hostname` override (the service config is a ChainMap with the
+  service-object entry first):
+
+  ```yaml
+  cost_onprem:
+    service_objects:
+      koku:
+        config:
+          hostname: "127.0.0.1:8000"
+          scheme: http
+    http:
+      default_auth_type: identity
+  ```
+
+- The plugin file must be named **`cost_management.local.yaml`**
+  (literally `{plugin}.local.yaml`) — the loader ignores other names.
+- The global `settings.local.yaml` keeps the identity (the same tenant
+  as the seed).
+
+### Scope notes (honest limits)
+
+- The **variation-ordering** IQE tests skip their ordering assertion by
+  design in the default projection (the list projects `short_term` +
+  `cost`; the assertion reads `medium_term...variation`): verify the
+  ordering directly with `filter[term]=medium` + `order_by=<variation>`
+  + `order_how=desc` and check descending distinct values. The tests'
+  contract part (the API accepts variation order_by keys) still runs.
+- Write-path fixtures (sources creation, report upload) need the
+  sources service object overridden too and the full ingestion stack —
+  out of the read-only scope; they ERROR on the un-overridden
+  `cost_management_sources` host.
+- Tag-filter tests skip without seeded `resolved_tags`.
