@@ -287,9 +287,12 @@ nise report ocp \
   --static-report-file $FIXTURE_DIR/ocp_report_quota.yml \
   --ocp-cluster-id $CLUSTER_ID \
   --ros-ocp-info \
-  --write-monthly \
-  -w /tmp/nise-quota
+  --write-monthly
 ```
+
+`--write-monthly` writes one file per month to the current directory and takes no path
+(the `-w /tmp/nise-quota` form fails with `unrecognized arguments`). `--insights-upload`
+is an ingress endpoint for a real upload, not an output directory.
 
 **What to look for:** High pod CPU/memory requests with explicit `resource_quota` used values
 in namespace `quota-e2e-ns`. The quota plugin recommends tightening or raising limits.
@@ -320,8 +323,7 @@ nise report ocp \
   --static-report-file $FIXTURE_DIR/ocp_report_cluster_quota.yml \
   --ocp-cluster-id $CLUSTER_ID \
   --ros-ocp-info \
-  --write-monthly \
-  -w /tmp/nise-crq
+  --write-monthly
 
 # Verify cluster quota recommendations
 curl -s -H "x-rh-identity: $IDENTITY" \
