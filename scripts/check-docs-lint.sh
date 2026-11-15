@@ -271,6 +271,78 @@ slug_drift = [
     if heading_slug(markdown) != expected
 ]
 
+# NISE command blocks (#825 follow-up). `-w` is `--write-monthly`, a store_true
+# switch, so `-w /tmp/out` makes nise exit 2 with `unrecognized arguments`.
+# Nothing executes these blocks — this static rule is the only thing that would
+# have caught the 12 occurrences that shipped with a fabricated `--write-dir`
+# flag row. Scans fenced blocks only; prose about the failure is not a command.
+NISE_SWITCH_FLAGS = ("-w", "--write-monthly")
+# Ends a command inside a fenced block: shell operators, redirects, comments.
+NISE_COMMAND_END = {"#", ";", "&&", "||", "|", "&", ">", ">>", "<", "2>&1", "2>", "&>"}
+# Verified against nise 5.4.2: this flag does not exist. The recipes page once
+# documented it as the output-directory flag, which produced the broken commands.
+NISE_NONEXISTENT_FLAGS = ("--write-dir", "--output-dir")
+
+
+def scan_nise_block(md: Path, block_start: int, block: list[str]) -> list[str]:
+    """Findings for one fenced block, or [] when it holds no nise command."""
+    joined = " ".join(part.rstrip("\\") for part in block)
+    tokens = joined.split()
+    start = next(
+        (
+            index
+            for index in range(len(tokens) - 1)
+            if tokens[index] == "nise" and tokens[index + 1] == "report"
+        ),
+        None,
+    )
+    if start is None:
+        return []
+    # Only the command itself matters. A following comment, redirect or next
+    # command (`--write-monthly &`, `--write-monthly` then `# 2. Package`) is
+    # not a value for the flag — scanning past the command was the first
+    # version's false-positive source.
+    command: list[str] = []
+    for token in tokens[start:]:
+        if token in NISE_COMMAND_END or token.startswith("#"):
+            break
+        command.append(token)
+    found: list[str] = []
+    for index, token in enumerate(command):
+        if token in NISE_NONEXISTENT_FLAGS:
+            found.append(
+                f"{md}: {token} does not exist in nise (block starting line {block_start})"
+            )
+        if token in NISE_SWITCH_FLAGS and index + 1 < len(command):
+            value = command[index + 1]
+            if not value.startswith("-"):
+                found.append(
+                    f"{md}: {token} is a switch and takes no value, got {value!r} "
+                    f"(block starting line {block_start})"
+                )
+    return found
+
+
+nise_flags: list[str] = []
+for md in sorted(docs_site.rglob("*.md")):
+    in_fence = False
+    block_start = 0
+    block: list[str] = []
+    for number, line in enumerate(
+        md.read_text(encoding="utf-8", errors="replace").splitlines(), 1
+    ):
+        if line.startswith("```"):
+            if in_fence:
+                nise_flags.extend(scan_nise_block(md, block_start, block))
+                block = []
+            else:
+                block_start = number + 1
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            block.append(line)
+
+print(f"  nise switch-flag misuse:      {len(nise_flags)}")
 print(f"  escaped (Pages 404 risk):     {len(escaped)}")
 print(f"  escaped (allowlisted files):  {len(escaped_skipped)}  [{', '.join(sorted(SKIP_ESCAPE_FILES)) or 'none'}]")
 print(f"  broken in-site targets:       {len(broken)}")
@@ -286,6 +358,7 @@ def show(title: str, rows: list[str], limit: int = 40) -> None:
         print(f"  ... and {len(rows) - limit} more")
 
 show("ESCAPED — rewrite to GitHub blob/{{ git_branch }} or in-site path", escaped)
+show("NISE flag misuse — see the recipes page flag table", nise_flags)
 show("BROKEN in-site — fix path or remove", broken)
 show("BROKEN anchors — point at an existing heading (ids follow GitHub's slug rule)", anchors)
 show("SLUG DRIFT — check-docs-lint's fallback disagrees with the published rule", slug_drift)
@@ -306,7 +379,7 @@ if missing_stamps:
 else:
     print("\ndocs-lint OK: Class A Last verified stamps present")
 
-findings = len(escaped) + len(broken) + len(anchors) + len(slug_drift) + len(missing_stamps)
+findings = len(escaped) + len(broken) + len(anchors) + len(slug_drift) + len(missing_stamps) + len(nise_flags)
 if findings == 0:
     print("\ndocs-lint: all checks passed")
     sys.exit(0)
