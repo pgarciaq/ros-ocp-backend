@@ -114,3 +114,4 @@ The index groups ADRs by domain, including:
 - **Deployment / Ops** — retention, migrations, observability, runbooks
 
 See the [full index](https://github.com/pgarciaq/ros-ocp-backend/tree/{{ git_branch }}/docs/adr) for the complete table.
+| [0357](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0357-stable-utc-text-page-sort-cursors.md) | Stable UTC text for page-sort cursor anchors and ordering | List pagination: timestamp sort values render as fixed-width UTC text (`to_char`), so ordering and cursor continuation are chronological in every session timezone — a DST-observing session previously reordered rows across the fall-back boundary and emptied continuation pages; the format is deliberately not RFC3339-parseable so the cursor anchor stays a verbatim string |

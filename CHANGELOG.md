@@ -73,6 +73,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **List pagination no longer reorders or loses rows across DST boundaries when sorting by `last_reported` ([#851](https://github.com/pgarciaq/ros-ocp-backend/issues/851)):**
+  the page-sort value was cast to text, and PostgreSQL renders
+  `timestamptz` text in the session timezone with a variable UTC
+  offset — across a DST fall-back boundary the text order disagrees
+  with chronological order, so page 1 served rows out of order and the
+  cursor-continued page 2 could come back empty (the keyset seek could
+  not match the mis-ordered anchor). Timestamp sort values now render
+  as fixed-width UTC text and the typed seeks compare naive UTC, so
+  ordering and cursor continuation are chronological in every session
+  timezone. **Deploy note:** a cursor issued before this change and
+  consumed after it can skip or duplicate rows for one in-flight page
+  chain; it self-corrects on the next cursor.
+
 - **Savings recalculation no longer drops overlapping per-cluster callbacks ([#812](https://github.com/pgarciaq/ros-ocp-backend/issues/812)):**
   the per-org coalescing guard stored a single latest-request slot, so
   while a recalculation ran for one cluster, a callback for cluster B
