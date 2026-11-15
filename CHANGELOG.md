@@ -73,6 +73,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **db-mode tag filtering no longer drops clusters that share a tag value ([#815](https://github.com/pgarciaq/ros-ocp-backend/issues/815)):**
+  `ROS_TAGS_SOURCE=db` resolved tags from Koku's
+  `reporting_ocptags_values`, whose cluster/namespace arrays are
+  rebuilt by every summarization run from that run's report periods
+  only — so for a key/value shared by two clusters, the
+  last-summarized cluster owned them and a tag filter silently hid
+  every other cluster. db mode now reads the same sources as the
+  push sync and the Koku Tags API (the pod and storage-volume label
+  summaries, joined through the report period) with the same
+  month-snapped window — db and api mode select the same clusters for
+  the same org data. A tag key disabled in Settings now stops
+  matching **immediately** in db mode (query-time check against
+  `reporting_enabledtagkeys`), instead of waiting for the next
+  summarization purge. **Performance note (measured, pessimistic
+  300-namespace org with the filtered key everywhere):** the
+  label-summary predicate costs ~3.2 ms per filtered list query vs
+  ~0.4 ms for the old table — bounded, once per query, not per row.
+  **Koku-side:** the misleading arrays remain in Koku's tables and
+  are misleading to any future consumer — filed Koku-side for the
+  durable fix.
+
 - **Invalid admin term configuration now fails at startup instead of locking silently ([#792](https://github.com/pgarciaq/ros-ocp-backend/issues/792)):**
   an out-of-range or unparseable `ROS_TERMS_*` value was silently ignored
   while its presence still locked the term — the admin's intent was

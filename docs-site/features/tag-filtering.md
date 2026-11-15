@@ -1,6 +1,6 @@
 # Tag filtering
 
-> **Last verified:** 2026-11-06
+> **Last verified:** 2026-11-15
 
 !!! info "Quick Facts"
     **Filter syntax:** `filter[tag:key]=value` (bracket notation, preferred) or `?tag=key:value` (legacy flat)  
@@ -119,10 +119,23 @@ Koku observes several values for one namespace and key, the payload keeps the al
 first and the `tag_keys` catalog lists all of them. Multi-value storage is not implemented
 yet.
 
-In advanced on-prem mode (`ROS_TAGS_SOURCE=db`), ROS list queries read Koku's tenant table
-`reporting_ocptags_values`; the startup probe checks `reporting_enabledtagkeys`. A Koku
-upgrade that renames tables or changes `cluster_ids[]` / `namespaces[]` semantics can break
-tag filters without any ROS code change.
+In advanced on-prem mode (`ROS_TAGS_SOURCE=db`), ROS list queries read Koku's tenant
+**label-summary tables** (`reporting_ocpusagepodlabel_summary` and
+`reporting_ocpstoragevolumelabel_summary`, joined through
+`reporting_ocpusagereportperiod` for the cluster) — the same sources the push
+sync and the Koku Tags API read, with the same month-snapped report-period
+window, so `db` and `api` mode select the same clusters for the same org data
+(#815). A disabled tag key stops matching **immediately** (query-time check
+against `reporting_enabledtagkeys`, scoped to OCP), not on the next
+summarization. **One known divergence remains (multi-value keys):** when a
+namespace's window holds several values for one key, the push collapses to
+the alphabetically first value (`resolved_tags` holds one), so `api` mode
+matches only that value — `db` mode matches any value in the summary union.
+Multi-value storage is tracked as #814. The remaining difference from `api`
+mode is timing only: `db` mode reads at query time, `api` mode reads what the
+last push landed. The startup probe checks `reporting_enabledtagkeys`. A
+Koku upgrade that renames tables or changes the summary schema can break tag
+filters without any ROS code change.
 
 | Check | Covers | Does not cover |
 |-------|--------|----------------|
@@ -171,11 +184,11 @@ summarized after the enable contribute values.
 | Event | `api` (chart / deployed default) | `db` (advanced shared database) |
 |-------|----------------------------------|---------------------------------|
 | Key enabled in Settings → Tags | The push is queued immediately and updates the catalog; values appear for report periods summarized after the enable | Key appears in Koku's enabled table immediately; values appear for report periods summarized after the enable |
-| Key disabled in Settings | The queued push omits the key and the full replace clears it from every container | Koku purges the key's rows on the next summarization; ROS does not check `reporting_enabledtagkeys` at query time, so filters keep matching the key until then |
+| Key disabled in Settings | The queued push omits the key and the full replace clears it from every container | The filter checks `reporting_enabledtagkeys` at query time (#815) — the key stops matching immediately, without waiting for a summarization purge |
 | Tag mapping changed | The push is queued immediately; the mutation also queues an async current-month re-summarization, so newly mapped values can arrive after it completes | The mutation queues the same current-month re-summarization; values change when it completes |
-| Key disappears from a cluster (still enabled) | Values already summarized for the period are kept and keep being pushed until the period leaves the window | Koku's rows are kept; membership arrays are rewritten only for key/values a run still sees, so a stale cluster can keep matching (#815) |
-| New tag value appears | Visible after summarization + a successful push | Visible after the next summarization |
-| Values disappear (pods deleted or relabeled) | The summarized value list is a union, never pruned — the stale value keeps matching until the period leaves the window or the key is disabled | Kept until a run rewrites that key/value's membership arrays, or the key is disabled (#815) |
+| Key disappears from a cluster (still enabled) | Values already summarized for the period are kept and keep being pushed until the period leaves the window | Same semantics (#815): the filter reads the label summaries with the same month-snapped window, so the cluster keeps matching until its report period leaves the window |
+| New tag value appears | Visible after summarization + a successful push | Visible after the next summarization (query-time read) |
+| Values disappear (pods deleted or relabeled) | The summarized value list is a union, never pruned — the stale value keeps matching until the period leaves the window or the key is disabled | Same union semantics, read at query time (#815) — kept until the period leaves the window or the key is disabled |
 | Sync failure (network, ROS down) | Previous tags retained; the failed org retries on the next event or the 6-hour cycle; other orgs unaffected | Not applicable — no HTTP sync |
 | ROS pod restart | No state loss; tags live in PostgreSQL | No state loss; reads are stateless |
 
