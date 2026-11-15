@@ -34,6 +34,12 @@ func runServiceStartup(ctx context.Context) {
 	plugin.Init()
 	services.WireLibrobneMalformedJSONReporter()
 	_ = db.GetPool()
+	// #792: refuse to start on admin term configuration that cannot be
+	// honoured — an invalid or unknown ROS_TERMS_* value must not be
+	// silently ignored (the term would lock without the value applying).
+	if err := engine.ValidateTermEnvConfig(); err != nil {
+		startCmdLog.Fatal(err)
+	}
 	engine.InitTermConfigCache(config.GetConfig())
 	if err := config.ValidateSecurityConfig(); err != nil {
 		startCmdLog.Fatal(err)

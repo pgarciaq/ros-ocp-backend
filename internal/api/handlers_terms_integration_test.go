@@ -14,6 +14,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api"
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/container"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/gpu"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/namespace"
@@ -84,6 +85,80 @@ func TestGetTermSettings_ReturnsDefaults(t *testing.T) {
 
 	assert.Equal(t, "long", resp.Terms[2].Name)
 	assert.Equal(t, 15, resp.Terms[2].WindowDays)
+}
+
+// TestGetTermSettings_InvalidEnvValueIsNotLocked pins #792: an invalid admin
+// env value must never be reported as locked — `locked: true` must not
+// describe a value that was never applied. A locked-but-unapplied term is
+// the worst of both worlds: the admin's intent is dropped AND the tenant is
+// forbidden from correcting it. (In production the value never gets this
+// far — startup refuses it — but the invariant must hold structurally, not
+// by startup accident.)
+func TestGetTermSettings_InvalidEnvValueIsNotLocked(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	app, identity := setupTermsApp(t)
+	// The term config cache (60s TTL) is shared across tests via the test
+	// org — reset this org+type entry so the env var under test is the
+	// only influence on the resolution.
+	engine.InvalidateTermCache(testutil.TestOrgID, "container")
+
+	// 120 exceeds the container plugin's 90-day window cap.
+	t.Setenv("ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS", "120")
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/settings/terms?recommendation_type=container", nil)
+	req.Header.Set("X-Rh-Identity", identity)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	var resp termsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Terms, 3)
+	long := resp.Terms[2]
+	require.Equal(t, "long", long.Name)
+
+	assert.False(t, long.Locked,
+		"a term whose env value was rejected must not be reported as locked — the tenant must be able to set it (#792)")
+	assert.Equal(t, 15, long.WindowDays,
+		"the rejected env value must not be applied; the plugin default holds")
+	assert.True(t, long.IsDefault, "the term must present as the default (nothing overridden)")
+}
+
+// TestGetTermSettings_ValidEnvLocksAndApplies pins the other half of #792's
+// invariant: locked implies applied. A valid admin env value locks the term
+// AND takes effect — locked and the effective value come from the same
+// resolution step.
+func TestGetTermSettings_ValidEnvLocksAndApplies(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	app, identity := setupTermsApp(t)
+	engine.InvalidateTermCache(testutil.TestOrgID, "container")
+
+	t.Setenv("ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS", "45")
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/settings/terms?recommendation_type=container", nil)
+	req.Header.Set("X-Rh-Identity", identity)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	var resp termsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Terms, 3)
+	long := resp.Terms[2]
+	require.Equal(t, "long", long.Name)
+
+	assert.True(t, long.Locked, "a valid admin env value locks the term")
+	assert.Equal(t, 45, long.WindowDays,
+		"locked implies applied — the env value must take effect (#792 invariant)")
+	assert.False(t, long.IsDefault)
 }
 
 func TestGetTermSettings_RequiresRecommendationType(t *testing.T) {

@@ -291,29 +291,36 @@ func loadEnvTerm(recommendationType, termName string, fallback TermConfig) (Term
 	maxWin := PluginMaxWindowDays(recommendationType)
 
 	if v := config.EnvString(prefix + "WINDOW_DAYS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= maxWin {
+		if err := validateTermEnvValue("WINDOW_DAYS", v, maxWin); err != nil {
+			// Unreachable in production: startup refuses invalid values
+			// (#792). Defense for paths that bypass startup validation.
+			logging.GetLogger().Warnf("term_config: invalid env %sWINDOW_DAYS=%q (%s), ignoring", prefix, v, err)
+		} else {
+			n, _ := strconv.Atoi(v) // parse cannot fail: validated above
 			tc.WindowDays = n
 			anySet = true
 			windowOverridden = true
-		} else {
-			logging.GetLogger().Warnf("term_config: invalid env %sWINDOW_DAYS=%q (must be 1-%d), ignoring", prefix, v, maxWin)
 		}
 	}
 	if v := config.EnvString(prefix + "MIN_DATA_DAYS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
+		if err := validateTermEnvValue("MIN_DATA_DAYS", v, maxWin); err != nil {
+			// Unreachable in production (#792); see WINDOW_DAYS above.
+			logging.GetLogger().Warnf("term_config: invalid env %sMIN_DATA_DAYS=%q (%s), ignoring", prefix, v, err)
+		} else {
+			n, _ := strconv.Atoi(v) // parse cannot fail: validated above
 			tc.MinDataDays = n
 			anySet = true
 			minDataExplicit = true
-		} else {
-			logging.GetLogger().Warnf("term_config: invalid env %sMIN_DATA_DAYS=%q, ignoring", prefix, v)
 		}
 	}
 	if v := config.EnvString(prefix + "DECAY_HALFLIFE_HOURS"); v != "" {
-		if f, err := strconv.ParseFloat(v, 64); err == nil && f >= 0 {
+		if err := validateTermEnvValue("DECAY_HALFLIFE_HOURS", v, maxWin); err != nil {
+			// Unreachable in production (#792); see WINDOW_DAYS above.
+			logging.GetLogger().Warnf("term_config: invalid env %sDECAY_HALFLIFE_HOURS=%q (%s), ignoring", prefix, v, err)
+		} else {
+			f, _ := strconv.ParseFloat(v, 64) // parse cannot fail: validated above
 			tc.DecayHalfLifeHours = f
 			anySet = true
-		} else {
-			logging.GetLogger().Warnf("term_config: invalid env %sDECAY_HALFLIFE_HOURS=%q, ignoring", prefix, v)
 		}
 	}
 
@@ -334,11 +341,21 @@ func loadEnvTerm(recommendationType, termName string, fallback TermConfig) (Term
 
 // IsTermLocked reports whether a specific term for a recommendation type is
 // locked by admin environment variables (tenant cannot modify).
+// #792: locked only when a set value WOULD be applied — the same validation
+// the resolver uses — so `locked: true` can never describe a value that was
+// never applied. In production this validity check is redundant (startup
+// refuses invalid values) but it makes the invariant structural.
 func IsTermLocked(recommendationType, termName string) bool {
 	prefix := config.TermEnvPrefix(recommendationType, termName)
-	return config.EnvString(prefix+"WINDOW_DAYS") != "" ||
-		config.EnvString(prefix+"MIN_DATA_DAYS") != "" ||
-		config.EnvString(prefix+"DECAY_HALFLIFE_HOURS") != ""
+	maxWin := PluginMaxWindowDays(recommendationType)
+	for _, field := range termEnvFields {
+		if v := config.EnvString(prefix + field); v != "" {
+			if validateTermEnvValue(field, v, maxWin) == nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // MinDataDaysForTerm returns the MinDataDays value for the specified term name.
