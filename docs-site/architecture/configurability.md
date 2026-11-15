@@ -1,6 +1,6 @@
 # Configurability Reference
 
-> **Last verified:** 2026-10-31
+> **Last verified:** 2026-11-15
 
 Complete environment variable reference for ROS-OCP Backend recommendation engines,
 classification thresholds, retention, and platform settings.
@@ -906,7 +906,7 @@ Configure on the **Koku** worker / masu deployment so rate changes trigger ROS r
 
 See [Cost Integration — Savings recalculation](cost-integration.md#savings-recalculation-after-cost-model-changes).
 
-Prometheus: `ros_savings_recalculation_total{org_id,recommendation_type,status}`; coalesced duplicate triggers — `rosocp_savings_recalc_coalesced_total{org_id}`. Effective-rates cache capacity (`ROS_COST_CACHE_MAX_ENTRIES`): `rosocp_cost_cache_size`, `rosocp_cost_cache_removals_total`.
+Prometheus: `ros_savings_recalculation_total{recommendation_type,status}`; coalesced duplicate triggers — `rosocp_savings_recalc_coalesced_total`. Effective-rates cache capacity (`ROS_COST_CACHE_MAX_ENTRIES`): `rosocp_cost_cache_size`, `rosocp_cost_cache_removals_total`.
 
 ---
 

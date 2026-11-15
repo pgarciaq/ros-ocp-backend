@@ -73,6 +73,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Savings recalculation no longer drops overlapping per-cluster callbacks ([#812](https://github.com/pgarciaq/ros-ocp-backend/issues/812)):**
+  the per-org coalescing guard stored a single latest-request slot, so
+  while a recalculation ran for one cluster, a callback for cluster B
+  followed by one for cluster C left only C — B's effective-rates cache
+  entry and estimated savings stayed stale until some later trigger.
+  Koku fires one callback per provider at the end of every
+  cost-model-update task, and providers sharing a price list fan out
+  parallel tasks, so callbacks for different clusters genuinely arrive
+  within one recalculation window. The guard's trailing state is now a
+  SET of pending clusters: every arriving cluster is drained when the
+  in-flight recalculation completes, same-cluster arrivals merge their
+  recommendation types into one run, and an org-wide request coexists
+  with (does not replace) specific-cluster requests. Bursts still
+  coalesce and at most one recalculation is in flight per org.
+
 - **The terms settings endpoint no longer offers an inert HCP knob ([#793](https://github.com/pgarciaq/ros-ocp-backend/issues/793)):**
   the HCP plugin scaffold (#630) registered a full TermProvider despite
   its own design line ("supports_terms:false v1 reusing container

@@ -207,6 +207,8 @@ Settings changes triggered unbounded parallel recalculation goroutines without d
 
 **Resolution:** Per-org single-flight coalescing guard ensures at most one in-flight recalculation per type, with one pending follow-up that uses the latest parameters.
 
+*Update (2026-11-15, #812):* the savings-recalculation guard's "one pending follow-up with the latest parameters" became a **set of pending clusters** — overlapping per-cluster callbacks (koku fires one per provider; providers sharing a price list fan out in parallel) are all drained, not overwritten. The threshold guard keeps the single-slot shape (its pending flag carries no parameters).
+
 ---
 
 #### #12 — SSRF risk when CSV host allowlist unset
@@ -570,6 +572,8 @@ When multiple Kafka messages arrive on the same day for the same cluster (sharin
 Coalescing guards re-executed trailing iterations with the original parameters from the first trigger, not the latest caller's parameters.
 
 **Resolution:** Flight structs store the latest caller parameters atomically under mutex. Trailing iterations read latest values before execution.
+
+*Update (2026-11-15, #812):* for the savings-recalculation guard this is superseded — its trailing state is now a set of pending clusters with per-cluster recTypes unions (see ADR-0125's update section); storing only the latest caller's parameters dropped every other pending cluster. The reship guard retains the latest-parameters semantics.
 
 ---
 
