@@ -1,6 +1,6 @@
 # Test Data Recipes
 
-> **Last verified:** 2026-11-08
+> **Last verified:** 2026-11-15
 
 How to generate targeted test data for each native engine plugin using NISE fixtures.
 
@@ -293,6 +293,25 @@ nise report ocp \
 
 **What to look for:** High pod CPU/memory requests with explicit `resource_quota` used values
 in namespace `quota-e2e-ns`. The quota plugin recommends tightening or raising limits.
+
+**Declared vs defaulted.** The fixture declares only four values inside `resource_quota`
+(`cpu_request_used`, `cpu_limit_used`, `memory_request_used_gig`, `memory_limit_used_gig`).
+The remaining namespace quota columns are NISE defaults, not chosen test data:
+
+| Column | Emitted value | Source |
+|---|---|---|
+| `storage_request_namespace_hard` | `53687091200.0` (50 GiB) | hard-coded default |
+| `storage_request_namespace_used` | 30–85 % of hard, **redrawn per row** | `uniform(0.3, 0.85)` |
+| `pods_namespace_hard` / `pods_namespace_used` | `50` / `30` | defaults |
+| `object_count_namespace_hard` / `object_count_namespace_used` | `100` / `50` | defaults |
+| `quota_name` | `compute-quota` | default; the fixture sets no `name` |
+
+Two consequences: the storage *used* figure is not reproducible (one draw per emitted row),
+so assert the hard value or a range rather than an exact used number; and a test that needs a
+namespace storage/pod/object recommendation should declare those keys in the fixture first.
+Both storage spellings are accepted — `storage_request_hard_gig: 500` and
+`storage_request_hard: 536870912000` are equivalent, and the `_gig` spelling wins when both
+are present.
 
 #### ClusterResourceQuota
 
