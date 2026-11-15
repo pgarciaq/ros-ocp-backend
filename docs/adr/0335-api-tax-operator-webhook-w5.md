@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (design) — **implementation coding deferred** until explicit W5 greenlight
+Accepted — **webhook half (B) implemented** (operator emission, ingest, advisory); **top-clients half (A) still gated** (#657). See [Amendment (2026-11-15)](#amendment-2026-11-15-webhook-half-implemented--shipped-shape-and-current-status).
 
 ## Phase
 
@@ -158,3 +158,118 @@ Rejected — user confirmed useful generally; epic still owns it because HCP amp
 - Kubernetes metrics: `apiserver_request_total`, `apiserver_admission_webhook_admission_duration_seconds`
 - OKD: [APIRequestCount](https://docs.okd.io/latest/rest_api/metadata_apis/apirequestcount-apiserver-openshift-io-v1.html)
 - OpenShift enhancement: API webhook supportability (webhook dashboards / metrics)
+
+## Amendment (2026-11-15: webhook half implemented — shipped shape and current status)
+
+The original text above is preserved unchanged for history. It says implementation
+was deferred and sketches a digest of `p99_seconds | rejected_rate` per webhook.
+Both statements are now stale: the webhook half shipped with a different export
+shape. This section supersedes them.
+
+### What shipped
+
+| Slice | Where | Notes |
+|-------|-------|-------|
+| Operator emission | koku-metrics-operator `internal/collector/apitax_collector.go`, `internal/collector/apitax_queries.go` (wedge #393, commit `a739e766`, 2026-10-06) | `ros-openshift-apitax-YYYYMM.csv`, hourly snapshots |
+| Backend ingest | `internal/ingestion/apitax.go`, migration `000204_apitax_rollup_store` | `hosted_api_tax_rollups`, monthly RANGE partitions |
+| Advisory | `librobne/advisory/apitax.go` (#724 robne parity; server rule `internal/engine/correlate/apitax.go`), wired by `cmd/robne/advisory_context.go` → `cmd/robne/recommend.go` | verdict `tune_noisy_webhook` |
+
+### Export shape: raw buckets, not `p99_seconds | rejected_rate`
+
+Three instant queries evaluated at window end, per hourly window:
+
+| Columns | Query |
+|---------|-------|
+| `webhook_name, le, bucket_count, source` | `sum by (name, le, job) (apiserver_admission_webhook_admission_duration_seconds_bucket)` |
+| `total_count` | `sum by (name, job) (apiserver_admission_webhook_request_total)` |
+| `rejected_count` | same family, `rejected="true"` |
+
+`source` is the Prometheus `job`. p99 is derived at read from bucket deltas (the
+same `WindowP99` path as the headroom rule), not computed in the operator. The
+`type` and `operation` labels are deliberately not grouped, which keeps each
+histogram at one row per `le` per webhook per job. Why this replaced the sketch:
+
+- **Cardinality is already bounded the way this ADR requires.** Rows scale with
+  registered webhooks × `le` boundaries (about fourteen), never with request,
+  user or namespace cardinality — the property the NO-GO above was protecting.
+  A single-node cluster exposing three webhooks emits roughly 50 rows per hour
+  (~35k rows per month).
+- **The window and the quantile stay revisable.** A p99 written at collection
+  time cannot be recomputed for another window, another quantile, or a corrected
+  bucket-boundary set; bucket deltas can.
+- **The evidence stays auditable.** Total count, rejected count and the
+  distribution behind a fired advisory remain inspectable after the fact.
+- **Per-source coherence.** Histograms from different `job`s are never merged
+  into one distribution (the SLO source-split lesson, #644).
+
+### Gate and consumers
+
+The file carries the `ros-openshift-` prefix, so packaging routes it into the
+manifest's `resource_optimization_files`, never the cost file set. It is
+collected under the resource-optimization toggle
+(`spec.prometheus_config.disabled_metrics_collection_resource_optimization`,
+**default true**), like its siblings NodePool inventory and fleet capacity. Cost
+Management has no consumer for these rows; enabling ROS is what turns the family
+on. Consequently a cost-only deployment reports no API tax — by design, not by
+omission.
+
+Unlike the SLO rollups, it has **no control-plane-topology gate**: the ROS
+toggle is its only gate. The SLO sibling is `External`-gated for a join reason
+(`slo_collector.go`: its rows must match `HostedCluster.spec.clusterID`), which
+does not apply here — see the scope note below.
+
+### Scope: standalone clusters (decided 2026-11-15)
+
+The original "HCP-only scope" alternative was re-opened and re-examined; the
+outcome is the same decision, on grounds that survive scrutiny.
+
+- **The obvious gate is wrong.** `ControlPlaneTopology == "External"` is a
+  *guest* fact; a management cluster (the farm) is `HighlyAvailable` or
+  `SingleReplica`. Mirroring the SLO gate would drop the management-plane
+  evidence — precisely the shared-plane case this ADR and [ADR-0349](0349-hcp-advisories-serving-api-contract.md)
+  §3 exist for, and the case #763 fixed.
+- **The correct predicate, if ever needed,** is
+  `ControlPlaneTopology == "External" || Status.Topology.HostedClusterCount > 0`.
+  Both fields are already populated by `buildTopologyStatus` from data the
+  operator collects anyway, so a gate would cost no new API calls.
+- **Verification asymmetry is what keeps it out of scope today.** The pipeline is
+  live-proven only on a standalone SNO (#393: 81-row contract CSV, parser 81/81,
+  ingest OK, proven-quiet negative). Hosted-plane availability of
+  `apiserver_admission_webhook_admission_duration_seconds` in a guest cluster's
+  thanos is **unverified**. Gating to HCP would trade the one proven path for two
+  unproven ones to save roughly 3 instant queries and 35k rows per cluster per
+  month.
+- **What a standalone cluster actually gets** is a diagnostic — name the webhook
+  when writes are slow or rejected — not a decision-modifier: no hosted
+  control-plane capacity advice exists there for it to reorder, because the SLO
+  rows that would feed such advice are themselves `External`-gated. Recorded as a
+  known limit, not claimed as a benefit.
+- **Reversal trigger.** Gate with the two-term predicate once hosted-plane series
+  availability is verified *and* a standalone consumer decision is made. Hosted-plane
+  visibility is tracked in #864. This note exists so that decision is re-taken
+  deliberately rather than rediscovered.
+
+Naming caveat: the delivery surfaces say "HCP" (`hcp_correlation_advisories`,
+the HCP advisories route, `robne`'s `HCPAdvisories` field) while the signal is
+measured on every cluster. That is a labelling debt, not a scope statement.
+
+### Advisory thresholds (shipped as consts, not knobs)
+
+| Gate | Value | Rationale (from the code comment) |
+|------|-------|-----------------------------------|
+| Webhook p99 | `>= 2.0 s` | healthy admission webhooks live in milliseconds; 2 s is unambiguous pain |
+| Rejected rate | `>= 5 %` | material rejection share, not background noise |
+
+At most one advisory per cluster per window: the hottest webhook by either gate.
+Missing evidence is silence, never a zero-filled row.
+
+### Still unshipped
+
+- **A — top API clients** (`APIRequestCount` top-N): still gated (#657). The
+  operator has no `APIRequestCount` read path and lab availability is
+  unestablished, so the degraded-“who” consequence noted above still applies.
+- **Cross-cutting listeners** (W2 ordering, W1 downsize annotation, W4 headroom
+  annotation): the advisory exists, but the paths that should *listen* to it are
+  not wired.
+- **Release status:** as of 2026-11-15 the operator emission exists on the
+  development branch only; no release tag contains commit `a739e766`.
