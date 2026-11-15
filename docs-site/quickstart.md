@@ -137,15 +137,19 @@ Install [NISE](https://github.com/project-koku/nise) and use a static YAML with
 `--ros-ocp-info` and `--write-monthly`:
 
 ```bash
+mkdir -p /tmp/nise-ros-output
+cd /tmp/nise-ros-output
+
 nise report ocp \
   --static-report-file /path/to/ocp_static_data.yml \
   --ocp-cluster-id 550e8400-e29b-41d4-a716-446655440001 \
   --ros-ocp-info \
-  --write-monthly \
-  -w /tmp/nise-ros-output
+  --write-monthly
 ```
 
-NISE writes files such as `May-2026-<uuid>-ocp_ros_usage.csv` under a monthly folder.
+`--write-monthly` is a switch, not a path (`-w /tmp/out` fails with `unrecognized arguments`),
+so NISE writes into the directory you are in — hence the `cd`. NISE writes files such as
+`May-2026-<uuid>-ocp_ros_usage.csv` there.
 Rename to the short pattern before packaging (drop the full UUID from filenames):
 
 ```text
@@ -184,8 +188,8 @@ later use Koku; also useful metadata):
 
 ```bash
 mkdir -p scripts/samples/june-data
-cp /tmp/nise-ros-output/<month-folder>/*.csv scripts/samples/june-data/
-cp /tmp/nise-ros-output/<month-folder>/manifest.json scripts/samples/june-data/
+cp /tmp/nise-ros-output/*.csv scripts/samples/june-data/
+cp /tmp/nise-ros-output/manifest.json scripts/samples/june-data/
 ```
 
 Verify nginx can reach the container CSV:
@@ -221,7 +225,7 @@ Only use this when Koku listener is deployed (not provided by compose).
 Build the tarball:
 
 ```bash
-cd /tmp/nise-ros-output/<month-folder>
+cd /tmp/nise-ros-output
 tar czf /tmp/ros-upload.tar.gz --transform='s|^\./||' manifest.json *.csv
 ```
 

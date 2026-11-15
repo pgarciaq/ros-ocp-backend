@@ -107,8 +107,7 @@ nise report ocp \
   --static-report-file $FIXTURE_DIR/ocp_report_gpu_mig_ros.yml \
   --ocp-cluster-id $CLUSTER_ID \
   --ros-ocp-info \
-  --write-monthly \
-  -w /tmp/nise-output
+  --write-monthly
 ```
 
 ### What each flag does
@@ -116,10 +115,15 @@ nise report ocp \
 | Flag | Required | Purpose |
 |---|---|---|
 | `--ros-ocp-info` | **Yes** | Generates container-level columns needed by the ROS processor |
-| `--write-monthly` | **Yes** | Organizes output by month (required for manifest structure) |
+| `--write-monthly` | **Yes** | Writes one typed file per month into the current directory. It is a switch, not a path |
 | `--static-report-file` | **Yes** | Uses the fixture YAML to define workload shapes |
 | `--ocp-cluster-id` | **Yes** | Must match a registered source/provider |
-| `-w` / `--write-dir` | Recommended | Output directory (default: current directory) |
+| `--insights-upload <dir>` | Optional | Writes the nested `<dir>/<cluster>/<month-folder>/` layout. The directory must already exist |
+| `--insights-upload <url>` | Optional | Uploads to that ingress endpoint instead of writing locally; needs `INSIGHTS_ACCOUNT_ID`+`INSIGHTS_ORG_ID`, basic auth, or `HCC_SERVICE_ACCOUNT_ID`+`HCC_SERVICE_ACCOUNT_SECRET` |
+
+**There is no output-directory flag.** `-w` is the short form of `--write-monthly` and takes no
+value, so `-w /tmp/out` fails with `nise: error: unrecognized arguments: /tmp/out`. To choose
+where files land, either `cd` first or pass an **existing** directory to `--insights-upload`.
 
 ### Ingesting into local dev environment
 
@@ -141,8 +145,7 @@ nise report ocp \
   --static-report-file $FIXTURE_DIR/ocp_report_ros_0.yml \
   --ocp-cluster-id $CLUSTER_ID \
   --ros-ocp-info \
-  --write-monthly \
-  -w /tmp/nise-container
+  --write-monthly
 
 # Verify in the API
 curl -s -H "x-rh-identity: $IDENTITY" \
@@ -166,8 +169,7 @@ nise report ocp \
   --static-report-file $FIXTURE_DIR/ocp_report_gpu_mig_ros.yml \
   --ocp-cluster-id $CLUSTER_ID \
   --ros-ocp-info \
-  --write-monthly \
-  -w /tmp/nise-gpu-mig
+  --write-monthly
 
 # Verify MIG recommendations
 curl -s -H "x-rh-identity: $IDENTITY" \
@@ -191,8 +193,7 @@ nise report ocp \
   --static-report-file $FIXTURE_DIR/ocp_report_gpu_timeslicing.yml \
   --ocp-cluster-id $CLUSTER_ID \
   --ros-ocp-info \
-  --write-monthly \
-  -w /tmp/nise-gpu-ts
+  --write-monthly
 ```
 
 **What to look for:** T4 GPUs with low SM/tensor/DRAM active percentages. The engine
@@ -205,8 +206,7 @@ nise report ocp \
   --static-report-file $FIXTURE_DIR/ocp_report_vm.yml \
   --ocp-cluster-id $CLUSTER_ID \
   --ros-ocp-info \
-  --write-monthly \
-  -w /tmp/nise-vm
+  --write-monthly
 
 # Verify VM recommendations
 curl -s -H "x-rh-identity: $IDENTITY" \
@@ -239,8 +239,7 @@ nise report ocp \
   --static-report-file $FIXTURE_DIR/ocp_report_pvc_rightsizing.yml \
   --ocp-cluster-id $CLUSTER_ID \
   --ros-ocp-info \
-  --write-monthly \
-  -w /tmp/nise-pvc
+  --write-monthly
 
 # Verify PVC recommendations
 curl -s -H "x-rh-identity: $IDENTITY" \
@@ -265,8 +264,7 @@ nise report ocp \
   --static-report-file $FIXTURE_DIR/ocp_report_snapshot_classification.yml \
   --ocp-cluster-id $CLUSTER_ID \
   --ros-ocp-info \
-  --write-monthly \
-  -w /tmp/nise-snapshot
+  --write-monthly
 ```
 
 **What to look for:** Four VolumeSnapshot records in `e2e-snap-ns`:
@@ -290,9 +288,9 @@ nise report ocp \
   --write-monthly
 ```
 
-`--write-monthly` writes one file per month to the current directory and takes no path
-(the `-w /tmp/nise-quota` form fails with `unrecognized arguments`). `--insights-upload`
-is an ingress endpoint for a real upload, not an output directory.
+Output goes to the current directory — see [What each flag does](#what-each-flag-does). To get
+the nested `<dir>/<cluster>/<month-folder>/` layout instead, pass an **existing** directory to
+`--insights-upload`.
 
 **What to look for:** High pod CPU/memory requests with explicit `resource_quota` used values
 in namespace `quota-e2e-ns`. The quota plugin recommends tightening or raising limits.
@@ -344,8 +342,7 @@ nise report ocp \
   --static-report-file $FIXTURE_DIR/ocp_report_node_idle_consolidation.yml \
   --ocp-cluster-id $CLUSTER_ID \
   --ros-ocp-info \
-  --write-monthly \
-  -w /tmp/nise-node
+  --write-monthly
 
 # Verify node recommendations
 curl -s -H "x-rh-identity: $IDENTITY" \

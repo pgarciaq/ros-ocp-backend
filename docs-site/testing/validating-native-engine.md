@@ -779,16 +779,20 @@ cd ~/dev/koku/nise
 pip install -e .   # or use .venv
 
 # Copy and edit dates in examples/ocp_on_aws/ocp_static_data.yml if needed
+mkdir -p /tmp/nise-ros-output
 nise report ocp \
   --static-report-file examples/ocp_on_aws/ocp_static_data.yml \
   --ocp-cluster-id "$CLUSTER_UUID" \
   --ros-ocp-info \
-  --write-monthly \
-  -w /tmp/nise-ros-output
+  --insights-upload /tmp/nise-ros-output
 ```
 
 **ROS files produced (monthly naming):**  
 `Month-Year-<uuid>-ocp_ros_usage.csv`, `ocp_ros_namespace_usage.csv`, `ocp_storage_usage.csv`, `ocp_snapshot_inventory.csv`, `ocp_ros_cluster_quota.csv`, etc.
+
+`--insights-upload` writes them under `/tmp/nise-ros-output/<cluster_id>/<start-end>/`, prefixed
+with the payload uuid, and adds combined `{uuid}_openshift_report.N.csv` files plus a
+`manifest.json` in each folder. Upload the typed files only (see the packaging step below).
 
 See `docs-site/testing.md` for the full filename ↔ plugin matrix.
 
@@ -806,7 +810,7 @@ nise report ocp \
   --ocp-cluster-id "$CLUSTER_UUID" \
   --ros-ocp-info \
   -s 2026-05-01 -e 2026-05-28 \
-  -w /tmp/nise-vm-output
+  --write-monthly
 ```
 
 **Required for VM plugin:** `ocp_ros_vm_usage.csv` (and `ocp_ros_vm_gpu_device.csv` when GPU scenarios are enabled).
@@ -884,7 +888,7 @@ Replace filenames with actual NISE output names.
 
 ```bash
 cd /tmp/nise-ros-output/<cluster>/<month-folder>
-tar czf /tmp/ros-upload.tar.gz --transform='s|^\./||' manifest.json *.csv
+tar czf /tmp/ros-upload.tar.gz --transform='s|^\./||' --exclude='*_openshift_report.*.csv' manifest.json *.csv
 ```
 
 ### Upload and trigger ingestion
@@ -916,7 +920,9 @@ curl -X POST \
   http://localhost:3000/api/ingress/v1/upload
 ```
 
-**Do not use** combined `openshift_report.*.csv` from `--insights-upload` only — mixed columns break Koku report typing. Prefer typed monthly files.
+**Do not upload** the combined `{uuid}_openshift_report.N.csv` files that `--insights-upload`
+writes alongside the typed ones in each folder — mixed columns break Koku report typing. Upload
+the typed monthly files only; `--write-monthly` produces just those.
 
 ### Watch processing
 
@@ -942,12 +948,12 @@ End-to-end validation: generate data → upload → confirm processor logs → s
 See [Generating test data](#generating-test-data). Minimum for all native plugins:
 
 ```bash
+mkdir -p /tmp/nise-ros-output
 nise report ocp \
   --static-report-file examples/ocp_on_aws/ocp_static_data.yml \
   --ocp-cluster-id "$CLUSTER_UUID" \
   --ros-ocp-info \
-  --write-monthly \
-  -w /tmp/nise-ros-output
+  --insights-upload /tmp/nise-ros-output
 ```
 
 Add `examples/ocp_vm/vm_static_data.yml` for VM scenarios. Package with `manifest.json` (`start`/`end` required) and upload via **Masu** `ingest_ocp_payload` or **ingress** `POST /api/ingress/v1/upload`.
