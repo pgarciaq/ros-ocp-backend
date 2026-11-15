@@ -73,6 +73,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Invalid admin term configuration now fails at startup instead of locking silently ([#792](https://github.com/pgarciaq/ros-ocp-backend/issues/792)):**
+  an out-of-range or unparseable `ROS_TERMS_*` value was silently ignored
+  while its presence still locked the term — the admin's intent was
+  dropped AND the tenant was forbidden from correcting it (a typo'd
+  `ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS=120` yielded the default window
+  and `locked: true`). The service now refuses to start on such a value,
+  with an error naming the variable, its value, and the valid range.
+  `ROS_TERMS_*` variables targeting a plugin, term, or field that does
+  not exist (term-less plugins like hcp — terms removed by #793 — and
+  typo'd names) are likewise rejected. The lock flag now comes from the
+  same validation as the applied value, so `locked: true` always
+  describes a value that was applied. **Deploy note:** deployments
+  carrying invalid or dead `ROS_TERMS_*` variables that previously
+  started (with the values ignored) will now fail at startup — remove
+  or correct the variables.
+
 - **List pagination no longer reorders or loses rows across DST boundaries when sorting by `last_reported` ([#851](https://github.com/pgarciaq/ros-ocp-backend/issues/851)):**
   the page-sort value was cast to text, and PostgreSQL renders
   `timestamptz` text in the session timezone with a variable UTC

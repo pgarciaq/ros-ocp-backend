@@ -1,6 +1,6 @@
 # Configurable Thresholds
 
-> **Last verified:** 2026-11-01
+> **Last verified:** 2026-11-15
 
 !!! info "Quick Facts"
     **API:** Per-plugin `GET/PUT/DELETE` under `/api/cost-management/v1/recommendations/openshift/settings/`  
@@ -50,6 +50,19 @@ Term windows, VM terms, and business-hours schedules use separate routes — see
 
 Resolution order: Tier 1 → Tier 2 → Tier 3. Env locks and `ROS_SETTINGS_LOCKED` are
 documented in [Configurability Reference](../architecture/configurability.md).
+
+### Invalid admin values fail at startup (#792)
+
+An out-of-range or unparseable admin env value is **not** silently ignored: the
+service refuses to start, with an error naming the variable, its value, and the
+valid range (e.g. `ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS=120` → "must be an
+integer between 1 and 90"). The same applies to `ROS_TERMS_*` variables that
+target a plugin, term, or field that does not exist — including term-less
+plugins (hcp, quota, cluster-quota, snapshot) and typo'd names — so a
+deployment either honours its admin configuration or does not start. A term
+whose env value is rejected is never reported as `locked`: the lock flag and
+the effective value come from the same resolution step, so `locked: true`
+always describes a value that was applied.
 
 ## Typical workflow
 

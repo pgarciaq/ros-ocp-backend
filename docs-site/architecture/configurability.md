@@ -113,7 +113,7 @@ Base path: `/api/cost-management/v1/recommendations/openshift/settings/`
 | **JSON field** | PUT/GET field (dot notation for nested objects) |
 | **Lockable** | `Yes` = tenant PUT when env unset and not globally locked; `No` = admin only; `Global` = `ROS_SETTINGS_LOCKED` blocks PUT (unless feature opt-out) |
 
-**Term env vars:** `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` — e.g. `ROS_TERMS_CONTAINER_MEDIUM_WINDOW_DAYS`, `ROS_TERMS_VM_SHORT_TERM_WINDOW_DAYS`.
+**Term env vars:** `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` — e.g. `ROS_TERMS_CONTAINER_MEDIUM_WINDOW_DAYS`, `ROS_TERMS_VM_MEDIUM_WINDOW_DAYS` (term names are the ord names `short`/`medium`/`long` for every plugin, including VM). An invalid value (out of range or unparseable) or a variable targeting a nonexistent plugin/term/field **fails at startup** (#792) — the service refuses to start with an error naming the variable, value, and valid range. A term whose env value was rejected is never reported as `locked`.
 
 When a parameter is locked by an admin env var, the Settings API marks it `"locked": true`
 in GET responses and rejects PUT attempts for that field.
