@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
@@ -19,6 +20,139 @@ const TagFiltersQueryKey = "__tag_filters__"
 type TagFilter struct {
 	Key    string
 	Values []string
+}
+
+// labelSummaryWindow returns the ADR-0353 month-snapped report-period window:
+// periods whose report_period_start falls in [last_month_start,
+// this_month_end] — the same window the api-mode push reads, so db mode and
+// api mode see the same clusters. Period starts are month-aligned, so the
+// half-open [lastMonthStart, nextMonthStart) is equivalent.
+func labelSummaryWindow() (time.Time, time.Time) {
+	now := time.Now().UTC()
+	thisMonthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	return thisMonthStart.AddDate(0, -1, 0), thisMonthStart.AddDate(0, 1, 0)
+}
+
+// tagFragmentBuilder builds SQL fragments with their bind arguments in one
+// of two placeholder styles: gorm's "?" or pgx's "$N" (idx starts at the
+// caller's next argument position).
+type tagFragmentBuilder struct {
+	args    []interface{}
+	idx     int
+	useGorm bool
+}
+
+func newGormTagFragmentBuilder() *tagFragmentBuilder {
+	return &tagFragmentBuilder{useGorm: true}
+}
+
+// newPgxTagFragmentBuilder builds fragments for pgx's "$N" placeholders.
+// nextPlaceholder is the position number the builder's FIRST placeholder
+// must take (ph() pre-increments, so idx starts one below it).
+func newPgxTagFragmentBuilder(nextPlaceholder int) *tagFragmentBuilder {
+	return &tagFragmentBuilder{idx: nextPlaceholder - 1}
+}
+
+func (b *tagFragmentBuilder) ph() string {
+	if b.useGorm {
+		return "?"
+	}
+	b.idx++
+	return fmt.Sprintf("$%d", b.idx)
+}
+
+func (b *tagFragmentBuilder) arg(v interface{}) {
+	b.args = append(b.args, v)
+}
+
+// labelSummaryTagMatch builds the #815 db-mode tag-match fragment for one
+// filter, correlated on the caller's cluster and namespace SQL expressions
+// (which must render text: e.g. "ock.cluster_uuid::text", "ock.namespace").
+//
+// Source: Koku's two label-summary tables (the Tags API's and ADR-0353's
+// push source), joined through the report period for the cluster — NOT
+// reporting_ocptags_values, whose cluster/namespace arrays are rebuilt per
+// summarization run and hold only the last-summarized cluster for any
+// shared key/value (#815). The month-snapped window mirrors the push's, so
+// a cluster keeps matching while one of its periods is in the window.
+//
+// The enabledtagkeys EXISTS (folded per the owner's #815 comment) makes a
+// disabled key stop matching immediately — today db mode keeps matching
+// until the next summarization purges the label rows.
+//
+// A summary row's values are an array per (key, period, namespace, node);
+// the namespace matches when any node's row in any window period carries a
+// requested value — the same union-then-match the push performs.
+func (b *tagFragmentBuilder) labelSummaryTagMatch(schema, clusterRef, nsRef string, f TagFilter) string {
+	podTable := pgx.Identifier{schema, "reporting_ocpusagepodlabel_summary"}.Sanitize()
+	volTable := pgx.Identifier{schema, "reporting_ocpstoragevolumelabel_summary"}.Sanitize()
+	periodTable := pgx.Identifier{schema, "reporting_ocpusagereportperiod"}.Sanitize()
+	etkTable := pgx.Identifier{schema, "reporting_enabledtagkeys"}.Sanitize()
+
+	winStart, winEnd := labelSummaryWindow()
+
+	// summaryPredicate emits its own placeholders and arguments for every
+	// occurrence — gorm's "?" binds one argument per occurrence, so a
+	// placeholder cannot be shared between the pod and storage EXISTS
+	// (pgx's "$N" could repeat, but one style must serve both).
+	summaryPredicate := func(table string) string {
+		keyPH := b.ph()
+		b.arg(f.Key)
+
+		valueClause := ""
+		if len(f.Values) != 1 || f.Values[0] != "*" {
+			parts := make([]string, len(f.Values))
+			for i, v := range f.Values {
+				ph := b.ph()
+				b.arg(v)
+				parts[i] = fmt.Sprintf("%s = ANY(ls.values)", ph)
+			}
+			valueClause = "AND (" + strings.Join(parts, " OR ") + ")"
+		}
+
+		// Window bounds bind as DATE strings with explicit ::date casts —
+		// comparing a bound timestamptz against the DATE column would shift
+		// the boundary under a non-UTC session TimeZone (#815 review).
+		winStartPH := b.ph()
+		b.arg(winStart.Format("2006-01-02"))
+		winEndPH := b.ph()
+		b.arg(winEnd.Format("2006-01-02"))
+
+		return fmt.Sprintf(`EXISTS (
+				SELECT 1
+				FROM %s ls
+				JOIN %s rp ON rp.id = ls.report_period_id
+				WHERE ls.key = %s
+				  AND ls.namespace = %s
+				  %s
+				  AND rp.cluster_id = %s
+				  AND rp.report_period_start >= %s::date
+				  AND rp.report_period_start < %s::date
+			)`, table, periodTable, keyPH, nsRef, valueClause, clusterRef, winStartPH, winEndPH)
+	}
+
+	// Build the summary predicates FIRST: the builder appends bind arguments
+	// in placeholder order, and Go evaluates fmt.Sprintf's arguments (the
+	// summaryPredicate calls) only when the return statement runs —
+	// generating etk's placeholder before them would append its argument
+	// first and scramble every bind after it.
+	podPredicate := summaryPredicate(podTable)
+	volPredicate := summaryPredicate(volTable)
+
+	etkPH := b.ph()
+	b.arg(f.Key)
+
+	// provider_type scope (#815 review P2): Cost Management enables tag keys
+	// per provider type — an OCP-disabled key with an AWS-enabled row of the
+	// same name must not keep matching. Koku's own label-summary SQL and
+	// ROS's DBTagProvider both scope the same way.
+	etkTypePH := b.ph()
+	b.arg("OCP")
+
+	return fmt.Sprintf(`((%s OR %s) AND EXISTS (
+			SELECT 1 FROM %s etk WHERE etk.key = %s AND etk.enabled AND etk.provider_type = %s
+		))`,
+		podPredicate, volPredicate, etkTable, etkPH, etkTypePH)
 }
 
 // ParseTagFilters parses repeated legacy ?tag= query values (key:value, key:*).
@@ -172,29 +306,14 @@ func applyDBTagFiltersToKeys(query *gorm.DB, orgID string, filters []TagFilter) 
 		log.Warnf("ApplyTagFiltersToKeys: invalid org_id %q: %v", orgID, err)
 		return query
 	}
-	tagValuesTable := pgx.Identifier{schema, "reporting_ocptags_values"}.Sanitize()
 
 	for _, f := range filters {
 		if f.Key == "" || len(f.Values) == 0 {
 			continue
 		}
-		var matchClause string
-		args := []interface{}{f.Key}
-		if len(f.Values) == 1 && f.Values[0] == "*" {
-			matchClause = "tv.key = ?"
-		} else {
-			matchClause = "tv.key = ? AND tv.value IN ?"
-			args = append(args, f.Values)
-		}
-		existsSQL := fmt.Sprintf(`EXISTS (
-			SELECT 1
-			FROM %s tv,
-			     unnest(tv.cluster_ids, tv.namespaces) AS t(cluster_id, namespace)
-			WHERE %s
-			  AND t.cluster_id = ock.cluster_uuid::text
-			  AND t.namespace = ock.namespace
-		)`, tagValuesTable, matchClause)
-		query = query.Where(existsSQL, args...)
+		b := newGormTagFragmentBuilder()
+		fragment := b.labelSummaryTagMatch(schema, "ock.cluster_uuid::text", "ock.namespace", f)
+		query = query.Where(fragment, b.args...)
 	}
 	return query
 }
@@ -228,29 +347,14 @@ func applyDBTagFiltersToClusterNamespace(
 		log.Warnf("ApplyTagFiltersToClusterNamespace: invalid org_id %q: %v", orgID, err)
 		return query
 	}
-	tagValuesTable := pgx.Identifier{schema, "reporting_ocptags_values"}.Sanitize()
 
 	for _, f := range filters {
 		if f.Key == "" || len(f.Values) == 0 {
 			continue
 		}
-		var matchClause string
-		args := []interface{}{f.Key}
-		if len(f.Values) == 1 && f.Values[0] == "*" {
-			matchClause = "tv.key = ?"
-		} else {
-			matchClause = "tv.key = ? AND tv.value IN ?"
-			args = append(args, f.Values)
-		}
-		existsSQL := fmt.Sprintf(`EXISTS (
-			SELECT 1
-			FROM %s tv,
-			     unnest(tv.cluster_ids, tv.namespaces) AS t(cluster_id, namespace)
-			WHERE %s
-			  AND t.cluster_id = %s::text
-			  AND t.namespace = %s
-		)`, tagValuesTable, matchClause, clusterColumn, namespaceColumn)
-		query = query.Where(existsSQL, args...)
+		b := newGormTagFragmentBuilder()
+		fragment := b.labelSummaryTagMatch(schema, clusterColumn+"::text", namespaceColumn, f)
+		query = query.Where(fragment, b.args...)
 	}
 	return query
 }
@@ -318,7 +422,6 @@ func tagFilterDBExistsClause(orgID, clusterExpr, namespaceExpr string, filters [
 		log.Warnf("TagFilterExistsClause: invalid org_id %q: %v", orgID, err)
 		return "", nil, nextArg
 	}
-	tagValuesTable := pgx.Identifier{schema, "reporting_ocptags_values"}.Sanitize()
 	args := []interface{}{}
 	idx := nextArg
 	inner := fmt.Sprintf(`EXISTS (
@@ -328,43 +431,25 @@ func tagFilterDBExistsClause(orgID, clusterExpr, namespaceExpr string, filters [
 	if namespaceExpr != "" {
 		inner += fmt.Sprintf(" AND %s = ock.namespace", namespaceExpr)
 	}
-	inner += fmt.Sprintf(`
-		  AND EXISTS (
-			SELECT 1 FROM %s tv,
-			     unnest(tv.cluster_ids, tv.namespaces) AS t(cluster_id, namespace)
-			WHERE t.cluster_id = ock.cluster_uuid::text
-			  AND t.namespace = ock.namespace`, tagValuesTable)
+	inner += `
+		  AND `
 	args = append(args, orgID)
 	idx++
 
-	tagPredicates := make([]string, 0, len(filters))
+	b := newPgxTagFragmentBuilder(idx)
+	fragments := make([]string, 0, len(filters))
 	for _, f := range filters {
 		if f.Key == "" || len(f.Values) == 0 {
 			continue
 		}
-		if len(f.Values) == 1 && f.Values[0] == "*" {
-			tagPredicates = append(tagPredicates, fmt.Sprintf("tv.key = $%d", idx))
-			args = append(args, f.Key)
-			idx++
-			continue
-		}
-		tagPredicates = append(tagPredicates, fmt.Sprintf("tv.key = $%d AND tv.value IN (", idx))
-		args = append(args, f.Key)
-		idx++
-		placeholders := make([]string, len(f.Values))
-		for i := range f.Values {
-			placeholders[i] = fmt.Sprintf("$%d", idx)
-			args = append(args, f.Values[i])
-			idx++
-		}
-		tagPredicates[len(tagPredicates)-1] += strings.Join(placeholders, ", ") + ")"
+		fragments = append(fragments, b.labelSummaryTagMatch(schema, "ock.cluster_uuid::text", "ock.namespace", f))
 	}
-	if len(tagPredicates) == 0 {
+	if len(fragments) == 0 {
 		return "", nil, nextArg
 	}
-	inner += " AND (" + strings.Join(tagPredicates, " AND ") + ")"
-	inner += "))"
-	return inner, args, idx
+	args = append(args, b.args...)
+	inner += strings.Join(fragments, "\n		  AND ") + ")"
+	return inner, args, b.idx + 1
 }
 
 // TagFilterExistsClauseForCommaSeparatedNamespaces matches rows when any namespace listed in a
@@ -442,7 +527,6 @@ func tagFilterDBExistsClauseCommaNamespaces(
 		log.Warnf("TagFilterExistsClauseForCommaSeparatedNamespaces: invalid org_id %q: %v", orgID, err)
 		return "", nil, nextArg
 	}
-	tagValuesTable := pgx.Identifier{schema, "reporting_ocptags_values"}.Sanitize()
 	args := []interface{}{orgID}
 	idx := nextArg + 1
 	inner := fmt.Sprintf(`EXISTS (
@@ -452,38 +536,20 @@ func tagFilterDBExistsClauseCommaNamespaces(
 		WHERE ock.org_id = $%d
 		  AND %s = ock.cluster_uuid
 		  AND trim(both ' ' from member.ns) = ock.namespace
-		  AND EXISTS (
-			SELECT 1 FROM %s tv,
-			     unnest(tv.cluster_ids, tv.namespaces) AS t(cluster_id, namespace)
-			WHERE t.cluster_id = ock.cluster_uuid::text
-			  AND t.namespace = ock.namespace`, namespacesExpr, nextArg, clusterExpr, tagValuesTable)
+		  AND `, namespacesExpr, nextArg, clusterExpr)
 
-	tagPredicates := make([]string, 0, len(filters))
+	b := newPgxTagFragmentBuilder(idx)
+	fragments := make([]string, 0, len(filters))
 	for _, f := range filters {
 		if f.Key == "" || len(f.Values) == 0 {
 			continue
 		}
-		if len(f.Values) == 1 && f.Values[0] == "*" {
-			tagPredicates = append(tagPredicates, fmt.Sprintf("tv.key = $%d", idx))
-			args = append(args, f.Key)
-			idx++
-			continue
-		}
-		tagPredicates = append(tagPredicates, fmt.Sprintf("tv.key = $%d AND tv.value IN (", idx))
-		args = append(args, f.Key)
-		idx++
-		placeholders := make([]string, len(f.Values))
-		for i := range f.Values {
-			placeholders[i] = fmt.Sprintf("$%d", idx)
-			args = append(args, f.Values[i])
-			idx++
-		}
-		tagPredicates[len(tagPredicates)-1] += strings.Join(placeholders, ", ") + ")"
+		fragments = append(fragments, b.labelSummaryTagMatch(schema, "ock.cluster_uuid::text", "ock.namespace", f))
 	}
-	if len(tagPredicates) == 0 {
+	if len(fragments) == 0 {
 		return "", nil, nextArg
 	}
-	inner += " AND (" + strings.Join(tagPredicates, " AND ") + ")"
-	inner += "))"
-	return inner, args, idx
+	args = append(args, b.args...)
+	inner += strings.Join(fragments, "\n		  AND ") + ")"
+	return inner, args, b.idx + 1
 }

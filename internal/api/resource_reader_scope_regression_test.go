@@ -536,7 +536,36 @@ func TestReaderScope_TagWarningNonDisclosure(t *testing.T) {
 			cluster_ids TEXT[] NOT NULL,
 			cluster_aliases TEXT[] NOT NULL DEFAULT '{}',
 			namespaces TEXT[] NOT NULL
-		)`)
+		);
+		CREATE TABLE IF NOT EXISTS `+schema+`.reporting_ocpusagereportperiod (
+			id BIGINT PRIMARY KEY,
+			cluster_id TEXT NOT NULL,
+			report_period_start DATE NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS `+schema+`.reporting_ocpusagepodlabel_summary (
+			uuid UUID PRIMARY KEY,
+			key TEXT NOT NULL,
+			values TEXT[] NOT NULL,
+			report_period_id BIGINT NOT NULL REFERENCES `+schema+`.reporting_ocpusagereportperiod (id),
+			namespace TEXT NOT NULL,
+			node TEXT
+		);
+		CREATE TABLE IF NOT EXISTS `+schema+`.reporting_ocpstoragevolumelabel_summary (
+			uuid UUID PRIMARY KEY,
+			key TEXT NOT NULL,
+			values TEXT[] NOT NULL,
+			report_period_id BIGINT NOT NULL REFERENCES `+schema+`.reporting_ocpusagereportperiod (id),
+			namespace TEXT NOT NULL,
+			node TEXT
+		);
+		CREATE TABLE IF NOT EXISTS `+schema+`.reporting_enabledtagkeys (
+			uuid UUID PRIMARY KEY,
+			key VARCHAR(512) NOT NULL,
+			enabled BOOLEAN NOT NULL DEFAULT true,
+			provider_type VARCHAR(50) NOT NULL,
+			UNIQUE (key, provider_type)
+		);
+	`)
 	require.NoError(t, err)
 
 	// A-only filtering for B's tag key and for a nonexistent key must

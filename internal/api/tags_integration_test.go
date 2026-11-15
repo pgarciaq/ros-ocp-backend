@@ -102,6 +102,34 @@ func seedKokuTagValuesForFilter(t *testing.T, ctx context.Context) {
 			nodes TEXT[],
 			UNIQUE (key, value)
 		);
+		CREATE TABLE IF NOT EXISTS `+schema+`.reporting_ocpusagereportperiod (
+			id BIGINT PRIMARY KEY,
+			cluster_id TEXT NOT NULL,
+			report_period_start DATE NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS `+schema+`.reporting_ocpusagepodlabel_summary (
+			uuid UUID PRIMARY KEY,
+			key TEXT NOT NULL,
+			values TEXT[] NOT NULL,
+			report_period_id BIGINT NOT NULL REFERENCES `+schema+`.reporting_ocpusagereportperiod (id),
+			namespace TEXT NOT NULL,
+			node TEXT
+		);
+		CREATE TABLE IF NOT EXISTS `+schema+`.reporting_ocpstoragevolumelabel_summary (
+			uuid UUID PRIMARY KEY,
+			key TEXT NOT NULL,
+			values TEXT[] NOT NULL,
+			report_period_id BIGINT NOT NULL REFERENCES `+schema+`.reporting_ocpusagereportperiod (id),
+			namespace TEXT NOT NULL,
+			node TEXT
+		);
+		CREATE TABLE IF NOT EXISTS `+schema+`.reporting_enabledtagkeys (
+			uuid UUID PRIMARY KEY,
+			key VARCHAR(512) NOT NULL,
+			enabled BOOLEAN NOT NULL DEFAULT true,
+			provider_type VARCHAR(50) NOT NULL,
+			UNIQUE (key, provider_type)
+		);
 	`)
 	require.NoError(t, err)
 	_, err = database.Pool.Exec(ctx, `
@@ -110,6 +138,20 @@ func seedKokuTagValuesForFilter(t *testing.T, ctx context.Context) {
 		) VALUES ($1, 'environment', 'production', ARRAY[$2], ARRAY['alias'], ARRAY[$3])
 		ON CONFLICT DO NOTHING`,
 		uuid.New(), testutil.TestClusterUUID, testutil.TestNamespace)
+	require.NoError(t, err)
+	// #815: the db-mode filter reads the label summaries — seed the
+	// same tag there (in-window period, enabled key).
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO `+schema+`.reporting_enabledtagkeys (uuid, key, enabled, provider_type)
+		VALUES ($1, 'environment', true, 'OCP') ON CONFLICT DO NOTHING`, uuid.New())
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO `+schema+`.reporting_ocpusagereportperiod (id, cluster_id, report_period_start)
+		VALUES (1, $1, date_trunc('month', now())) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO `+schema+`.reporting_ocpusagepodlabel_summary (uuid, key, values, report_period_id, namespace, node)
+		VALUES ($1, 'environment', ARRAY['production'], 1, $2, NULL)`, uuid.New(), testutil.TestNamespace)
 	require.NoError(t, err)
 }
 
