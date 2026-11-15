@@ -121,6 +121,10 @@ func applyNativeContainerPageSeek(query *gorm.DB, opts listoptions.ListOptions, 
 	if !opts.HasCursor {
 		return query
 	}
+	// #851: the anchor is stable UTC text — compare the timestamp as naive
+	// UTC so PostgreSQL does not parse the offset-less anchor in the
+	// session timezone.
+	sortExpr = timestampSeekExpr(sortExpr)
 	if opts.AfterContainerSortPresent {
 		clause, args := nativeContainerSeekAfter(
 			sortExpr, opts.OrderHow, opts.AfterContainerSortValue,

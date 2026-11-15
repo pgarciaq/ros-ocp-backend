@@ -426,8 +426,8 @@ func buildNativeContainerKeysPageQuery(
 		selectPrefix = "DISTINCT ON (ock.cluster_uuid, ock.namespace, ock.workload, ock.workload_type, ock.container_name) "
 	}
 	pageKeys = pageKeys.Select(fmt.Sprintf(
-		"%sock.cluster_uuid, ock.namespace, ock.workload, ock.workload_type, ock.container_name, (%s)::text AS ros_container_page_sort",
-		selectPrefix, pageSortExpr,
+		"%sock.cluster_uuid, ock.namespace, ock.workload, ock.workload_type, ock.container_name, %s AS ros_container_page_sort",
+		selectPrefix, pageSortTextExpr(pageSortExpr),
 	))
 
 	if keysOnlySort || sortFilter != "" {
@@ -594,8 +594,8 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 
 	distinctSubquery := db.Table("recommendation_sets rs").
 		Select(fmt.Sprintf(
-			"DISTINCT ON (rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name) rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name, (%s)::text AS ros_container_page_sort",
-			sortExpr,
+			"DISTINCT ON (rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name) rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name, %s AS ros_container_page_sort",
+			pageSortTextExpr(sortExpr),
 		)).
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("rs.org_id = ?", orgID)

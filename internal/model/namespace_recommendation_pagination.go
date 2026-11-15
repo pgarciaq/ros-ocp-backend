@@ -191,6 +191,46 @@ func PaginationSortValueJSON(v interface{}) json.RawMessage {
 }
 
 // nativeNSParseSortText converts a text sort key from the page subquery into a SQL bind value.
+// isTimestampPageSort reports whether the sort expression is a timestamp
+// column (the last_reported sorts on both list paths) — #851.
+func isTimestampPageSort(sortExpr string) bool {
+	return strings.Contains(sortExpr, "updated_at") || strings.Contains(sortExpr, "last_reported_at")
+}
+
+// pageSortTextExpr renders a page-sort value as text for the cursor anchor
+// and the page-subquery ordering (#851). Timestamp sorts MUST use the stable
+// UTC to_char: a bare (ts)::text renders in the SESSION timezone with a
+// variable UTC offset, and text ordering across a DST boundary disagrees
+// with chronological order (page 1 misorders; the cursor then seeks past
+// rows it should return and continuation pages come back empty). The format
+// is fixed-width (.US always six digits), so text order == chronological
+// order, and to_char is DateStyle-independent (unlike ::text, which also
+// breaks under non-ISO DateStyle). It is DELIBERATELY not RFC3339-parseable
+// (space separator, no offset): nativeNSParseSortText and
+// DecodePaginationSortValue must keep returning the anchor as a verbatim
+// string — a parseable format would silently bind time.Time values against
+// the text-seek columns. Changing this format requires re-auditing every
+// seek bind site and both parse functions.
+func pageSortTextExpr(sortExpr string) string {
+	if isTimestampPageSort(sortExpr) {
+		return fmt.Sprintf("to_char((%s) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS.US')", sortExpr)
+	}
+	return fmt.Sprintf("(%s)::text", sortExpr)
+}
+
+// timestampSeekExpr adapts a typed keyset-seek sort expression to the stable
+// UTC text anchor (#851): the anchor string is offset-less UTC text, which
+// PostgreSQL would otherwise parse in the SESSION timezone (hours off under
+// a DST-observing zone). Casting the timestamptz expression to a naive UTC
+// timestamp makes both sides of the comparison naive UTC. Non-timestamp
+// sorts pass through unchanged.
+func timestampSeekExpr(sortExpr string) string {
+	if isTimestampPageSort(sortExpr) {
+		return fmt.Sprintf("(%s) AT TIME ZONE 'UTC'", sortExpr)
+	}
+	return sortExpr
+}
+
 func nativeNSParseSortText(sortExpr string, text *string) interface{} {
 	if text == nil || *text == "" {
 		return nil

@@ -347,8 +347,8 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 		selectPrefix = "DISTINCT ON (onk.cluster_uuid, onk.namespace_name) "
 	}
 	pageKeys = pageKeys.Select(fmt.Sprintf(
-		"%sonk.cluster_uuid, onk.namespace_name, (%s)::text AS ros_ns_page_sort",
-		selectPrefix, pageSortExpr,
+		"%sonk.cluster_uuid, onk.namespace_name, %s AS ros_ns_page_sort",
+		selectPrefix, pageSortTextExpr(pageSortExpr),
 	))
 
 	if keysOnlySort {
@@ -467,6 +467,10 @@ func applyNativeNSKeysPageSeek(query *gorm.DB, opts listoptions.ListOptions, sor
 	if !opts.HasCursor {
 		return query
 	}
+	// #851: the anchor is stable UTC text — compare the timestamp as naive
+	// UTC so PostgreSQL does not parse the offset-less anchor in the
+	// session timezone.
+	sortExpr = timestampSeekExpr(sortExpr)
 	if opts.AfterNSSortPresent {
 		tie := "(onk.cluster_uuid, onk.namespace_name)"
 		sortValue := opts.AfterNSSortValue
