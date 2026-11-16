@@ -264,7 +264,26 @@ func handleKafkaTransientError(consumer kafkaCommitter, producer kafkaMessagePro
 		if dlqErr := produceToDLQImpl(producer, msg, kafkaTransientErr.Error()); dlqErr != nil {
 			log.Errorf("kafka: DLQ produce attempt %d failed: %v", attempts+1, dlqErr)
 			if rerr := produceDLQRedeliveryImpl(producer, msg, attempts); rerr != nil {
-				log.Errorf("kafka: failed to produce DLQ redelivery: %v (will redeliver naturally)", rerr)
+				// #803: an uncommitted return is NOT a redelivery guarantee —
+				// Kafka commits are cumulative, so the next message's commit
+				// would ack this offset and the report would be silently
+				// lost. Commit with the DLQ-exhaustion disposition instead
+				// (loud loss): the alert fires, the files are marked failed,
+				// and the offset is deliberately acked. Commits are a
+				// synchronous coordinator round-trip (no local success
+				// path), so during a full broker outage the commit blocks
+				// and then either succeeds (loud loss — the alert already
+				// fired) or fails after a rebalance (redelivery). The
+				// zero-loss alternative (a contiguous commit watermark) is
+				// filed as #870.
+				log.Errorf("kafka: failed to produce DLQ redelivery: %v (committing with alert — an uncommitted return would be silently acked by the next commit, #803)", rerr)
+				metrics.KafkaDLQFailedTotal.Inc()
+				markDLQFilesFailed(log, msg, kafkaTransientErr.Error())
+				if consumer != nil {
+					if err := kafka_internal.CommitMessage(consumer, msg); err != nil {
+						log.Errorf("kafka: unable to commit after DLQ redelivery failure: %v", err)
+					}
+				}
 				return
 			}
 			if consumer != nil {
@@ -287,7 +306,19 @@ func handleKafkaTransientError(consumer kafkaCommitter, producer kafkaMessagePro
 		retries+1, maxRetries, msg.TopicPartition, kafkaTransientErr)
 	metrics.KafkaRetriesTotal.Inc()
 	if retryErr := produceRetryImpl(producer, msg, retries); retryErr != nil {
-		log.Errorf("kafka: failed to produce retry: %v (will redeliver naturally)", retryErr)
+		// #803: same reasoning as the DLQ-redelivery failure above — an
+		// uncommitted return would be silently acked by the next message's
+		// cumulative commit. Commit with the alert instead (loud loss; see
+		// the outage note above); the zero-loss watermark alternative is
+		// #870.
+		log.Errorf("kafka: failed to produce retry: %v (committing with alert — an uncommitted return would be silently acked by the next commit, #803)", retryErr)
+		metrics.KafkaDLQFailedTotal.Inc()
+		markDLQFilesFailed(log, msg, kafkaTransientErr.Error())
+		if consumer != nil {
+			if err := kafka_internal.CommitMessage(consumer, msg); err != nil {
+				log.Errorf("kafka: unable to commit after retry produce failure: %v", err)
+			}
+		}
 		return
 	}
 	if consumer != nil {

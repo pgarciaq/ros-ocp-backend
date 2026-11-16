@@ -82,7 +82,7 @@ var (
 	KafkaDLQFailedTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "rosocp_kafka_dlq_failed_total",
-			Help: "Kafka messages dropped after exhausting DLQ delivery attempts",
+			Help: "Kafka messages dropped with alert: DLQ attempts exhausted, or every redelivery produce failed while the commit path still worked (#803)",
 		},
 	)
 

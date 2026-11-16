@@ -204,25 +204,43 @@ func TestHandleKafkaTransientError_DLQPathWhenAtMax(t *testing.T) {
 	assert.Equal(t, beforeDLQ+1, afterDLQ)
 }
 
-func TestHandleKafkaTransientError_ProduceFailureDoesNotCommit(t *testing.T) {
-	t.Parallel()
+// TestHandleKafkaTransientError_ProduceFailureCommitsWithAlert pins #803's
+// option A: a retry-topic produce failure must NOT return uncommitted — an
+// uncommitted return is silently acked by the next message's cumulative
+// commit, losing the report. The fallback takes the DLQ-exhaustion
+// disposition: alert, mark the files failed, commit (loud loss).
+func TestHandleKafkaTransientError_ProduceFailureCommitsWithAlert(t *testing.T) {
 	producer := &fakeKafkaProducer{err: assert.AnError}
 	consumer := &fakeKafkaCommitter{}
 	msg := testTopicMessage(nil)
 
+	beforeDLQFailed := counterValue(t, "rosocp_kafka_dlq_failed_total")
 	handleKafkaTransientError(consumer, producer, msg, assert.AnError)
-	assert.False(t, consumer.committed)
+
+	assert.True(t, consumer.committed,
+		"the produce-failure fallback must commit — an uncommitted return is silently acked by the next message's cumulative commit (#803)")
+	afterDLQFailed := counterValue(t, "rosocp_kafka_dlq_failed_total")
+	assert.Equal(t, beforeDLQFailed+1, afterDLQFailed,
+		"the produce-failure fallback must fire the DLQ-failed alert (#803)")
 }
 
-func TestHandleKafkaTransientError_DLQProduceFailureDoesNotCommit(t *testing.T) {
-	t.Parallel()
+// TestHandleKafkaTransientError_DLQProduceFailureCommitsWithAlert pins the
+// other #803 fallback: DLQ produce AND DLQ-redelivery produce both failing
+// must also commit with the alert, not return uncommitted.
+func TestHandleKafkaTransientError_DLQProduceFailureCommitsWithAlert(t *testing.T) {
 	producer := &fakeKafkaProducer{err: assert.AnError}
 	consumer := &fakeKafkaCommitter{}
 	maxRetries := maxTransientRetries()
 	msg := testTopicMessage([]kafka.Header{{Key: retryCountHeader, Value: []byte(strconv.Itoa(maxRetries))}})
 
+	beforeDLQFailed := counterValue(t, "rosocp_kafka_dlq_failed_total")
 	handleKafkaTransientError(consumer, producer, msg, assert.AnError)
-	assert.False(t, consumer.committed)
+
+	assert.True(t, consumer.committed,
+		"the DLQ-redelivery-failure fallback must commit — an uncommitted return is silently acked by the next message's cumulative commit (#803)")
+	afterDLQFailed := counterValue(t, "rosocp_kafka_dlq_failed_total")
+	assert.Equal(t, beforeDLQFailed+1, afterDLQFailed,
+		"the DLQ-redelivery-failure fallback must fire the DLQ-failed alert (#803)")
 }
 
 func TestGetDLQAttemptCount_NoHeaderReturnsZero(t *testing.T) {
