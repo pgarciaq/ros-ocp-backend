@@ -1,6 +1,6 @@
 # Monitoring and Observability
 
-> **Last verified:** 2026-09-29
+> **Last verified:** 2026-11-16
 
 This guide helps operators deploy, scrape, and troubleshoot ROS-OCP Backend using Prometheus metrics and structured logs.
 
@@ -77,6 +77,7 @@ sum by (type) (increase(rosocp_recommendations_written_total[1h]))
 | Metric | Type | Labels | What to watch |
 |--------|------|--------|---------------|
 | `rosocp_kafka_dlq_messages_total` | Counter | — | Messages sent to the Dead Letter Queue after max retries |
+| `rosocp_kafka_dlq_failed_total` | Counter | — | Reports dropped with alert, two triggers: DLQ attempts exhausted; OR a redelivery produce failed on a path where no other produced (the retry-topic produce on a transient retry, or the DLQ and DLQ-redelivery produces at retry exhaustion) while the commit path still worked — the message is committed and the files are marked failed (#803). Zero-loss handling is deliberately not implemented (the watermark alternative is tracked, not required) |
 | `rosocp_ingestion_errors_total` | Counter | `stage` | Pipeline failures: `csv_parse`, `digest`, `recommend`, `write` |
 | `rosocp_invalid_csv_total` | Counter | — | Bad container CSV from upstream |
 | `rosocp_invalid_namespace_csv_total` | Counter | — | Bad namespace CSV |

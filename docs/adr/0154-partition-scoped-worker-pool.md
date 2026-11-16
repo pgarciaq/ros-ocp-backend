@@ -34,3 +34,37 @@ Parallelism across partitions. Ordering within partition. Configurable worker co
 ## References
 
 - [internal/kafka/consumer.go](internal/kafka/consumer.go)
+
+## Update (2026-11-16, #803 — commit fallbacks and the rebalance window; decision text above immutable)
+
+The #756 amendment's commit-site enumeration ("the handler tail, the retry
+path, and panic-recovery commit-on-skip") was incomplete: two
+produce-failure fallbacks in `handleKafkaTransientError` returned
+**without committing**, relying on a "will redeliver naturally" that
+cumulative commits defeat — the next message's commit acked the skipped
+offset and the report was silently lost. Both fallbacks (retry-topic
+produce failed; DLQ produce and DLQ-redelivery produce both failed) now
+take the DLQ-exhaustion disposition: alert
+(`rosocp_kafka_dlq_failed_total`), mark the files failed, **commit** —
+loud loss instead of silent loss. Owner decision (2026-11-16): the
+zero-loss alternative (a contiguous commit watermark that stalls the
+partition until restart) is **not required for ROS OCP** — the loss
+window needs every redelivery produce to fail while the commit path
+still works (commits are a synchronous coordinator round-trip — during a
+full broker outage they block and then either succeed, leaving the loss
+loud via the already-fired alert, or fail after a rebalance, in which
+case redelivery happens), and the DLQ-exhaustion precedent already
+accepts loud loss there. The watermark is filed as #870 should the
+requirement change.
+
+The rebalance policy's convergence claim ("a replayed report converges
+to the same row") is now evidence, not assertion: the write-level replay
+tests in `internal/ingestion/replay_convergence_test.go` demonstrate
+both rebalance interleavings (the old consumer's late in-flight write
+landing after the new owner's replay, and the reverse) converging to the
+sequential state, with the transient regression — the tolerated window —
+asserted mid-flight. Regressions added:
+`internal/services/kafka_retry_test.go` (the fallback commits-with-alert
+pair), `internal/kafka/commit_fallback_compose_test.go` (the fallback's
+commit composing with the next message's through the real queue
+machinery, mock-cluster broker watermark).

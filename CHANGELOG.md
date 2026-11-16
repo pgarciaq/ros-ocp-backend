@@ -73,6 +73,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Kafka commit fallbacks no longer silently lose reports when every redelivery produce fails ([#803](https://github.com/pgarciaq/ros-ocp-backend/issues/803)):**
+  when a report exhausted its retries and every produce path failed
+  (retry topic, DLQ, DLQ-redelivery), the handler returned without
+  committing, relying on a "will redeliver naturally" that Kafka's
+  cumulative commits defeat — the next message's commit silently
+  acknowledged the skipped offset and the report was lost with no
+  signal. Both fallbacks now take the DLQ-exhaustion disposition:
+  the `rosocp_kafka_dlq_failed_total` alert fires, the files are
+  marked failed, and the offset is committed — loud loss instead of
+  silent loss. Zero-loss handling is deliberately
+  not implemented: the contiguous-commit-watermark alternative is
+  tracked for the case where it is ever required. The rebalance replay
+  window — the sibling finding — is now proven benign by write-level
+  replay tests (both interleavings converge to the sequential state),
+  turning ADR-0154's convergence assertion into evidence.
+
 - **The internal docs link gate slugs rendered heading text, not the raw Markdown line ([#805](https://github.com/pgarciaq/ros-ocp-backend/issues/805)):**
   the gate's GitHub-slug reimplementation kept link destinations in
   heading anchors — a heading embedding `[#514](https://…)` produced an
