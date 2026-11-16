@@ -48,7 +48,6 @@ fi
 python3 - "$SOFT" <<'PY'
 from __future__ import annotations
 
-import collections
 import re
 import sys
 from pathlib import Path
@@ -78,14 +77,32 @@ REF_DEF_RE = re.compile(r"^\s*\[[^\]]+\]:\s*(\S+)")
 CODE_SPAN_RE = re.compile(r"`[^`]*`")
 SKIP_SCHEMES = ("#", "http://", "https://", "mailto:", "ftp:", "tel:", "data:")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
+# #805: GitHub slugs the RENDERED heading text. Link syntax is stripped
+# before slugging, keeping the label/alt text — the destination never
+# reaches the anchor.
+MD_LINK_RE = re.compile(r"!?\[([^\]]*)\]\(\s*[^)\s]+?(?:\s+\"[^\"]*\")?\s*\)")
+MD_REFLINK_RE = re.compile(r"\[([^\]]*)\]\[[^\]]*\]")
 
 
 def github_slug(text: str) -> str:
     """GitHub-flavored heading anchor.
 
     Lowercase, strip inline HTML, drop every character that is not a word
-    character, hyphen or space, then turn spaces into hyphens.
+    character, hyphen or space, then turn spaces into hyphens. Link syntax
+    is stripped first, keeping the label (#805: GitHub slugs the rendered
+    text — a heading's link destination never reaches the anchor). Code
+    spans render literally, so their content is protected from the strip.
     """
+    spans: list[str] = []
+
+    def stash(match: re.Match) -> str:
+        spans.append(match.group(0))
+        return f"\x00{len(spans) - 1}\x00"
+
+    text = CODE_SPAN_RE.sub(stash, text)
+    text = MD_LINK_RE.sub(r"\1", text)
+    text = MD_REFLINK_RE.sub(r"\1", text)
+    text = re.sub(r"\x00(\d+)\x00", lambda m: spans[int(m.group(1))], text)
     out = re.sub(r"<[^>]+>", "", text.strip().lower())
     out = re.sub(r"[^\w\- ]", "", out)
     return out.replace(" ", "-")
@@ -96,7 +113,7 @@ def headings(path: Path) -> set[str]:
     result: set[str] = set()
     if not (path.is_file() and path.suffix == ".md"):
         return result
-    seen: collections.Counter[str] = collections.Counter()
+    used: set[str] = set()
     in_fence = False
     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         if FENCE_RE.match(line):
@@ -107,10 +124,18 @@ def headings(path: Path) -> set[str]:
         match = HEADING_RE.match(line)
         if not match:
             continue
+        # GitHub's slugger dedupes against every anchor ALREADY EMITTED
+        # (github-slugger's used-slug set), not per heading text: a literal
+        # heading whose text equals another heading's generated -N anchor
+        # gets its own -N suffix instead of colliding (#805).
         base = github_slug(match.group(2))
-        count = seen[base]
-        seen[base] += 1
-        result.add(base if count == 0 else f"{base}-{count}")
+        anchor = base
+        n = 0
+        while anchor in used:
+            n += 1
+            anchor = f"{base}-{n}"
+        used.add(anchor)
+        result.add(anchor)
     return result
 
 
