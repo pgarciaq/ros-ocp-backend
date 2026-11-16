@@ -73,6 +73,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **The internal docs link gate slugs rendered heading text, not the raw Markdown line ([#805](https://github.com/pgarciaq/ros-ocp-backend/issues/805)):**
+  the gate's GitHub-slug reimplementation kept link destinations in
+  heading anchors — a heading embedding `[#514](https://…)` produced an
+  anchor containing `httpsgithubcom…` where GitHub publishes the
+  label-only slug. Latent (nothing linked to those anchors), but the
+  guard failed the wrong way when a link appeared: the correct link
+  rejected, with a message steering the author to a slug that 404s on
+  GitHub. Link syntax is now stripped before slugging (inline,
+  reference-style, and images keep their label/alt text), and the
+  duplicate-anchor rule now dedupes against every anchor already emitted
+  (github-slugger's used-slug semantics) — a literal heading whose text
+  equals another heading's generated `-N` anchor gets its own suffix
+  instead of colliding. The gate gains its first self-test: six fixture
+  cases (heading-with-link, duplicates, cross-group collision,
+  reference-style, image, broken-anchor control) run the script against
+  a temporary tree. The repository scan stays green with its
+  1148-link baseline unchanged.
+
 - **db-mode tag filtering no longer drops clusters that share a tag value ([#815](https://github.com/pgarciaq/ros-ocp-backend/issues/815)):**
   `ROS_TAGS_SOURCE=db` resolved tags from Koku's
   `reporting_ocptags_values`, whose cluster/namespace arrays are
