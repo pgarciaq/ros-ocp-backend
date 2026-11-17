@@ -1,10 +1,10 @@
 # Tag filtering
 
-> **Last verified:** 2026-11-15
+> **Last verified:** 2026-11-17
 
 !!! info "Quick Facts"
     **Filter syntax:** `filter[tag:key]=value` (bracket notation, preferred) or `?tag=key:value` (legacy flat)  
-    **Data source:** Push-synced `org_container_keys.resolved_tags` (`ROS_TAGS_SOURCE=api`, chart/deployed default); or Koku `reporting_ocptags_values` (`db`, binary unset / advanced)  
+    **Data source:** Push-synced `org_container_keys.resolved_tags` (`ROS_TAGS_SOURCE=api`, chart/deployed default); or Koku's pod and storage-volume label summaries, windowed to report periods in `[last_month_start, this_month_end]` (`db`, binary unset / advanced)  
     **Feature gate:** `ROS_TAGS_ENABLED=true` (default: `true`)  
     **Supported plugins:** Containers, Namespaces, Nodes, VMs, GPU MIG, GPU Time-Slicing, PVC, Quota, Cluster-Quota  
     **Multi-value:** Comma-separated values use OR logic within a key; multiple keys use AND

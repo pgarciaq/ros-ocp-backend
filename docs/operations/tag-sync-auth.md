@@ -268,8 +268,16 @@ Compare `synced_at` to the last OCP manifest completion time for the org.
 When ROS and Koku share a PostgreSQL instance and operators set `ROS_TAGS_SOURCE=db`,
 ROS reads tag data **directly from Koku tenant tables**:
 
-- `org{org_id}.reporting_enabledtagkeys`
-- `org{org_id}.reporting_ocptags_values`
+- `org{org_id}.reporting_enabledtagkeys` — enabled OCP tag keys, checked at query time
+- `org{org_id}.reporting_ocpusagepodlabel_summary` — pod label values per report period
+- `org{org_id}.reporting_ocpstoragevolumelabel_summary` — storage-volume label values per report period
+- `org{org_id}.reporting_ocpusagereportperiod` — report period start per cluster (the join
+  that turns a label-summary row into a cluster, and the window bound)
+- `org{org_id}.reporting_ocptags_values` — the tag catalog the catalog endpoints read
+  (distinct `(key, value)` with cluster/namespace/node arrays); no filter reads it
+
+ROS's database role therefore needs `SELECT` on all five; the label summaries and the
+report period table are the ones a grant written for the pre-#815 reader will be missing.
 
 There is **no HTTP push** from Koku for tag filtering in `db` mode. ROS uses its database
 credentials to query Koku schemas on the same PostgreSQL server.

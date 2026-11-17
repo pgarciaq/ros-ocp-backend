@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted — implemented in #770 (Koku `masu/processor/ros_tag_sync.py`)
+Accepted — implemented in #770 (Koku `masu/processor/ros_tag_sync.py`).
+Amended 2026-11-17: `db` mode moved to this source and window (#815), and the
+`reporting_ocptags_values` arrays became a window rebuild rather than a per-run
+snapshot (#867).
 
 ## Phase
 
@@ -85,10 +88,12 @@ window than Koku's, and the two disagreed in production.
   query selects only the columns the payload needs, but the row count is not
   small. It was not measured against a large tenant; a synthetic large-tenant
   measurement is the next step if push duration becomes a concern.
-- **`ROS_TAGS_SOURCE=db` still diverges.** db mode reads
+- **`ROS_TAGS_SOURCE=db` diverges — superseded 2026-11-17.** db mode used to read
   `reporting_ocptags_values`, a per-run last-writer snapshot rebuilt from one
-  provider's report periods. It was already different from the push path and
-  remains so; tracked in #815.
+  provider's report periods. It read a different table, over a different window,
+  with a different cluster set than the push path. Both halves are now closed:
+  #815 moved the db reader onto this ADR's source and window, and #867 rebuilt
+  the catalog arrays — see *Amended (2026-11-17)* below.
 - **Cluster-ID drift is safe.** Report periods are created with `get_or_create`
   on `(cluster_id, report_period_start, report_period_end)` and only
   `cluster_alias` is ever rewritten, so a changed cluster ID creates a new
@@ -133,6 +138,59 @@ alternatives lost are:
 immediately, e.g. a key removed for compliance reasons, or users reporting stale
 tag matches after a relabel.
 
+## Amended (2026-11-17): db mode reads this source, and the catalog is rebuilt
+
+Two changes closed the db-mode divergence recorded above.
+
+**#815 — the db reader moved onto this ADR's source and window.** Every
+`ROS_TAGS_SOURCE=db` filter site now matches a container's
+`(cluster_uuid, namespace)` against `reporting_ocpusagepodlabel_summary` ∪
+`reporting_ocpstoragevolumelabel_summary`, joined through
+`reporting_ocpusagereportperiod` for the cluster and restricted to report
+periods whose `report_period_start` is inside `[last_month_start,
+this_month_end]`. The sites are `MatchingContainerKeys`,
+`ApplyTagFiltersToKeys`, `ApplyTagFiltersToClusterNamespace`,
+`ApplyTagFiltersToNSKeys`, `TagFilterExistsClause`, and
+`TagFilterExistsClauseForCommaSeparatedNamespaces`; all six call one predicate
+(`labelSummaryTagMatch`). `db` and `api` now select the same clusters from the
+same tables. The predicate also checks `reporting_enabledtagkeys`
+(`enabled`, `provider_type='OCP'`) at query time, so a disabled key stops
+matching immediately — decision 5 still holds, because nothing is recomputed on
+toggle.
+
+**#867 — `reporting_ocptags_values` is rebuilt, not overwritten.** The pod and
+volume label-summary SQL now recompute `cluster_ids`, `cluster_aliases`,
+`namespaces`, and `nodes` for the `(key, value)` pairs the run touched, from
+both label summaries over the same window, instead of letting the summarizing
+cluster's arrays replace the row. A touched pair with no cluster left inside the
+window is deleted rather than kept with empty arrays (an empty array satisfies
+every `contained_by` filter). The table is the tag catalog the picker and the
+OCP-on-cloud `matched_tags` SQL read; no ROS **filter** reads it.
+
+**Why two ROS sites had to change with #867.** The container-key
+(`MatchingContainerKeys`, pgx) and namespace-key (`ApplyTagFiltersToNSKeys`,
+gorm) sites read the catalog with `unnest(tv.cluster_ids, tv.namespaces)`,
+which pairs the two arrays **by position**. Under the per-run snapshot both
+arrays were written together for one cluster, so positions happened to agree —
+the defect was that the other clusters were missing, not that pairs were wrong.
+Under the rebuild the two arrays are aggregated independently over the whole
+window, so their orders are unrelated: `cluster_ids = [A, B]` with
+`namespaces = [ns-b, ns-a]` yields `(A, ns-b)` and `(B, ns-a)`, neither of which
+carried the tag. That converts a silent miss into a **false match** inside the
+same org. Both sites now use the label-summary predicate, which needs no
+pairing.
+
+**Executed coverage.** `TestMatchingContainerKeys_DBMode_NoPositionalArrayPairing`
+and `TestApplyTagFiltersToNSKeys_DBMode_NoPositionalArrayPairing`
+(`internal/model/tag_filters_db_exec_test.go`) seed that cross-ordered catalog
+plus the key rows for both false pairs, and assert only the label summaries'
+true pairs match. Reverting either site to `unnest()` fails them with the false
+pair present and the true pair missing.
+
+**What would reopen this:** a db-mode query that has to answer "which cluster
+and namespace" from the catalog arrays alone, where the label summaries are not
+reachable.
+
 ## Verification
 
 - Regression test `test_build_namespace_tags_payload_spans_clusters_and_report_periods`
@@ -153,7 +211,7 @@ tag matches after a relabel.
 | koku | `koku/masu/processor/ros_tag_sync.py` (producer) | Builds the payload from label summaries in the month window |
 | ros-ocp-backend | `internal/tags/sync.go` (consumer) | Full replace of `org_container_keys.resolved_tags`; unchanged |
 | koku | `reporting_ocpusagepodlabel_summary`, `reporting_ocpstoragevolumelabel_summary` | Table and column semantics this ADR depends on |
-| ros-ocp-backend | `ROS_TAGS_SOURCE=db` reader | Not covered — see #815 |
+| ros-ocp-backend | `ROS_TAGS_SOURCE=db` reader | Covered by #815 (same source and window) and #867 (catalog rebuilt, no positional pairing) |
 
 ## Related Decisions
 

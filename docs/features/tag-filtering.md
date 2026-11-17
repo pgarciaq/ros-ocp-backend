@@ -38,15 +38,16 @@ files present.
   Celery `sync_ros_ocp_tags` → payload from the label summaries → `POST /internal/tags/sync`
   with a ServiceAccount bearer token → TokenReview → full-replace transaction. Sequence,
   triggers, and payload fields are in [tag-sync.md](../operations/tag-sync.md).
-- **db path (`db`):** no sync, no inter-service auth — list queries JOIN Koku tables. The
-  cost is coupling to Koku's schema (below).
+- **db path (`db`):** no sync, no inter-service auth — list queries match a container's
+  `(cluster_uuid, namespace)` against Koku's pod and storage-volume label summaries at query
+  time. The cost is coupling to Koku's schema (below).
 
 ## Dual-path comparison
 
 | Dimension | On-Prem (`db`) | SaaS (`api`) |
 |-----------|----------------|--------------|
 | **Database topology** | Shared PostgreSQL | Separate Koku and ROS databases |
-| **Tag data location** | Koku `reporting_ocptags_values` | ROS `org_container_keys.resolved_tags` |
+| **Tag data location** | Koku `reporting_ocpusagepodlabel_summary` + `reporting_ocpstoragevolumelabel_summary` (joined via `reporting_ocpusagereportperiod`) | ROS `org_container_keys.resolved_tags` |
 | **Sync mechanism** | None (live SQL JOIN) | HTTP POST full-replace |
 | **Latency to new tags** | After next Koku summarization | After summarization + successful push |
 | **Worst-case staleness** | Summarization schedule only | Up to ~6h if pushes fail |
@@ -77,12 +78,12 @@ flowchart LR
     subgraph koku["Koku Celery pipeline"]
         ING["CSV ingestion"]
         SUM["OCP summarization"]
-        TAGT["reporting_enabledtagkeys<br/>reporting_ocptags_values"]
+        TAGT["reporting_enabledtagkeys<br/>pod + volume label summaries<br/>reporting_ocpusagereportperiod"]
         ING --> SUM --> TAGT
     end
     subgraph ros["ROS API"]
         REQ["User list request"]
-        JOIN["SQL JOIN org_container_keys<br/>to Koku tag tables"]
+        JOIN["SQL match org_container_keys<br/>(cluster, namespace)<br/>against label summaries"]
         RESP["Filtered recommendations"]
         REQ --> JOIN --> RESP
     end
@@ -96,14 +97,20 @@ flowchart LR
 User Request
   → ROS API (identity/RBAC)
   → Parse filter[tag:key]=value
-  → Step 1: resolve matching containers from org_container_keys
+  → Step 1: resolve matching container keys from org_container_keys
             WHERE EXISTS (
-              SELECT 1 FROM org{org_id}.reporting_ocptags_values tv,
-                   unnest(tv.cluster_ids, tv.namespaces) AS t(cluster_id, namespace)
-              WHERE tv.key = :key AND tv.value IN (:values)
-                AND t.cluster_id = ock.cluster_uuid::text
-                AND t.namespace = ock.namespace
+              SELECT 1 FROM org{org_id}.reporting_ocpusagepodlabel_summary ls
+              JOIN org{org_id}.reporting_ocpusagereportperiod rp
+                ON rp.id = ls.report_period_id
+              WHERE ls.key = :key AND :value = ANY(ls.values)
+                AND ls.namespace = ock.namespace
+                AND rp.cluster_id = ock.cluster_uuid::text
+                AND rp.report_period_start >= :window_start
+                AND rp.report_period_start <  :window_end
             )
+            -- OR the same EXISTS over
+            --    reporting_ocpstoragevolumelabel_summary
+            -- AND EXISTS (enabled key, provider_type = 'OCP')
   → Step 2: fetch recommendations for those container keys
   → Response
 ```
@@ -117,11 +124,22 @@ payloads or env vars.
 
 | Table | Purpose |
 |-------|---------|
-| `reporting_enabledtagkeys` | Enabled OCP tag keys — read by the tag catalog (`internal/tags/db_provider.go`) and the startup probe. **Not** consulted by the filter JOIN |
-| `reporting_ocptags_values` | Distinct `(key, value)` pairs with parallel `cluster_ids[]` and `namespaces[]` arrays linking tags to cluster/namespace scope |
+| `reporting_enabledtagkeys` | Enabled OCP tag keys — read by the tag catalog (`internal/tags/db_provider.go`), the startup probe, **and** the filter predicate (a key disabled here stops matching immediately) |
+| `reporting_ocpusagepodlabel_summary` | Pod label values per report period, `(key, namespace, node)` |
+| `reporting_ocpstoragevolumelabel_summary` | Storage-volume label values per report period, `(key, namespace, node)` |
+| `reporting_ocpusagereportperiod` | Report period start per cluster — turns a label-summary row into a cluster and supplies the window |
+| `reporting_ocptags_values` | Distinct `(key, value)` pairs with `cluster_ids[]`, `cluster_aliases[]`, `namespaces[]`, `nodes[]` — the tag catalog the catalog endpoints read; **not** the filter source |
 
-**Implementation:** [`internal/tags/db_provider.go`](../../internal/tags/db_provider.go),
-[`internal/model/tag_filters.go`](../../internal/model/tag_filters.go) (`applyDBTagFiltersToKeys`).
+The window is `[last_month_start, this_month_end]` over `report_period_start` — the
+same month-snapped window the `api` push builder uses (ADR-0353). The catalog
+arrays in `reporting_ocptags_values` are rebuilt from both label summaries over
+that window (#867); ROS never pairs them by position.
+
+**Implementation:** [`internal/tags/db_provider.go`](../../internal/tags/db_provider.go) (tag catalog),
+[`internal/model/tag_filters.go`](../../internal/model/tag_filters.go) (`labelSummaryTagMatch`, the
+one predicate every db-mode site calls — `MatchingContainerKeys`, `ApplyTagFiltersToKeys`,
+`ApplyTagFiltersToClusterNamespace`, `ApplyTagFiltersToNSKeys`, `TagFilterExistsClause`,
+`TagFilterExistsClauseForCommaSeparatedNamespaces`).
 
 **Properties:**
 
@@ -158,7 +176,7 @@ each result shape. Public lists *which* endpoints support tags; this table recor
 |-----------|---------|------|
 | Thousands of orgs | JOIN per request; Koku tables indexed | Periodic task fans out one Celery job per tenant |
 | ~200 enabled tags | EXISTS subquery per filter key | JSONB `@>` / `->>` on `resolved_tags` |
-| Large namespace counts | `reporting_ocptags_values` unnest join | Batch UPDATE by `(org_id, cluster_uuid, namespace)` in one transaction |
+| Large namespace counts | EXISTS per label-summary source (pod, volume) | Batch UPDATE by `(org_id, cluster_uuid, namespace)` in one transaction |
 
 The push payload is built from label-summary rows — roughly keys × namespaces × nodes per
 report period inside the window. The query selects only the columns the payload needs, but
@@ -171,7 +189,8 @@ measurement, not a narrower window (#770 fixed the opposite).
 | Item | Where it stands |
 |------|-----------------|
 | One value per tag key | #814 — `resolved_tags` stores a single value; the payload picks the alphabetically first |
-| db-mode cluster coverage | #815 — `reporting_ocptags_values` arrays are a per-run last-writer snapshot |
+| db-mode cluster coverage | Closed by #815 — `db` mode reads the label summaries, not the per-run `reporting_ocptags_values` snapshot |
+| Catalog array pairing | Closed by #867 — the catalog arrays are rebuilt over the window; no db-mode site pairs `cluster_ids` with `namespaces` by position |
 | `group_by[tag:key]` on list/history | Not supported; would restructure flat list responses into per-tag buckets (pagination, sorting, RBAC, OpenAPI). Medium effort per resource family; `savings-summary` covers the fleet case |
 | Tag display in responses | Filter-only today; list/detail JSON carries no `labels`/`tags` |
 | mTLS for SaaS push | Planned hardening; TokenReview retained during migration — see [tag-sync-auth.md](../operations/tag-sync-auth.md) |
