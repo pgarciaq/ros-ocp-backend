@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -18,11 +19,39 @@ type TagKeyCatalog struct {
 	Values []string `json:"values"`
 }
 
+// TagValue unmarshals a tag value in either shape (#814 D4 tolerance): a
+// JSON string (the pre-#814 koku payload, and the scalar legacy) or a JSON
+// array of strings (the cycle-2 koku payload). A JSON null element decodes
+// as the empty string (Go's null-into-string no-op) rather than erroring —
+// benign only because normalization drops empty values; any other
+// non-string element is rejected — the contract is string-valued tags.
+type TagValue []string
+
+func (t *TagValue) UnmarshalJSON(data []byte) error {
+	var single string
+	if err := json.Unmarshal(data, &single); err == nil {
+		*t = []string{single}
+		return nil
+	}
+	var multi []string
+	if err := json.Unmarshal(data, &multi); err == nil {
+		*t = multi
+		return nil
+	}
+	return fmt.Errorf("tag value must be a string or an array of strings, got %s", data)
+}
+
+// MarshalJSON writes the normalized array form (#814 D1: values are
+// sorted-unique arrays in storage).
+func (t TagValue) MarshalJSON() ([]byte, error) {
+	return json.Marshal([]string(t))
+}
+
 // NamespaceTags holds resolved tag key/value pairs for all containers in a namespace.
 type NamespaceTags struct {
-	ClusterUUID string            `json:"cluster_uuid"`
-	Namespace   string            `json:"namespace"`
-	Tags        map[string]string `json:"tags"`
+	ClusterUUID string              `json:"cluster_uuid"`
+	Namespace   string              `json:"namespace"`
+	Tags        map[string]TagValue `json:"tags"`
 }
 
 // SyncRequest is the body for POST /internal/tags/sync.
@@ -243,6 +272,10 @@ func logRemovedTagKeys(orgID string, previous, current []TagKeyCatalog) {
 	}
 }
 
+// normalizeTagKeys applies the same D3 defense to the catalog half of the
+// payload: sorted-unique values, empty values dropped (a cycle-2 koku
+// sending unsorted or duplicate catalog values must not store them raw —
+// the catalog feeds the tag-values API).
 func normalizeTagKeys(tagKeys []TagKeyCatalog) []TagKeyCatalog {
 	if len(tagKeys) == 0 {
 		return []TagKeyCatalog{}
@@ -253,26 +286,59 @@ func normalizeTagKeys(tagKeys []TagKeyCatalog) []TagKeyCatalog {
 		if key == "" {
 			continue
 		}
-		values := entry.Values
-		if values == nil {
-			values = []string{}
+		seen := make(map[string]struct{}, len(entry.Values))
+		values := make([]string, 0, len(entry.Values))
+		for _, v := range entry.Values {
+			v = strings.TrimSpace(v)
+			if v == "" {
+				continue
+			}
+			if _, ok := seen[v]; ok {
+				continue
+			}
+			seen[v] = struct{}{}
+			values = append(values, v)
 		}
+		sort.Strings(values)
 		out = append(out, TagKeyCatalog{Key: key, Values: values})
 	}
 	return out
 }
 
-func normalizeNamespaceTags(tags map[string]string) map[string]string {
+// normalizeNamespaceTags normalizes to sorted-unique arrays (#814 D1/D3):
+// whatever shape arrives — scalar values from the pre-#814 koku builder,
+// unsorted or duplicate arrays from cycle 2 — the storage contract is
+// always {"key": ["sorted", "unique", "values"]}. The sorted order also
+// makes the first element the alphabetically-first value, which the
+// enrichment projection (D5 phase 1) uses for the scalar response shape.
+func normalizeNamespaceTags(tags map[string]TagValue) map[string]TagValue {
 	if tags == nil {
-		return map[string]string{}
+		return map[string]TagValue{}
 	}
-	out := make(map[string]string, len(tags))
-	for key, value := range tags {
+	out := make(map[string]TagValue, len(tags))
+	for key, values := range tags {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
 		}
-		out[key] = value
+		seen := make(map[string]struct{}, len(values))
+		unique := make([]string, 0, len(values))
+		for _, v := range values {
+			v = strings.TrimSpace(v)
+			if v == "" {
+				continue
+			}
+			if _, ok := seen[v]; ok {
+				continue
+			}
+			seen[v] = struct{}{}
+			unique = append(unique, v)
+		}
+		if len(unique) == 0 {
+			continue
+		}
+		sort.Strings(unique)
+		out[key] = TagValue(unique)
 	}
 	return out
 }

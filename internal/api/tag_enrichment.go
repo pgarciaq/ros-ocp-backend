@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"sort"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
@@ -56,8 +57,8 @@ func loadNamespaceTagsMap(ctx context.Context, orgID string, keys []namespaceTag
 			continue
 		}
 		if len(tagsJSON) > 2 {
-			var tags map[string]string
-			if err := json.Unmarshal(tagsJSON, &tags); err != nil {
+			tags, err := projectStoredTags(tagsJSON)
+			if err != nil {
 				log.Warnf("loadNamespaceTagsMap: unmarshal tags for %s/%s: %v", clusterUUID, namespace, err)
 				continue
 			}
@@ -70,6 +71,38 @@ func loadNamespaceTagsMap(ctx context.Context, orgID string, keys []namespaceTag
 		log.Warnf("loadNamespaceTagsMap: rows iteration error: %v", err)
 	}
 	return tagMap
+}
+
+// projectStoredTags unmarshals stored resolved_tags tolerantly (#814 D4:
+// values may be arrays — the post-#814 storage — or scalars — the pre-#814
+// legacy rows, until each org's next push) and projects each value to a
+// single string (D5 phase 1): a scalar string maps to itself; an array maps
+// to its alphabetically-first element (the write path stores sorted-unique
+// arrays; sorted defensively so the projection does not depend on write
+// discipline). Keys holding other JSON types are skipped. The response shape
+// stays map[string]string — unchanged for koku-ui and IQE.
+func projectStoredTags(tagsJSON []byte) (map[string]string, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(tagsJSON, &raw); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(raw))
+	for key, val := range raw {
+		var single string
+		if err := json.Unmarshal(val, &single); err == nil {
+			out[key] = single
+			continue
+		}
+		var multi []string
+		if err := json.Unmarshal(val, &multi); err == nil && len(multi) > 0 {
+			sorted := append([]string(nil), multi...)
+			sort.Strings(sorted)
+			out[key] = sorted[0]
+			continue
+		}
+		log.Warnf("projectStoredTags: skipping non-string tag value for key %q", key)
+	}
+	return out, nil
 }
 
 func uniqueNamespaceTagKeys(keys []namespaceTagKey) []namespaceTagKey {

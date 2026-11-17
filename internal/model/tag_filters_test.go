@@ -96,9 +96,17 @@ func TestTagFilterExistsClause_NamespaceScopedIncludesNamespaceColumn(t *testing
 	clause, args, _ := model.TagFilterExistsClause("1234567", "pvc.cluster_uuid", "pvc.namespace", filters, 2)
 	require.NotEmpty(t, clause)
 	assert.Contains(t, clause, "pvc.namespace = ock.namespace")
-	assert.Contains(t, clause, "ock.resolved_tags->>$")
-	assert.Contains(t, clause, "IN (")
-	require.GreaterOrEqual(t, len(args), 4)
+	// #814 D2: both-shapes containment — no ->> extraction (broken on arrays).
+	assert.NotContains(t, clause, "->>")
+	assert.Contains(t, clause, "ock.resolved_tags @> $3::jsonb")
+	assert.Contains(t, clause, "ock.resolved_tags @> $6::jsonb")
+	// orgID ($2) + two values × two arms (array + scalar) = five args.
+	require.Len(t, args, 5)
+	assert.Equal(t, "1234567", args[0])
+	assert.Equal(t, `{"environment":["production"]}`, args[1])
+	assert.Equal(t, `{"environment":"production"}`, args[2])
+	assert.Equal(t, `{"environment":["staging"]}`, args[3])
+	assert.Equal(t, `{"environment":"staging"}`, args[4])
 }
 
 func TestTagFilterExistsClause_DBSourceBalancedParentheses(t *testing.T) {

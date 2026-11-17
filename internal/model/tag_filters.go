@@ -277,6 +277,40 @@ func ApplyTagFiltersToKeys(query *gorm.DB, orgID string, filters []TagFilter) *g
 	return applyDBTagFiltersToKeys(query, orgID, filters)
 }
 
+// tagValueContainmentGorm builds the #814 D2 any-of predicate for one
+// filter in both storage shapes: for each requested value v of key k,
+// (tags @> {"k":["v"]}) OR (tags @> {"k":"v"}) — the array arm is jsonb
+// containment ("v" ∈ the stored array, the post-#814 storage); the scalar
+// arm matches legacy rows (the pre-#814 storage, until each org's next
+// push — the D4 transition tolerance). column is the qualified jsonb
+// column ("ock.resolved_tags" / "onk.resolved_tags"). Returns "" when no
+// value survived marshaling.
+func tagValueContainmentGorm(column string, f TagFilter) (string, []interface{}) {
+	var clauses []string
+	var args []interface{}
+	for _, v := range f.Values {
+		arrayPayload, err := json.Marshal(map[string][]string{f.Key: {v}})
+		if err != nil {
+			log.Warnf("tagValueContainmentGorm: skipping value %q: %v", v, err)
+			continue
+		}
+		scalarPayload, err := json.Marshal(map[string]string{f.Key: v})
+		if err != nil {
+			log.Warnf("tagValueContainmentGorm: skipping value %q: %v", v, err)
+			continue
+		}
+		clauses = append(clauses, "("+column+" @> ? OR "+column+" @> ?)")
+		args = append(args, string(arrayPayload), string(scalarPayload))
+	}
+	if len(clauses) == 0 {
+		return "", nil
+	}
+	return "(" + strings.Join(clauses, " OR ") + ")", args
+}
+
+// applyAPITagFiltersToKeys applies api-mode (resolved_tags) filters.
+// #814: values are stored as sorted arrays; see tagValueContainmentGorm
+// for the both-shapes match.
 func applyAPITagFiltersToKeys(query *gorm.DB, filters []TagFilter) *gorm.DB {
 	for _, f := range filters {
 		if f.Key == "" || len(f.Values) == 0 {
@@ -286,16 +320,11 @@ func applyAPITagFiltersToKeys(query *gorm.DB, filters []TagFilter) *gorm.DB {
 			query = query.Where("ock.resolved_tags ? ?", f.Key)
 			continue
 		}
-		if len(f.Values) == 1 {
-			payload, err := json.Marshal(map[string]string{f.Key: f.Values[0]})
-			if err != nil {
-				log.Warnf("ApplyTagFiltersToKeys: skipping filter %q: %v", f.Key, err)
-				continue
-			}
-			query = query.Where("ock.resolved_tags @> ?", string(payload))
+		pred, args := tagValueContainmentGorm("ock.resolved_tags", f)
+		if pred == "" {
 			continue
 		}
-		query = query.Where("ock.resolved_tags->>? IN ?", f.Key, f.Values)
+		query = query.Where(pred, args...)
 	}
 	return query
 }
@@ -371,6 +400,36 @@ func TagFilterExistsClause(orgID, clusterExpr, namespaceExpr string, filters []T
 	return tagFilterDBExistsClause(orgID, clusterExpr, namespaceExpr, filters, nextArg)
 }
 
+// tagValueContainmentPgx is the numbered-placeholder twin of
+// tagValueContainmentGorm for raw pgx sites: same #814 D2 both-shapes
+// any-of predicate, with $n::jsonb placeholders starting at startIdx.
+// Returns the number of args emitted (0 when no value survived
+// marshaling).
+func tagValueContainmentPgx(column string, f TagFilter, startIdx int) (string, []interface{}, int) {
+	var clauses []string
+	var args []interface{}
+	idx := startIdx
+	for _, v := range f.Values {
+		arrayPayload, err := json.Marshal(map[string][]string{f.Key: {v}})
+		if err != nil {
+			log.Warnf("tagValueContainmentPgx: skipping value %q: %v", v, err)
+			continue
+		}
+		scalarPayload, err := json.Marshal(map[string]string{f.Key: v})
+		if err != nil {
+			log.Warnf("tagValueContainmentPgx: skipping value %q: %v", v, err)
+			continue
+		}
+		clauses = append(clauses, fmt.Sprintf("(%s @> $%d::jsonb OR %s @> $%d::jsonb)", column, idx, column, idx+1))
+		args = append(args, string(arrayPayload), string(scalarPayload))
+		idx += 2
+	}
+	if len(clauses) == 0 {
+		return "", nil, 0
+	}
+	return "(" + strings.Join(clauses, " OR ") + ")", args, len(args)
+}
+
 func tagFilterAPIExistsClause(orgID, clusterExpr, namespaceExpr string, filters []TagFilter, nextArg int) (string, []interface{}, int) {
 	args := []interface{}{orgID}
 	idx := nextArg + 1
@@ -391,26 +450,13 @@ func tagFilterAPIExistsClause(orgID, clusterExpr, namespaceExpr string, filters 
 			idx++
 			continue
 		}
-		if len(f.Values) == 1 {
-			payload, err := json.Marshal(map[string]string{f.Key: f.Values[0]})
-			if err != nil {
-				continue
-			}
-			inner += fmt.Sprintf(" AND ock.resolved_tags @> $%d::jsonb", idx)
-			args = append(args, string(payload))
-			idx++
+		pred, predArgs, n := tagValueContainmentPgx("ock.resolved_tags", f, idx)
+		if n == 0 {
 			continue
 		}
-		inner += fmt.Sprintf(" AND ock.resolved_tags->>$%d IN (", idx)
-		args = append(args, f.Key)
-		idx++
-		placeholders := make([]string, len(f.Values))
-		for i := range f.Values {
-			placeholders[i] = fmt.Sprintf("$%d", idx)
-			args = append(args, f.Values[i])
-			idx++
-		}
-		inner += strings.Join(placeholders, ", ") + ")"
+		inner += " AND " + pred
+		args = append(args, predArgs...)
+		idx += n
 	}
 	inner += ")"
 	return inner, args, idx
@@ -492,26 +538,13 @@ func tagFilterAPIExistsClauseCommaNamespaces(
 			idx++
 			continue
 		}
-		if len(f.Values) == 1 {
-			payload, err := json.Marshal(map[string]string{f.Key: f.Values[0]})
-			if err != nil {
-				continue
-			}
-			inner += fmt.Sprintf(" AND ock.resolved_tags @> $%d::jsonb", idx)
-			args = append(args, string(payload))
-			idx++
+		pred, predArgs, n := tagValueContainmentPgx("ock.resolved_tags", f, idx)
+		if n == 0 {
 			continue
 		}
-		inner += fmt.Sprintf(" AND ock.resolved_tags->>$%d IN (", idx)
-		args = append(args, f.Key)
-		idx++
-		placeholders := make([]string, len(f.Values))
-		for i := range f.Values {
-			placeholders[i] = fmt.Sprintf("$%d", idx)
-			args = append(args, f.Values[i])
-			idx++
-		}
-		inner += strings.Join(placeholders, ", ") + ")"
+		inner += " AND " + pred
+		args = append(args, predArgs...)
+		idx += n
 	}
 	inner += ")"
 	return inner, args, idx

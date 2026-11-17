@@ -412,6 +412,53 @@ func TestApplyTagFiltersToKeys_DBAndAPIModesAgree(t *testing.T) {
 		"db mode (label summaries) and api mode (pushed resolved_tags) must select the same cluster set for the same org data (#815 close criterion)")
 }
 
+// TestApplyTagFiltersToKeys_DBAndAPIModesAgree_MultiValue extends the #815
+// agreement to #814's multi-value world: the label summary carries multiple
+// values for one key (values ARRAY['production','staging']) and the pushed
+// resolved_tags hold the same values as a sorted array — both modes must
+// select the same rows for a filter on either value (the db mode's = ANY
+// union, the api mode's containment).
+func TestApplyTagFiltersToKeys_DBAndAPIModesAgree_MultiValue(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	gdb := testutil.OpenTestGORM(pool)
+	schema := setupKokuLabelSchema(t, pool)
+	seedDBTagTwoClusterWorld(t, pool, schema)
+	ctx := context.Background()
+
+	// The ground truth gains a second value on cluster A's namespace.
+	_, err := pool.Exec(ctx, `UPDATE `+schema+`.reporting_ocpusagepodlabel_summary
+		SET values = ARRAY['production','staging'] WHERE namespace = $1`, dbTagNSA)
+	require.NoError(t, err)
+
+	// The api-mode world: the push writes cluster A's row as an array and
+	// leaves cluster B's scalar (the D4 mixed-shape transition world).
+	_, err = pool.Exec(ctx, `UPDATE org_container_keys SET resolved_tags = $2::jsonb WHERE namespace = $1`,
+		dbTagNSA, `{"environment":["production","staging"]}`)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `UPDATE org_container_keys SET resolved_tags = $2::jsonb WHERE namespace = $1`,
+		dbTagNSB, `{"environment":"production"}`)
+	require.NoError(t, err)
+
+	for _, value := range []string{"production", "staging"} {
+		filters := []model.TagFilter{{Key: "environment", Values: []string{value}}}
+		dbPairs := dbTagRunKeysFilter(t, gdb, "db", filters)
+		apiPairs := dbTagRunKeysFilter(t, gdb, "api", filters)
+
+		expected := [][2]string{
+			{dbTagClusterA, dbTagNSA},
+			{dbTagClusterB, dbTagNSB},
+		}
+		if value == "staging" {
+			// Only cluster A's namespace carries staging.
+			expected = [][2]string{{dbTagClusterA, dbTagNSA}}
+		}
+		assert.ElementsMatch(t, expected, dbPairs,
+			"db mode must match %s in the label summaries' values arrays", value)
+		assert.ElementsMatch(t, expected, apiPairs,
+			"api mode must agree with db mode on %s (array and scalar shapes)", value)
+	}
+}
+
 // TestTagFilterExistsClause_DBMode_Executed is executed coverage for the
 // raw-$N clause builder (the nodes/mig/quota handler path — the gorm sites
 // above do not exercise it). It pins BOTH the placeholder numbering and the

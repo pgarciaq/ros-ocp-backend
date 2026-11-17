@@ -1,7 +1,6 @@
 package model
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -143,16 +142,11 @@ func applyAPITagFiltersToNSKeys(query *gorm.DB, filters []TagFilter) *gorm.DB {
 			query = query.Where("onk.resolved_tags ? ?", f.Key)
 			continue
 		}
-		if len(f.Values) == 1 {
-			payload, err := json.Marshal(map[string]string{f.Key: f.Values[0]})
-			if err != nil {
-				log.Warnf("ApplyTagFiltersToNSKeys: skipping filter %q: %v", f.Key, err)
-				continue
-			}
-			query = query.Where("onk.resolved_tags @> ?", string(payload))
+		pred, args := tagValueContainmentGorm("onk.resolved_tags", f)
+		if pred == "" {
 			continue
 		}
-		query = query.Where("onk.resolved_tags->>? IN ?", f.Key, f.Values)
+		query = query.Where(pred, args...)
 	}
 	return query
 }

@@ -22,7 +22,7 @@ func TestValidateSyncRequest(t *testing.T) {
 			{
 				ClusterUUID: "550e8400-e29b-41d4-a716-446655440000",
 				Namespace:   "payments",
-				Tags:        map[string]string{"environment": "prod"},
+				Tags:        map[string]tags.TagValue{"environment": {"prod"}},
 			},
 		},
 	}
@@ -65,7 +65,7 @@ func TestValidateSyncRequest(t *testing.T) {
 			{
 				ClusterUUID: "550e8400-e29b-41d4-a716-446655440000",
 				Namespace:   "payments",
-				Tags:        map[string]string{"environment": strings.Repeat("x", 1025)},
+				Tags:        map[string]tags.TagValue{"environment": {strings.Repeat("x", 1025)}},
 			},
 		}
 		err := tags.ValidateSyncRequest(req)

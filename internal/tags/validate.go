@@ -71,12 +71,14 @@ func ValidateSyncRequest(req SyncRequest) error {
 		if len(nt.Tags) > 200 {
 			return fmt.Errorf("namespace_tags[%d]: tags exceeds maximum of 200 keys", i)
 		}
-		for key, value := range nt.Tags {
+		for key, values := range nt.Tags {
 			if err := validateTagKey(key); err != nil {
 				return fmt.Errorf("namespace_tags[%d].tags[%q]: %w", i, key, err)
 			}
-			if err := validateTagValue(value); err != nil {
-				return fmt.Errorf("namespace_tags[%d].tags[%q]: %w", i, key, err)
+			for _, value := range values {
+				if err := validateTagValue(value); err != nil {
+					return fmt.Errorf("namespace_tags[%d].tags[%q]: %w", i, key, err)
+				}
 			}
 		}
 	}

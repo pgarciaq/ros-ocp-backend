@@ -2,9 +2,7 @@ package model
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
@@ -40,26 +38,13 @@ func MatchingContainerKeys(ctx context.Context, pool *pgxpool.Pool, orgID string
 				argIdx++
 				continue
 			}
-			if len(f.Values) == 1 {
-				payload, err := json.Marshal(map[string]string{f.Key: f.Values[0]})
-				if err != nil {
-					continue
-				}
-				query += fmt.Sprintf(" AND ock.resolved_tags @> $%d::jsonb", argIdx)
-				args = append(args, string(payload))
-				argIdx++
+			pred, predArgs, n := tagValueContainmentPgx("ock.resolved_tags", f, argIdx)
+			if n == 0 {
 				continue
 			}
-			placeholders := make([]string, len(f.Values))
-			query += fmt.Sprintf(" AND ock.resolved_tags->>$%d IN (", argIdx)
-			args = append(args, f.Key)
-			argIdx++
-			for i, v := range f.Values {
-				placeholders[i] = fmt.Sprintf("$%d", argIdx)
-				args = append(args, v)
-				argIdx++
-			}
-			query += strings.Join(placeholders, ", ") + ")"
+			query += " AND " + pred
+			args = append(args, predArgs...)
+			argIdx += n
 		}
 	} else {
 		schema, err := tags.TenantSchema(orgID)

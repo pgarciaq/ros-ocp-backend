@@ -400,12 +400,12 @@ func TestGetNativeRecommendations_TagFilter(t *testing.T) {
 			{
 				ClusterUUID: testutil.TestClusterUUID,
 				Namespace:   testutil.TestNamespace,
-				Tags:        map[string]string{"environment": "production"},
+				Tags:        map[string]tags.TagValue{"environment": {"production"}},
 			},
 			{
 				ClusterUUID: testutil.TestClusterUUID,
 				Namespace:   "other-namespace",
-				Tags:        map[string]string{"environment": "staging"},
+				Tags:        map[string]tags.TagValue{"environment": {"staging"}},
 			},
 		},
 	})

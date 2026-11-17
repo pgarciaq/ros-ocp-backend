@@ -41,9 +41,9 @@ func TestSyncOrgTags_UpdatesMatchingRows(t *testing.T) {
 			{
 				ClusterUUID: clusterUUID,
 				Namespace:   "payments",
-				Tags: map[string]string{
-					"environment": "production",
-					"team":        "payments",
+				Tags: map[string]tags.TagValue{
+					"environment": {"production"},
+					"team":        {"payments"},
 				},
 			},
 		},
@@ -58,7 +58,7 @@ func TestSyncOrgTags_UpdatesMatchingRows(t *testing.T) {
 		orgID, "payments", "api-server", "api",
 	).Scan(&tagsJSON)
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"environment":"production","team":"payments"}`, tagsJSON)
+	assert.JSONEq(t, `{"environment":["production"],"team":["payments"]}`, tagsJSON)
 }
 
 func TestSyncOrgTags_FullReplaceClearsRemovedTags(t *testing.T) {
@@ -90,7 +90,7 @@ func TestSyncOrgTags_FullReplaceClearsRemovedTags(t *testing.T) {
 			{
 				ClusterUUID: clusterUUID,
 				Namespace:   "payments",
-				Tags:        map[string]string{"environment": "production"},
+				Tags:        map[string]tags.TagValue{"environment": {"production"}},
 			},
 		},
 	})
@@ -130,7 +130,7 @@ func TestSyncOrgTags_AppliesNamespaceTagsToAllContainers(t *testing.T) {
 			{
 				ClusterUUID: clusterUUID,
 				Namespace:   "payments",
-				Tags:        map[string]string{"environment": "production"},
+				Tags:        map[string]tags.TagValue{"environment": {"production"}},
 			},
 		},
 	})
@@ -166,7 +166,7 @@ func TestSyncOrgTags_EmptyTagKeyValues(t *testing.T) {
 			{
 				ClusterUUID: clusterUUID,
 				Namespace:   "payments",
-				Tags:        map[string]string{},
+				Tags:        map[string]tags.TagValue{},
 			},
 		},
 	})
@@ -215,9 +215,9 @@ func TestSyncOrgTags_RemovedTagKeyClearsMetadataCatalog(t *testing.T) {
 			{
 				ClusterUUID: clusterUUID,
 				Namespace:   "payments",
-				Tags: map[string]string{
-					"environment": "production",
-					"team":        "payments",
+				Tags: map[string]tags.TagValue{
+					"environment": {"production"},
+					"team":        {"payments"},
 				},
 			},
 		},
@@ -233,7 +233,7 @@ func TestSyncOrgTags_RemovedTagKeyClearsMetadataCatalog(t *testing.T) {
 			{
 				ClusterUUID: clusterUUID,
 				Namespace:   "payments",
-				Tags:        map[string]string{"environment": "production"},
+				Tags:        map[string]tags.TagValue{"environment": {"production"}},
 			},
 		},
 	})
@@ -249,7 +249,7 @@ func TestSyncOrgTags_RemovedTagKeyClearsMetadataCatalog(t *testing.T) {
 		SELECT resolved_tags::text FROM org_container_keys
 		WHERE org_id = $1 AND namespace = 'payments'`, orgID).Scan(&tagsJSON)
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"environment":"production"}`, tagsJSON)
+	assert.JSONEq(t, `{"environment":["production"]}`, tagsJSON)
 }
 
 func TestSyncOrgTags_BatchUpdatesMultipleNamespaces(t *testing.T) {
@@ -275,8 +275,8 @@ func TestSyncOrgTags_BatchUpdatesMultipleNamespaces(t *testing.T) {
 	updated, err := svc.SyncOrgTags(ctx, tags.SyncRequest{
 		OrgID: orgID,
 		NamespaceTags: []tags.NamespaceTags{
-			{ClusterUUID: clusterUUID, Namespace: "payments", Tags: map[string]string{"team": "payments"}},
-			{ClusterUUID: clusterUUID, Namespace: "billing", Tags: map[string]string{"team": "billing"}},
+			{ClusterUUID: clusterUUID, Namespace: "payments", Tags: map[string]tags.TagValue{"team": {"payments"}}},
+			{ClusterUUID: clusterUUID, Namespace: "billing", Tags: map[string]tags.TagValue{"team": {"billing"}}},
 		},
 	})
 	require.NoError(t, err)
@@ -293,8 +293,8 @@ func TestSyncOrgTags_BatchUpdatesMultipleNamespaces(t *testing.T) {
 		SELECT resolved_tags::text FROM org_container_keys
 		WHERE org_id = $1 AND namespace = 'ledger'`, orgID).Scan(&ledgerTags))
 
-	assert.JSONEq(t, `{"team":"payments"}`, paymentsTags)
-	assert.JSONEq(t, `{"team":"billing"}`, billingTags)
+	assert.JSONEq(t, `{"team":["payments"]}`, paymentsTags)
+	assert.JSONEq(t, `{"team":["billing"]}`, billingTags)
 	assert.JSONEq(t, `{}`, ledgerTags)
 }
 
