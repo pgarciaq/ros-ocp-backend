@@ -1,0 +1,15 @@
+# #772 Nise Packaging Family Preservation — Implementation Plan
+
+> **For agentic workers:** superpowers:test-driven-development governs every step. Owner go-ahead 2026-11-07. Implementation in `~/dev/koku/nise` (fork `pgarciaq`, branch `pgarciaq-rosocp-superpowers-phase17`, at `fa10bae` after #755); central tracker ros-ocp-backend #772. The consumer validation uses the ros-ocp-backend `robne` CLI (read-only — built fresh, no ROS production change).
+
+**Goal:** every ROS-family file's identity survives packaging — the packaged/extracted payload yields the same recognized families and rows as the raw monthly directory in a freshly built current CLI consumer.
+
+**Mechanism (verified at HEAD, nise zero drift since `e2e1b9b2`):** the packaging loop special-cases 4 of the 11 ROS-family members (`ocp_ros_namespace_usage`, `ocp_ros_cluster_quota`, `ocp_ros_vm_usage`, `ocp_snapshot_inventory`) with recognized upload names; the `else` fallback renames the remaining **SEVEN** to `{uuid}_openshift_report.N.csv` — `OCP_ROS_USAGE` (the ROS container file — the issue's "container" note), `OCP_ROS_VM_GPU_DEVICE`, `OCP_ROS_VM_PVC` (the companions), and `OCP_HCP_CAPACITY/NODEPOOL/SLO/APITAX` (the filed quartet). ROS's `DetermineCSVType` (both phases read) recognizes neither the generic name nor a compensating header → the server dispatch marks them done without ingestion ("no capacity snapshot in this payload").
+
+**The fix (survey-driven):** every one of the seven fall-through families' monthly names ALREADY carries a recognized token (`...-ocp_ros_usage[-N]`, `...-ocp_ros_vm_gpu_device[-N]`, `...-ocp_ros_vm_pvc[-N]`, and the KMO-contract `ros-openshift-<kind>-YYYYMM`). The `else` branch therefore **preserves the original basename** instead of the generic rename — identity by construction, split parts inherently numbered, collision-safe within a payload (month-year prefixes + split numbers). The four working special cases are untouched. Cost files (`monthly_files`) keep the generic names — koku consumes those by header (the criteria's header-fallback distinction, unchanged).
+
+**Tests:**
+- Unit RED (nise, `tests/test_report.py` or a new file): drive the packaging path with a static report generating all 11 families (and row-limit splits for the splittable ones); assert every manifest ROS entry's filename carries its family's recognized token (the ROS-rule table mirrored as the contract). Baseline: seven entries are generic → RED naming the mechanism. Controls: the four special-cased families (already passing), split parts, and the cost files keeping generic names (the header-fallback validity).
+- Consumer validation (the criteria's "freshly built current CLI consumer"): `make robne` in ros-ocp-backend; run the hcp-capacity recommend over the raw monthly dir vs the packaged/extracted dir — same recognized families, same row counts; the baseline packaged run fails with "no capacity snapshot". The audit's proof as the acceptance.
+
+**Constraints:** nise-only production change; no ROS server change (every family has an existing rule — verified); no renaming of the working four; commits wait for owner go-ahead.
