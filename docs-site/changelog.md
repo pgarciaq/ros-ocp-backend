@@ -8,6 +8,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Tag-warning catalog scopes to the caller's project set ([#834](https://github.com/pgarciaq/ros-ocp-backend/issues/834)):**
+  the data-derived half of the tag-warning key catalog (the
+  `resolved_tags` scan behind the "not in the known tag catalog" warning)
+  now also filters by the caller's `openshift.project` grants, mirroring
+  the RBAC query builder's project semantics — an explicit (non-`*`)
+  project grant narrows the catalog to those namespaces; an absent or
+  wildcard project grant leaves it unchanged; an empty project grant
+  scopes to nothing (no access, Koku semantics). A project-restricted
+  user can no longer distinguish a tag key observed in another project
+  of an accessible cluster from a nonexistent key — the same
+  existence-oracle class #828 closed across clusters, closed within a
+  cluster. One deliberate asymmetry: the PVC, node-utilization, and GPU
+  MIG list results are not project-filtered by their data paths (a
+  pre-existing gap, tracked separately), so on those three routes the
+  warning catalog is now finer than the results it annotates —
+  over-warning only, never a leak. The org-enabled catalog half stays
+  org-wide (Koku parity, unchanged), and node grain remains the
+  documented limitation (a data-model constraint:
+  `org_container_keys` has no node dimension).
+  Zero performance delta — no new queries; the namespace list rides the
+  existing cluster-filtered scan as one more bind parameter, and the
+  lazy scope resolution (happy paths pay nothing) is unchanged.
+
 - **Multi-value tag storage, tolerant reads, any-of filtering ([#814](https://github.com/pgarciaq/ros-ocp-backend/issues/814)):**
   `org_container_keys.resolved_tags` now stores each tag key's values as a
   sorted, de-duplicated JSON array instead of a bare string — the ROS half of
