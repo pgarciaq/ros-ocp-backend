@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/rbac"
@@ -164,29 +163,16 @@ func applyDBTagFiltersToNSKeys(query *gorm.DB, orgID string, filters []TagFilter
 		log.Warnf("ApplyTagFiltersToNSKeys: invalid org_id %q: %v", orgID, err)
 		return query
 	}
-	tagValuesTable := pgx.Identifier{schema, "reporting_ocptags_values"}.Sanitize()
-
 	for _, f := range filters {
 		if f.Key == "" || len(f.Values) == 0 {
 			continue
 		}
-		var matchClause string
-		args := []interface{}{f.Key}
-		if len(f.Values) == 1 && f.Values[0] == "*" {
-			matchClause = "tv.key = ?"
-		} else {
-			matchClause = "tv.key = ? AND tv.value IN ?"
-			args = append(args, f.Values)
-		}
-		existsSQL := fmt.Sprintf(`EXISTS (
-			SELECT 1
-			FROM %s tv,
-			     unnest(tv.cluster_ids, tv.namespaces) AS t(cluster_id, namespace)
-			WHERE %s
-			  AND t.cluster_id = onk.cluster_uuid::text
-			  AND t.namespace = onk.namespace_name
-		)`, tagValuesTable, matchClause)
-		query = query.Where(existsSQL, args...)
+		// Same source, window and key-enabled check as every other db-mode
+		// filter site (#815). The catalog's cluster/namespace arrays are
+		// rebuilt over the whole reporting window, so unnest() pairs a
+		// cluster with a namespace it may not own (#867).
+		b := newGormTagFragmentBuilder()
+		query = query.Where(b.labelSummaryTagMatch(schema, "onk.cluster_uuid::text", "onk.namespace_name", f), b.args...)
 	}
 	return query
 }

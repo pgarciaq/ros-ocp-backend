@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/tags"
@@ -67,35 +66,18 @@ func MatchingContainerKeys(ctx context.Context, pool *pgxpool.Pool, orgID string
 		if err != nil {
 			return nil, err
 		}
-		tagValuesTable := pgx.Identifier{schema, "reporting_ocptags_values"}.Sanitize()
 		for _, f := range filters {
 			if f.Key == "" || len(f.Values) == 0 {
 				continue
 			}
-			var matchClause string
-			if len(f.Values) == 1 && f.Values[0] == "*" {
-				matchClause = fmt.Sprintf("tv.key = $%d", argIdx)
-				args = append(args, f.Key)
-				argIdx++
-			} else {
-				placeholders := make([]string, len(f.Values))
-				matchClause = fmt.Sprintf("tv.key = $%d AND tv.value IN (", argIdx)
-				args = append(args, f.Key)
-				argIdx++
-				for i, v := range f.Values {
-					placeholders[i] = fmt.Sprintf("$%d", argIdx)
-					args = append(args, v)
-					argIdx++
-				}
-				matchClause += strings.Join(placeholders, ", ") + ")"
-			}
-			query += fmt.Sprintf(` AND EXISTS (
-				SELECT 1 FROM %s tv,
-				     unnest(tv.cluster_ids, tv.namespaces) AS t(cluster_id, namespace)
-				WHERE %s
-				  AND t.cluster_id = ock.cluster_uuid::text
-				  AND t.namespace = ock.namespace
-			)`, tagValuesTable, matchClause)
+			// Same source, window and key-enabled check as every other db-mode
+			// filter site (#815). The catalog's cluster/namespace arrays are
+			// rebuilt over the whole reporting window, so unnest() pairs a
+			// cluster with a namespace it may not own (#867).
+			b := newPgxTagFragmentBuilder(argIdx)
+			query += " AND " + b.labelSummaryTagMatch(schema, "ock.cluster_uuid::text", "ock.namespace", f)
+			args = append(args, b.args...)
+			argIdx += len(b.args)
 		}
 	}
 

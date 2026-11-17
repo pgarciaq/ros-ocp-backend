@@ -486,3 +486,122 @@ func TestTagFilterExistsClauseForCommaSeparatedNamespaces_DBMode_Executed(t *tes
 		})
 	}
 }
+
+// seedDBTagCrossClusterWorld builds the shape #867 leaves behind: the
+// reporting_ocptags_values arrays rebuilt over the whole reporting window,
+// with cluster_ids and namespaces aggregated independently. Positional
+// unnest() then pairs each cluster with a namespace it never carried the tag
+// in. The label summaries keep the truth — cluster A tags ns-a only, cluster
+// B tags ns-b only.
+func seedDBTagCrossClusterWorld(t *testing.T, pool *pgxpool.Pool, schema string) {
+	t.Helper()
+	ctx := context.Background()
+	_, thisMonthStart := dbTagMonthStarts()
+
+	_, err := pool.Exec(ctx, `INSERT INTO `+schema+`.reporting_enabledtagkeys (uuid, key, enabled, provider_type)
+		VALUES (gen_random_uuid(), 'environment', true, 'OCP') ON CONFLICT DO NOTHING`)
+	require.NoError(t, err)
+
+	_, err = pool.Exec(ctx, `INSERT INTO `+schema+`.reporting_ocpusagereportperiod (id, cluster_id, report_period_start)
+		VALUES (1, $1, $3), (2, $2, $3)`, dbTagClusterA, dbTagClusterB, thisMonthStart)
+	require.NoError(t, err)
+
+	_, err = pool.Exec(ctx, `INSERT INTO `+schema+`.reporting_ocpusagepodlabel_summary (uuid, key, values, report_period_id, namespace, node)
+		VALUES
+			(gen_random_uuid(), 'environment', ARRAY['production'], 1, $1, 'node-a'),
+			(gen_random_uuid(), 'environment', ARRAY['production'], 2, $2, 'node-b')`,
+		dbTagNSA, dbTagNSB)
+	require.NoError(t, err)
+
+	// Both clusters, both namespaces — arrays in independent orders, so
+	// unnest(tv.cluster_ids, tv.namespaces) reads (A, ns-b) and (B, ns-a).
+	_, err = pool.Exec(ctx, `INSERT INTO `+schema+`.reporting_ocptags_values (uuid, key, value, cluster_ids, namespaces)
+		VALUES (gen_random_uuid(), 'environment', 'production', ARRAY[$1, $2], ARRAY[$4, $3])`,
+		dbTagClusterA, dbTagClusterB, dbTagNSA, dbTagNSB)
+	require.NoError(t, err)
+}
+
+// TestMatchingContainerKeys_DBMode_NoPositionalArrayPairing is executed
+// coverage for the raw pgx container-key site (node GPU recommendations).
+// Once #867 rebuilds the catalog arrays over the whole window, unnest() of
+// cluster_ids and namespaces pairs them by position — here that read is
+// (A, ns-b) and (B, ns-a), neither of which carries the tag. The filter must
+// match only the label summaries' true pairs, and the keys table rows for the
+// false pairs must not come back.
+func TestMatchingContainerKeys_DBMode_NoPositionalArrayPairing(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	schema := setupKokuLabelSchema(t, pool)
+	seedDBTagCrossClusterWorld(t, pool, schema)
+
+	ctx := context.Background()
+	_, err := pool.Exec(ctx, `INSERT INTO org_container_keys (org_id, cluster_uuid, namespace, workload, workload_type, container_name)
+		VALUES
+			($5, $1, $3, 'w-a', 'Deployment', 'c-a'),
+			($5, $1, $4, 'w-b', 'Deployment', 'c-b'),
+			($5, $2, $3, 'w-c', 'Deployment', 'c-c'),
+			($5, $2, $4, 'w-d', 'Deployment', 'c-d')
+		ON CONFLICT DO NOTHING`,
+		dbTagClusterA, dbTagClusterB, dbTagNSA, dbTagNSB, testutil.TestOrgID)
+	require.NoError(t, err)
+
+	config.ResetTagsForTest()
+	t.Setenv("ROS_TAGS_ENABLED", "true")
+	t.Setenv("ROS_TAGS_SOURCE", "db")
+
+	keys, err := model.MatchingContainerKeys(ctx, pool, testutil.TestOrgID,
+		[]model.TagFilter{{Key: "environment", Values: []string{"production"}}})
+	require.NoError(t, err)
+	require.NotNil(t, keys, "the filter must produce a key set, not match everything")
+
+	assert.True(t, keys.Contains(dbTagClusterA, dbTagNSA, "w-a", "c-a"),
+		"cluster A carries the tag in its label summary for ns-a")
+	assert.True(t, keys.Contains(dbTagClusterB, dbTagNSB, "w-d", "c-d"),
+		"cluster B carries the tag in its label summary for ns-b")
+	assert.False(t, keys.Contains(dbTagClusterA, dbTagNSB, "w-b", "c-b"),
+		"positional unnest() pairs cluster A with ns-b, which its label summary never tags")
+	assert.False(t, keys.Contains(dbTagClusterB, dbTagNSA, "w-c", "c-c"),
+		"positional unnest() pairs cluster B with ns-a, which its label summary never tags")
+	assert.Len(t, keys, 2, "exactly the two true (cluster, namespace) pairs must match")
+}
+
+// TestApplyTagFiltersToNSKeys_DBMode_NoPositionalArrayPairing is the same
+// executed check for the gorm namespace-key site (namespace recommendation
+// lists), built on org_namespace_keys.
+func TestApplyTagFiltersToNSKeys_DBMode_NoPositionalArrayPairing(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	gdb := testutil.OpenTestGORM(pool)
+	schema := setupKokuLabelSchema(t, pool)
+	seedDBTagCrossClusterWorld(t, pool, schema)
+
+	ctx := context.Background()
+	_, err := pool.Exec(ctx, `INSERT INTO org_namespace_keys (org_id, cluster_uuid, namespace_name)
+		VALUES ($5, $1, $3), ($5, $1, $4), ($5, $2, $3), ($5, $2, $4)
+		ON CONFLICT DO NOTHING`,
+		dbTagClusterA, dbTagClusterB, dbTagNSA, dbTagNSB, testutil.TestOrgID)
+	require.NoError(t, err)
+
+	config.ResetTagsForTest()
+	t.Setenv("ROS_TAGS_ENABLED", "true")
+	t.Setenv("ROS_TAGS_SOURCE", "db")
+
+	query := gdb.Table("org_namespace_keys onk").
+		Select("onk.cluster_uuid::text, onk.namespace_name").
+		Where("onk.org_id = ?", testutil.TestOrgID)
+	query = model.ApplyTagFiltersToNSKeys(query, testutil.TestOrgID,
+		[]model.TagFilter{{Key: "environment", Values: []string{"production"}}})
+
+	rows, err := query.Rows()
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+
+	var pairs [][2]string
+	for rows.Next() {
+		var cluster, ns string
+		require.NoError(t, rows.Scan(&cluster, &ns))
+		pairs = append(pairs, [2]string{cluster, ns})
+	}
+	require.NoError(t, rows.Err())
+
+	assert.ElementsMatch(t, [][2]string{{dbTagClusterA, dbTagNSA}, {dbTagClusterB, dbTagNSB}}, pairs,
+		"only the label summaries' true pairs may match; unnest() would also return (A, ns-b) and (B, ns-a)")
+}
