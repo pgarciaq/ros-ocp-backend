@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Multi-value tag storage, tolerant reads, any-of filtering ([#814](https://github.com/pgarciaq/ros-ocp-backend/issues/814)):**
+  `org_container_keys.resolved_tags` now stores each tag key's values as a
+  sorted, de-duplicated JSON array instead of a bare string — the ROS half of
+  the multi-value tags contract (the Koku builder emitting the full value
+  union is cycle 2; it needs no ROS coordination). The sync endpoint accepts
+  both payload shapes (a bare string per key, as the current Koku builder
+  sends, or an array of strings) and normalizes whatever arrives; empty
+  values and empty-only keys are dropped. Tag filters (`filter[tag:key]` /
+  `?tag=`) match a namespace when **any** of the key's stored values matches,
+  on array-shaped rows and on pre-update scalar rows alike (both shapes are
+  read during the transition — an org's rows convert at its next push).
+  `group_by[tag:key]` savings summaries now count a container's savings under
+  **each** of its tag key's values. List responses still expose one value per
+  key in `tags` (the alphabetically first) — the response shape is unchanged
+  for koku-ui and IQE.
+
 - **Request-less container rows ingest with the unset-zero sentinel ([#697](https://github.com/pgarciaq/ros-ocp-backend/issues/697)):**
   the ROS container CSV parser no longer drops rows whose
   `cpu_request_container_avg` / `memory_request_container_avg` cells are

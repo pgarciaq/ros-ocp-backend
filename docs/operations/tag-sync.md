@@ -54,7 +54,7 @@ When `ROS_TAGS_SOURCE=db`, these tasks are no-ops.
     {
       "cluster_uuid": "...",
       "namespace": "payments",
-      "tags": {"environment": "production"}
+      "tags": {"environment": ["production"], "team": "platform"}
     }
   ]
 }
@@ -66,13 +66,20 @@ When `ROS_TAGS_SOURCE=db`, these tasks are no-ops.
 | `tag_keys` | All **enabled** OCP tag keys and distinct values from the label summaries in the month window |
 | `namespace_tags` | Per `(cluster_uuid, namespace)` resolved tags applied to all containers in that namespace |
 
+Each tag value may arrive as a JSON string or an array of strings (#814): ROS
+accepts both shapes and normalizes storage to **sorted, de-duplicated arrays**
+(empty values and empty-only keys are dropped). The current Koku builder still
+sends one value per key (a bare string); emitting the full value union as
+arrays is koku's half of #814 (cycle 2) — ROS is already multi-value-ready,
+so the koku change needs no ROS coordination.
+
 The payload is built from Koku's per-report-period label summaries
 (`reporting_ocpusagepodlabel_summary` + `reporting_ocpstoragevolumelabel_summary`) for
 report periods in `[last month start, this month end]` — the same sources and window the
 Koku Tags API uses (ADR-0353). A cluster that summarized on an older day is still in the
 payload; that is the point. Values are unioned per namespace and key, then collapsed to the
-alphabetically first value, because `resolved_tags` stores a single value per key
-(multi-value storage is tracked in #814).
+alphabetically first value (the Koku builder's current behavior, until #814 cycle 2;
+ROS keeps every value it receives).
 
 ---
 
@@ -86,6 +93,23 @@ alphabetically first value, because `resolved_tags` stores a single value per ke
 
 Namespaces **not** in the payload end up with empty `resolved_tags` after step 1.
 Disabled tag keys are omitted from `tag_keys` and from namespace tag maps.
+
+---
+
+## Rollback window (#814)
+
+The array storage is **forward-only**. After this ROS version deploys and an org's
+next push lands, that org's `resolved_tags` rows hold arrays — a rollback to a
+pre-#814 binary leaves those rows unreadable until the org's **next push** rewrites
+them (the sync fully replaces; the safety-net cadence is up to ~6h). Until then, for
+every org that pushed since the deploy:
+
+- tag filters silently stop matching (the old scalar containment does not match
+  array storage),
+- list responses drop `tags` (the old unmarshal rejects array values).
+
+If you must roll back, force a re-push afterwards (or accept the degraded window);
+rolling forward again is always safe — both shapes are read.
 
 ---
 

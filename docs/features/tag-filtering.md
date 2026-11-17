@@ -188,11 +188,11 @@ measurement, not a narrower window (#770 fixed the opposite).
 
 | Item | Where it stands |
 |------|-----------------|
-| One value per tag key | #814 — `resolved_tags` stores a single value; the payload picks the alphabetically first |
+| One value per tag key | #814 cycle 1 (ROS) done — `resolved_tags` stores sorted value arrays, filters match any-of, responses still project one value; koku's builder emitting the full union is cycle 2 |
 | db-mode cluster coverage | Closed by #815 — `db` mode reads the label summaries, not the per-run `reporting_ocptags_values` snapshot |
 | Catalog array pairing | Closed by #867 — the catalog arrays are rebuilt over the window; no db-mode site pairs `cluster_ids` with `namespaces` by position |
 | `group_by[tag:key]` on list/history | Not supported; would restructure flat list responses into per-tag buckets (pagination, sorting, RBAC, OpenAPI). Medium effort per resource family; `savings-summary` covers the fleet case |
-| Tag display in responses | Filter-only today; list/detail JSON carries no `labels`/`tags` |
+| Tag display in responses | List responses carry `tags` on each row (one value per key — the alphabetically first, #814's phase-1 projection); `group_by[tag:key]` on lists is the deferred part (savings-summary covers the fleet case) |
 | mTLS for SaaS push | Planned hardening; TokenReview retained during migration — see [tag-sync-auth.md](../operations/tag-sync-auth.md) |
 | Pod-level tag resolution | Requires per-pod label storage on both sides; out of scope |
 | Webhook / instant sync | Would reduce reliance on the 6-hour safety-net; not designed |
