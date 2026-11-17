@@ -69,3 +69,29 @@ pre,
   break-inside: avoid;
   page-break-inside: avoid;
 }
+
+/* --- #801: neutralize screen-only height styles (WeasyPrint #2798) ---
+ *
+ * The Material theme sets html,body{height:100%} (a browser-screen style)
+ * and the mkdocs-to-pdf defaults set article{min-height:100vh}. With a
+ * height-styled box, WeasyPrint 62.3's block_container_layout can SILENTLY
+ * DROP the rest of the document when a box's bottom decoration (border,
+ * padding, or an <hr/>) overflows the page bottom — the open upstream bug
+ * Kozea/WeasyPrint#2798. The Operations book truncated exactly this way at
+ * section 10.20 (the <hr/> after its paragraph), losing sections 10.21–12
+ * with no error and TOC page numbers of 0.
+ *
+ * height/min-height have no paged-media meaning here; auto is safe. Keep
+ * this override until the upstream fix ships AND the pinned version is
+ * bumped past it — verify_pdf_complete in docs-pdf.sh guards the class.
+ */
+html,
+body {
+  height: auto !important;
+  min-height: auto !important;
+}
+
+article,
+section + section {
+  min-height: auto !important;
+}

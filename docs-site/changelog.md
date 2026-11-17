@@ -233,6 +233,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **The PDF books no longer truncate silently — and a guard makes the class loud ([#801](https://github.com/pgarciaq/ros-ocp-backend/issues/801)):**
+  the Operations PDF book ended inside section 10.20 (98–99 pages),
+  silently dropping sections 10.21–12 — including Known Limitations
+  and Dual-Write Mode — while its table of contents advertised them
+  with page number 0. Root cause (upstream-confirmed): the Material
+  theme's `html, body { height: 100% }` (a screen-only style, carried
+  into paged media) plus WeasyPrint 62.3's open bug
+  [Kozea/WeasyPrint#2798](https://github.com/Kozea/WeasyPrint/issues/2798) —
+  when a height-styled box's bottom decoration (an `<hr/>` after
+  section 10.20's paragraph) overflows the page bottom, the renderer
+  silently stops. The print stylesheet now neutralizes the
+  paged-media-meaningless height styles; the Operations book renders
+  all 108 pages with real TOC page numbers, and every book build runs
+  a truncation guard — the last section's title must appear in the
+  second half of the extracted text (never the TOC, which lists every
+  title with page 0 when truncation strikes) or the build fails. All
+  eleven books rebuilt and guarded. The workaround is load-bearing
+  until the upstream fix ships and the pinned WeasyPrint version is
+  bumped past it.
+
 - **The published changelog carries every entry again, with a freshness gate ([#800](https://github.com/pgarciaq/ros-ocp-backend/issues/800)):**
   `docs-site/changelog.md` was both committed and regenerated from
   `CHANGELOG.md`, and the pair had diverged both ways: 18 issue

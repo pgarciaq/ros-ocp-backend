@@ -320,7 +320,6 @@ prepare_planned_features() {
   - Replica Count Optimization: planned-features/replica-count-optimization.md
   - Local Mode:
       - planned-features/local-mode.md
-      - Scale estimates: planned-features/librobne-scalability.md
 NAV
   )"
 }
@@ -524,6 +523,84 @@ build_pdf() {
   echo "Wrote $DIST_DIR/${pdf_name}.pdf ($(du -h "$DIST_DIR/${pdf_name}.pdf" | awk '{print $1}'))"
 }
 
+# verify_pdf_complete SECTION PDF — the #801 silent-truncation guard.
+#
+# WeasyPrint 62.3 can silently drop everything after an unlucky layout
+# point (open upstream bug Kozea/WeasyPrint#2798; the styles.scss height
+# override is the workaround). This guard makes the class LOUD.
+#
+# Invariant: the LAST heading of the last nav leaf's source markdown — the
+# book's actual final content — must appear in the SECOND HALF of the
+# extracted text. The TOC (first pages) lists every heading with page 0
+# when truncation strikes, so a whole-text search is vacuous (the hole the
+# first guard version had); and the last leaf's H1 may sit in the FIRST
+# half for single-page books or nav labels that shorten the H1 (the second
+# version's hole, caught by the all-books run) — the LAST heading is the
+# position that must be near the end in every shape.
+verify_pdf_complete() {
+  local section="$1"
+  local pdf="$2"
+  local last_path last_heading pages half
+
+  last_path="$(grep -E '^[[:space:]]*- ' "$WORK_DIR/mkdocs.yml" | tail -1 | sed 's/^[[:space:]]*-[[:space:]]*//; s/^[^:]*:[[:space:]]*//; s/^[[:space:]]*//')"
+  [[ -n "$last_path" ]] || die "truncation guard: no nav leaf found in $WORK_DIR/mkdocs.yml"
+  [[ -f "$WORK_DIR/docs/$last_path" ]] || die "truncation guard: missing source $WORK_DIR/docs/$last_path"
+
+  last_heading="$(python3 - "$WORK_DIR/docs/$last_path" <<'PY'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+# Headings only OUTSIDE fenced code blocks — a "# line" inside a fence is
+# literal text, not a heading (the historical-book lesson).
+headings = []
+in_fence = False
+for line in text.splitlines():
+    if line.lstrip().startswith("```") or line.lstrip().startswith("~~~"):
+        in_fence = not in_fence
+        continue
+    if in_fence:
+        continue
+    m = re.match(r"^#+\s+(.+?)\s*#*\s*$", line)
+    if m:
+        headings.append(m.group(1).strip())
+if not headings:
+    sys.exit(1)
+h = headings[-1]
+# Strip inline markdown so the heading matches its rendered text.
+h = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", h)   # links -> labels
+h = re.sub(r"\[([^\]]*)\]\[[^\]]*\]", r"\1", h)      # reference links
+h = h.replace("**", "").replace("__", "").replace("`", "")
+print(h)
+PY
+)" || die "truncation guard: no heading found in $last_path"
+
+  pages="$(pdfinfo "$pdf" 2>/dev/null | awk '/^Pages:/ {print $2}')"
+  [[ -n "$pages" ]] || die "truncation guard: could not read page count of $pdf"
+  half=$(( (pages + 1) / 2 ))
+
+  # Heading-LINE match, not substring: the rendered heading appears alone on
+  # a line, prefixed by its pdf-order number ("12.8.2 Cons"). A plain
+  # substring grep on short headings ('Cons') matches incidental prose in
+  # the truncated book — the M1 lesson. (NB: the matcher must run via -c —
+  # a heredoc would replace the pipe as stdin.)
+  if ! pdftotext -f "$half" -l "$pages" -layout "$pdf" - 2>/dev/null | python3 -c '
+import re, sys
+want = sys.argv[1].strip()
+found = False
+# Drain ALL of stdin before exiting: an early sys.exit closes the pipe and
+# pdftotext dies with SIGPIPE, which set -o pipefail turns into a spurious
+# guard failure (the planned-features Heisenbug).
+for line in sys.stdin:
+    line = line.strip()
+    line = re.sub(r"^[0-9]+(\.[0-9]+)*\s+", "", line)
+    if line == want:
+        found = True
+sys.exit(0 if found else 1)
+' "$last_heading"; then
+    die "PDF truncation guard FAILED for $section: last heading '$last_heading' (of $last_path) not found as a rendered heading line in the second half of the PDF — the #801 class (silent WeasyPrint truncation; see styles.scss and Kozea/WeasyPrint#2798)"
+  fi
+  echo "  truncation guard OK: $section — last heading '$last_heading' present (pages $half-$pages)"
+}
+
 maybe_generate_docs() {
   if [[ "${SKIP_GENERATE:-0}" != "1" ]]; then
     echo "Running generate-docs.sh (set SKIP_GENERATE=1 to skip)..."
@@ -555,6 +632,7 @@ build_section() {
   fi
 
   build_pdf "$section"
+  verify_pdf_complete "$section" "$DIST_DIR/$section.pdf"
 }
 
 build_all() {
