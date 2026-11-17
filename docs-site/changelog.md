@@ -6,7 +6,85 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Request-less container rows ingest with the unset-zero sentinel ([#697](https://github.com/pgarciaq/ros-ocp-backend/issues/697)):**
+  the ROS container CSV parser no longer drops rows whose
+  `cpu_request_container_avg` / `memory_request_container_avg` cells are
+  empty (previously any such row was silently skipped: request-less
+  workloads — e.g. ACM agent addons — never produced digest rows or
+  recommendations). Empty request cells now parse as 0 with usage preserved,
+  the same unset-requests convention the namespace parser already ships
+  (ADR-0344); malformed non-empty values still skip the row. The engine
+  generates requests/limits from usage percentiles for those rows, giving
+  users an indication of what to set instead of silence.
+
+- **HCP capacity header contract is name-based ([#704](https://github.com/pgarciaq/ros-ocp-backend/issues/704)):**
+  the capacity CSV parser now locates columns by header name (the family
+  convention used by every other ROS CSV parser) instead of requiring the
+  exact 25-column name sequence. A reordered header is harmless; an
+  operator adding an extra column is tolerated with a reported warning
+  (stderr on the CLI, log on ingestion) instead of rejecting the whole
+  file; a missing or renamed required column remains a file-level error
+  naming the absent columns; `native_model_version` keeps gating the math
+  model. KMO writers are unaffected — future column additions no longer
+  require coordinated reader changes.
+
 ### Added
+
+- **HCP fleet-capacity advisory API ([#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392)):**
+  two new GET endpoints (hcp plugin required) serving the W4 native
+  published-sizing advisory for management-cluster fleets.
+  `GET /recommendations/openshift/hcp/fleet-capacity` returns the latest
+  snapshot per authorized cluster — with no cluster filter, one row per
+  cluster (the UI card-list discovery surface); `filter[cluster_uuid]`
+  (and the equivalent `filter[cluster]` / bare `cluster_uuid` spellings)
+  narrows to that cluster.
+  `GET /recommendations/openshift/hcp/fleet-capacity/history` returns
+  newest-first snapshots for one cluster — the single-cluster filter is
+  required (history is a per-cluster trend), with `limit`/`offset`
+  pagination. Rows carry the five native scenarios (`request`, `low_qps`,
+  `average_qps`, `medium_qps`, `high_qps`) with serve-time headroom (null
+  when occupancy, worker placement, or average QPS is unknown; withheld
+  when pressure is affirmed), optional same-scenario MCE reference gauges
+  (null = absent, never zero), sample age, HC/placement completeness,
+  pressure state, source versions, and warnings: `stale` (age over 2× the
+  row's own max cadence), `below_version_floor` (known `ocp_version`
+  under 4.17 — data still served, never suppressed), `pressured` /
+  `pressure_unknown`, `mce_may_be_stale` (MCE references frozen
+  across the freshness window while native inputs moved), and
+  `shared_infrastructure` (shared-plane rows). Ingests the operator's
+  25-column `ros-openshift-hcp-capacity-*.csv` (KMO emission rides the
+  rosocp fork branch; upstream release pending); serve-time derivation
+  shared with the robne CLI in `librobne/hcp/serve.go`. Authorization
+  is org identity plus cluster RBAC before any read; unauthorized or
+  unknown clusters are non-disclosing (200 with empty data). Responses
+  are `Cache-Control: no-store`.
+
+- **HCP row `management` flag ([#695](https://github.com/pgarciaq/ros-ocp-backend/issues/695)):**
+  HCP list and detail rows now carry `management: true|false` — a topology
+  fact sourced read-side from `clusters.cluster_topology = 'management'` (the
+  same table the `filter[scope]=management` selector reads). Served as an
+  explicit boolean on HCP rows (including `false`) so consumers read the fact
+  rather than infer from absence; classic surfaces omit the key. Independent
+  from `incomplete` — they answer different questions (which cluster vs is an
+  association missing) and both may be true at once.
+
+- **HCP CSV `management` column ([#695](https://github.com/pgarciaq/ros-ocp-backend/issues/695)):**
+  the shared flattened recommendation CSV (HCP list `format=csv`; legacy
+  classic fallback) gains a `management` column between `hosted_cluster_id`
+  and `incomplete`. Classic rows that never fetch clusters facts print
+  `false`.
+
+- **HCP detail native-first parity ([#696](https://github.com/pgarciaq/ros-ocp-backend/issues/696)):**
+  `GET /recommendations/openshift/hcp/{id}` now resolves through the native
+  detail path — the same shape as the container detail: `include=explanation`
+  is honored (explanation object on each engine), `filter[term]`/`filter[engine]`
+  fold the detail to the selected projection, and plots (percentile bands)
+  come from the digests. Rows the native engine has not written fall back to
+  the legacy synth shape; the HCP scope gate (404 off-scope) is unchanged,
+  and the HCP facts (`hosted_cluster_id`, `management`, `incomplete`) ride
+  on the shared native shape.
 
 - **Zombie activity measure: p50 → p95, server and robne ([#747](https://github.com/pgarciaq/ros-ocp-backend/issues/747)):**
   the zombie idle leg's activity measure is now the daily **p95** per
@@ -19,6 +97,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (p95 == p50 for constants; 0 for idle) — every existing fixture and
   its expected value carries over unchanged. The floor now means "any
   ~5% of the day above it counts as activity."
+
 - **robne CLI: zombie activity measure aligned with the server ([#746](https://github.com/pgarciaq/ros-ocp-backend/issues/746)):**
   the zombie idle leg now sums BOTH digest streams when the
   business-hours stream is present (robne's `business_hours` config
@@ -28,6 +107,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   config, the all-hours p50 alone reads partial-day activity as idle —
   the p50 measure's shared limitation, now tracked as #747 (the
   all-hours p95 fix).
+
 - **robne CLI: W5 api-tax advisory ([#724](https://github.com/pgarciaq/ros-ocp-backend/issues/724)):**
   the `tune_noisy_webhook` advisory joins the `hcp_advisories` sibling
   with full parity to the server's thin W5 rule — the hottest webhook on
@@ -37,6 +117,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   names no single HC). Per-source histogram coherence and counter-reset
   resolution mirror the server; the fire window shares the headroom
   rule's hours.
+
 - **robne CLI: W2 headroom advisory ([#723](https://github.com/pgarciaq/ros-ocp-backend/issues/723)):**
   the `do_not_add_workers_first` advisory joins the `hcp_advisories`
   sibling with full parity to the server's precision-first correlator —
@@ -49,6 +130,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and pressured workers produce nothing — the silence cases are pinned
   by the ported verdict-matrix tests. `headroom_advisory` YAML
   configures the policy fields.
+
 - **robne CLI: W3 unused-hosted-cluster (zombie) advisory ([#722](https://github.com/pgarciaq/ros-ocp-backend/issues/722), [ADR-0333](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0333-unused-hostedcluster-lifecycle-w3.md)):**
   the `review_unused_hosted_cluster` advisory joins the `hcp_advisories`
   sibling with full parity to the server's correlator rule — the standard
@@ -62,6 +144,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   synced platform-namespace exclusions. Restored the evidence-grounded
   `open-cluster-management-hc01` entry to the shared compiled platform
   set (the #721 copy had dropped it — a sleep/zombie parity fix).
+
 - **robne CLI: multi-payload input and the W8 sleep advisory ([#721](https://github.com/pgarciaq/ros-ocp-backend/issues/721), [ADR-0350](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0350-robne-multi-payload-input.md)):**
   `--input` is now repeatable — the first payload is the primary
   (recommendation cluster), additional payloads are advisory context
@@ -74,6 +157,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   independently (a mismatched context payload fails fast). The advisory is
   independent of the HCP capacity plugin — gated on the business-hours
   schedule, the context facts, and the dual digests.
+
 - **W8 non-prod HC sleep advisory ([#716](https://github.com/pgarciaq/ros-ocp-backend/issues/716), [ADR-0348](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0348-w8-nonprod-sleep-advisory.md)):**
   the correlator now emits `schedule_nonprod_sleep` advisories for hosted
   clusters that are **declared** non-prod (label
@@ -90,6 +174,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `sleep_outside_bh_idle_floor_mc`). The tier is read latest-wins
   (mid-window relabels and label removal take effect immediately), and the
   advisory is partitioned from the zombie rule by predicate.
+
 - **HCP advisories serving API ([#717](https://github.com/pgarciaq/ros-ocp-backend/issues/717), [ADR-0349](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0349-hcp-advisories-serving-api-contract.md)):**
   `GET /api/cost-management/v1/recommendations/openshift/hcp/advisories`
   returns the org's live correlator advisories — the first serving surface
@@ -103,86 +188,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the response is unpaginated with a 500-row cap, and the field vocabulary
   evolves additively only. Requires the `hcp` plugin.
 
-### Changed
-
-- **HCP capacity header contract is name-based ([#704](https://github.com/pgarciaq/ros-ocp-backend/issues/704)):**
-  the capacity CSV parser now locates columns by header name (the family
-  convention used by every other ROS CSV parser) instead of requiring the
-  exact 25-column name sequence. A reordered header is harmless; an
-  operator adding an extra column is tolerated with a reported warning
-  (stderr on the CLI, log on ingestion) instead of rejecting the whole
-  file; a missing or renamed required column remains a file-level error
-  naming the absent columns; `native_model_version` keeps gating the math
-  model. KMO writers are unaffected — future column additions no longer
-  require coordinated reader changes.
-
-### Fixed
-
-- **Security: settings-only roles no longer inherit unrestricted OpenShift data access ([#753](https://github.com/pgarciaq/ros-ocp-backend/issues/753)):**
-  data-side RBAC helpers treated an absent OpenShift grant as
-  unrestricted, so a role holding only `cost-management:settings:read`
-  or `:write` could read all infrastructure telemetry and
-  recommendations. Authorization now mirrors Koku's permission lattice
-  (resources start empty; inheritance only from an affirmative parent):
-  eligibility requires an affirmative non-empty `openshift.*` grant or a
-  wildcard — absent AND explicitly-empty grants deny with 200+empty.
-  Applied across all data helpers plus three routes that had bypassed
-  them entirely (snapshot cost-by-type, snapshot age-distribution,
-  cluster instance-types). Settings routes remain fully usable by
-  settings-only roles; no-access responses are unchanged (200 + empty).
-- **Cluster filter by alias on nodes, storage, snapshots, quota and cluster-quota ([#790](https://github.com/pgarciaq/ros-ocp-backend/issues/790)):**
-  `filter[cluster]=<alias>` (the form the UI cluster filter sends)
-  returned 503 on those five endpoints — they bound the raw value against
-  a uuid column. Alias values now resolve through an org-scoped
-  case-insensitive substring lookup on the cluster alias, matching the
-  container endpoints and Koku; UUID filters are unchanged, and an
-  unknown alias returns an empty result (200) rather than an error.
-  Savings currency also resolves correctly for alias filters now —
-  previously the raw alias silently fell back to USD for non-USD
-  organizations.
-- **Security: fleet heatmap cache no longer serves nodes outside the caller RBAC scope ([#754](https://github.com/pgarciaq/ros-ocp-backend/issues/754)):**  the cache key carried only the cluster dimension, so a
-  wildcard-cluster role with a narrow `openshift.node` grant shared the
-  `org:all` entry with an unrestricted role — cache hits bypassed the
-  node filter (secret nodes served to restricted users; restricted
-  users could poison the entry with a partial view). The cache now
-  holds the org-level node pool; node RBAC scope, maxNodes truncation
-  and counts are applied per request, cold and warm. The pool ordering
-  also gained a `cluster_uuid` tie-breaker so cap truncation is
-  deterministic across clusters sharing machineset and node names.
-- **Security: resource readers ignore explicit cluster RBAC restrictions ([#752](https://github.com/pgarciaq/ros-ocp-backend/issues/752)):**
-  the PVC, quota, cluster-quota, HCP advisories and workload-types readers
-  used org scoping only, so a cluster-A-only role could enumerate cluster
-  B's storage and quota groups, advisories and workload types, read a
-  known B container's OOM timeline, and a client cluster filter
-  substituted for authorization. Every reader now resolves its
-  server-owned allowed clusters and appends an `ANY()` scope clause to
-  count/list/group/CSV queries (an empty set — settings-only or
-  explicitly-empty grants — denies). Resolved-ID detail and trend paths
-  (OOM timeline, PVC/quota/CRQ detail, quota trend) return 404
-  indistinguishable from unknown IDs (Koku's RBAC-filtered-queryset
-  convention), and quota-ID resolution itself is cluster-scoped, closing
-  a timing oracle. The data-derived tag-key catalog is cluster-scoped
-  too: a scoped empty response can no longer reveal tag keys that exist
-  elsewhere in the org.
-- **HCP advisory visibility: HC grant OR management grant ([#791](https://github.com/pgarciaq/ros-ocp-backend/issues/791)):**
-  a user granted a hosted cluster now sees that HC's advisories; a user
-  granted the management cluster sees the management cluster's advisories
-  and all its HCs'. Shared-plane advisories (no HC association) remain
-  management-gated.
-- **VM multi-file payload digest merging ([#707](https://github.com/pgarciaq/ros-ocp-backend/issues/707)):**
-  VM CSV files within one payload are now digested in a single pass — a day
-  split across files (row-limit splits, multi-part payloads) merges instead
-  of keeping only the last file's rows. Previously each file was digested
-  independently with a full-replacement upsert: same-day rows from earlier
-  files were lost, and a partial last file could fall below the 20-sample
-  guest-agent percentile minimum, silently degrading VM recommendations to
-  the usage branch. Cross-payload semantics are unchanged (a re-sent
-  monthly accumulator still replaces). The ≥20 agent-sample percentile
-  minimum is now a shared constant between the processor and the robne
-  in-memory digest builder.
-
-### Added
-
 - **Per-plugin term windows ([#705](https://github.com/pgarciaq/ros-ocp-backend/issues/705), [ADR-0346](architecture/adrs.md)):**
   robne resolves term windows per plugin — `plugin_terms:` in robne.yaml when
   configured, else the plugin's documented table (container family 1/7/15,
@@ -194,30 +199,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   **Pre-release output change:** VM and PVC recommendations now follow their
   documented tables (VM short 1→7 days, long-term withheld below 15 days of
   data; PVC medium 7→30 days clamped to available).
-- **Term-table single source ([ADR-0346](architecture/adrs.md)):** the six
-  documented per-plugin term tables live in librobne (PVC's added;
-  container-family and VM's already there); the server plugins'
-  `DefaultTerms()` delegate to the same constants — behavior identical,
-  pinned by the existing term-config tests. robne's Path-A digest SELECT
-  window sizes from the maximum effective lookback (90d default) instead of
-  the container maximum (15d), so VM/PVC long-term data is no longer
-  truncated.
 
-- **HCP fleet-capacity advisory — W4 ([#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392), [ADR-0334](architecture/adrs.md) amended):**
-  `GET /recommendations/openshift/hcp/fleet-capacity` (latest snapshot per
-  authorized management cluster) and `GET .../hcp/fleet-capacity/history`
-  (newest-first per-cluster trend, `filter[cluster_uuid]` required). Five
-  scenarios (`request`, `low_qps`, `average_qps`, `medium_qps`, `high_qps`)
-  from the native published-sizing model over eligible worker capacity,
-  occupancy, and QPS baselines, with MCE capacity gauges as a separately
-  labeled reference (null = absent, never zero). Headroom is null when
-  occupancy, worker placement, or average QPS is unknown and withheld when
-  node pressure is affirmed. Warnings: `stale`, `below_version_floor`,
-  `pressured`, `pressure_unknown`, `mce_may_be_stale`,
-  `shared_infrastructure`. Ingests the operator's 25-column
-  `ros-openshift-hcp-capacity-*.csv` (KMO emission rides the rosocp fork
-  branch; upstream release pending). Serve-time derivation shared with the
-  robne CLI in `librobne/hcp/serve.go`.
 - **robne CLI HCP fleet-capacity ([#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)):**
   `robne recommend --plugins hcp` renders the same advisory as the service
   from management-cluster payloads (disconnected-mode tarball/dir or reports
@@ -231,6 +213,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `cluster_quota` → `cluster-quota` (flag/YAML/registry; JSON sibling key
   `cluster_quota_recommendations` unchanged) and JSON envelope root
   `recommendations` → `container_recommendations`.
+
 - **nise HCP capacity generator ([#702](https://github.com/pgarciaq/ros-ocp-backend/issues/702), [pgarciaq/nise](https://github.com/pgarciaq/nise) `185d1e0`):**
   `nise report ocp` emits the KMO-contract file
   `ros-openshift-hcp-capacity-YYYYMM.csv` (one monthly accumulator, no
@@ -238,7 +221,565 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   static-YAML block; deterministic QPS variation against frozen MCE
   references; defaults pinned to the hand-verified healthy-fleet fixture
   (scenarios 7/7/7/5/3).
-- **Management-overhead scope ([#694](https://github.com/pgarciaq/ros-ocp-backend/issues/694), [ADR-0343](architecture/adrs.md)):**
+
+- **Term-table single source ([ADR-0346](architecture/adrs.md)):** the six
+  documented per-plugin term tables live in librobne (PVC's added;
+  container-family and VM's already there); the server plugins'
+  `DefaultTerms()` delegate to the same constants — behavior identical,
+  pinned by the existing term-config tests. robne's Path-A digest SELECT
+  window sizes from the maximum effective lookback (90d default) instead of
+  the container maximum (15d), so VM/PVC long-term data is no longer
+  truncated.
+
+### Fixed
+
+- **The published changelog carries every entry again, with a freshness gate ([#800](https://github.com/pgarciaq/ros-ocp-backend/issues/800)):**
+  `docs-site/changelog.md` was both committed and regenerated from
+  `CHANGELOG.md`, and the pair had diverged both ways: 18 issue
+  entries (plus one ref-less ADR entry) lived only in the site copy
+  and were silently dropped at every deploy, while every entry added
+  since the divergence never reached the published page — including
+  this campaign's. The pair is reconciled (entry text moved verbatim;
+  the uniquely-carried facts of the both-sides-diverged entries
+  merged), the generator's link rewrite now maps `docs-site/` paths
+  site-relatively (healing three dead links on the deployed page),
+  and regeneration is a no-op from the committed pair — enforced by
+  the #777 freshness gate, which now covers the changelog. From this
+  change on, every `CHANGELOG.md` edit must run
+  `./scripts/generate-docs.sh` and commit the site copy; the gate
+  fails the build otherwise.
+
+- **Kafka commit fallbacks no longer silently lose reports when every redelivery produce fails ([#803](https://github.com/pgarciaq/ros-ocp-backend/issues/803)):**
+  when a report exhausted its retries and every produce path failed
+  (retry topic, DLQ, DLQ-redelivery), the handler returned without
+  committing, relying on a "will redeliver naturally" that Kafka's
+  cumulative commits defeat — the next message's commit silently
+  acknowledged the skipped offset and the report was lost with no
+  signal. Both fallbacks now take the DLQ-exhaustion disposition:
+  the `rosocp_kafka_dlq_failed_total` alert fires, the files are
+  marked failed, and the offset is committed — loud loss instead of
+  silent loss. Zero-loss handling is deliberately
+  not implemented: the contiguous-commit-watermark alternative is
+  tracked for the case where it is ever required. The rebalance replay
+  window — the sibling finding — is now proven benign by write-level
+  replay tests (both interleavings converge to the sequential state),
+  turning ADR-0154's convergence assertion into evidence.
+
+- **The internal docs link gate slugs rendered heading text, not the raw Markdown line ([#805](https://github.com/pgarciaq/ros-ocp-backend/issues/805)):**
+  the gate's GitHub-slug reimplementation kept link destinations in
+  heading anchors — a heading embedding `[#514](https://…)` produced an
+  anchor containing `httpsgithubcom…` where GitHub publishes the
+  label-only slug. Latent (nothing linked to those anchors), but the
+  guard failed the wrong way when a link appeared: the correct link
+  rejected, with a message steering the author to a slug that 404s on
+  GitHub. Link syntax is now stripped before slugging (inline,
+  reference-style, and images keep their label/alt text), and the
+  duplicate-anchor rule now dedupes against every anchor already emitted
+  (github-slugger's used-slug semantics) — a literal heading whose text
+  equals another heading's generated `-N` anchor gets its own suffix
+  instead of colliding. The gate gains its first self-test: six fixture
+  cases (heading-with-link, duplicates, cross-group collision,
+  reference-style, image, broken-anchor control) run the script against
+  a temporary tree. The repository scan stays green with its
+  1148-link baseline unchanged.
+
+- **db-mode tag filtering no longer drops clusters that share a tag value ([#815](https://github.com/pgarciaq/ros-ocp-backend/issues/815)):**
+  `ROS_TAGS_SOURCE=db` resolved tags from Koku's
+  `reporting_ocptags_values`, whose cluster/namespace arrays are
+  rebuilt by every summarization run from that run's report periods
+  only — so for a key/value shared by two clusters, the
+  last-summarized cluster owned them and a tag filter silently hid
+  every other cluster. db mode now reads the same sources as the
+  push sync and the Koku Tags API (the pod and storage-volume label
+  summaries, joined through the report period) with the same
+  month-snapped window — db and api mode select the same clusters for
+  the same org data. A tag key disabled in Settings now stops
+  matching **immediately** in db mode (query-time check against
+  `reporting_enabledtagkeys`), instead of waiting for the next
+  summarization purge. **Performance note (measured, pessimistic
+  300-namespace org with the filtered key everywhere):** the
+  label-summary predicate costs ~3.2 ms per filtered list query vs
+  ~0.4 ms for the old table — bounded, once per query, not per row.
+  **Koku-side:** the misleading arrays remain in Koku's tables and
+  are misleading to any future consumer — filed Koku-side for the
+  durable fix.
+
+- **Invalid admin term configuration now fails at startup instead of locking silently ([#792](https://github.com/pgarciaq/ros-ocp-backend/issues/792)):**
+  an out-of-range or unparseable `ROS_TERMS_*` value was silently ignored
+  while its presence still locked the term — the admin's intent was
+  dropped AND the tenant was forbidden from correcting it (a typo'd
+  `ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS=120` yielded the default window
+  and `locked: true`). The service now refuses to start on such a value,
+  with an error naming the variable, its value, and the valid range.
+  `ROS_TERMS_*` variables targeting a plugin, term, or field that does
+  not exist (term-less plugins like hcp — terms removed by #793 — and
+  typo'd names) are likewise rejected. The lock flag now comes from the
+  same validation as the applied value, so `locked: true` always
+  describes a value that was applied. **Deploy note:** deployments
+  carrying invalid or dead `ROS_TERMS_*` variables that previously
+  started (with the values ignored) will now fail at startup — remove
+  or correct the variables.
+
+- **List pagination no longer reorders or loses rows across DST boundaries when sorting by `last_reported` ([#851](https://github.com/pgarciaq/ros-ocp-backend/issues/851)):**
+  the page-sort value was cast to text, and PostgreSQL renders
+  `timestamptz` text in the session timezone with a variable UTC
+  offset — across a DST fall-back boundary the text order disagrees
+  with chronological order, so page 1 served rows out of order and the
+  cursor-continued page 2 could come back empty (the keyset seek could
+  not match the mis-ordered anchor). Timestamp sort values now render
+  as fixed-width UTC text and the typed seeks compare naive UTC, so
+  ordering and cursor continuation are chronological in every session
+  timezone. **Deploy note:** a cursor issued before this change and
+  consumed after it can skip or duplicate rows for one in-flight page
+  chain; it self-corrects on the next cursor.
+
+- **Savings recalculation no longer drops overlapping per-cluster callbacks ([#812](https://github.com/pgarciaq/ros-ocp-backend/issues/812)):**
+  the per-org coalescing guard stored a single latest-request slot, so
+  while a recalculation ran for one cluster, a callback for cluster B
+  followed by one for cluster C left only C — B's effective-rates cache
+  entry and estimated savings stayed stale until some later trigger.
+  Koku fires one callback per provider at the end of every
+  cost-model-update task, and providers sharing a price list fan out
+  parallel tasks, so callbacks for different clusters genuinely arrive
+  within one recalculation window. The guard's trailing state is now a
+  SET of pending clusters: every arriving cluster is drained when the
+  in-flight recalculation completes, same-cluster arrivals merge their
+  recommendation types into one run, and an org-wide request coexists
+  with (does not replace) specific-cluster requests. Bursts still
+  coalesce and at most one recalculation is in flight per org.
+
+- **The terms settings endpoint no longer offers an inert HCP knob ([#793](https://github.com/pgarciaq/ros-ocp-backend/issues/793)):**
+  the HCP plugin scaffold (#630) registered a full TermProvider despite
+  its own design line ("supports_terms:false v1 reusing container
+  windows") and ADR-0346's classification of the fleet-capacity
+  advisory as term-less (snapshot-series model). The terms handler's
+  trait walk therefore accepted `recommendation_type=hcp` on
+  `GET/PUT/DELETE /settings/terms` — storing values whose only reader was an unfiltered plot-window
+  query (percentile_bands read the org's term rows without a
+  recommendation_type filter — a leftover hcp row could shift plot
+  points; now scoped to the container family's rows). The trait is
+  removed:
+  `recommendation_type=hcp` now returns 400 like the other term-less
+  plugins (quota, cluster-quota, snapshot). HCP recommendation
+  endpoints and their term projection are unchanged. robne was already
+  correct (its exclusion follows ADR-0346) — the parity break's
+  polarity was the server's stray scaffold artifact.
+- **Business-hours manifests no longer fail staging on the Kafka path ([#858](https://github.com/pgarciaq/ros-ocp-backend/issues/858)):**
+  the staged batch's sample-count accounting counted INPUT rows, but
+  rows inside an enabled business-hours schedule stage TWICE (an
+  all-hours sample and a business-hours sample) — the finalize
+  integrity check read back more than was accounted and hard-failed
+  a perfectly intact staging table, after digest chunks had already
+  committed, deterministically on every retry: BH-enabled manifests
+  crossing the staging threshold could never complete. The accounting
+  now counts the actual staged rows, cumulatively across the staging
+  chunk flushes. The integrity check also gained a pre-count pass
+  that fails before any digest chunk commits for loss detectable at
+  finalize entry — loss occurring during the finalize itself is still
+  caught by the streaming check, after chunks may have committed
+  (the manifest retry re-processes from scratch).
+- **The streaming ingest paths no longer fragment container-day digests when the flush knob is set ([#822](https://github.com/pgarciaq/ros-ocp-backend/issues/822)):**
+  with `ROS_INGEST_FLUSH_BATCH_SIZE` set to a finite value, the
+  per-file streaming paths flushed digests mid-CSV at the group-count
+  threshold — and because the threshold crossed on the row creating
+  the Nth group, any container-day (or namespace-day) spanning that
+  boundary had its first fragment REPLACED by its last: the digest
+  ended up with percentiles from the last fragment only, silently
+  losing the earlier samples. The same shape applied to
+  `hcp_sleep_evidence` (an understated off leg could weaken the sleep
+  advisory's safety gate). The stream paths now ignore the knob
+  entirely — one complete batch write per CSV (the default behavior;
+  the knob remains meaningful for the staged path, where its flush is
+  safe). No default-configuration exposure: the knob defaults to
+  disabled.
+- **The Kafka message-sampling log no longer races across partition goroutines ([#804](https://github.com/pgarciaq/ros-ocp-backend/issues/804)):**
+  the "Processed N kafka messages in X" sampling (every 100th
+  message) shared its batch-start timestamp across the per-partition
+  consumer goroutines with unsynchronized read/write — consecutive
+  sampling events could overlap, producing a torn timestamp and a
+  nonsense elapsed duration in the log line (and a `-race` failure).
+  The batch start is now an atomic pointer. A race-detector regression
+  test (GOMAXPROCS-pinned for deterministic detection) runs in a new
+  dedicated CI step — `make test` does not enable the race detector.
+- **The weekly sleep reclaim estimate now counts non-scheduled days ([#848](https://github.com/pgarciaq/ros-ocp-backend/issues/848)):**
+  both the server and robne computed the reclaim as scheduled days ×
+  outside-hours-within-each-day — omitting weekends entirely, although
+  those hours are part of the proposed sleep window (weekend activity
+  is evaluated as a veto). A Mon–Fri 09:00–17:00 schedule reported 80
+  sleep hours/week instead of 128; two workers reported 160 instead of
+  256 node-hours/week — a 37.5% underestimate. The estimate is now the
+  weekly complement (168 minus the week's business hours), matching
+  the documented contract and ADR-0348 §7. Found by the phase17 branch
+  review.
+- **A stale platform row no longer silences the offline sleep advisory ([#847](https://github.com/pgarciaq/ros-ocp-backend/issues/847)):**
+  the robne CLI's schedule attestation (#831) was one window-wide
+  boolean over every evidence row — so a single platform-namespace row
+  with an old or NULL schedule fingerprint kept the offline advisory
+  silent even after the user workloads' evidence had fully rebuilt,
+  while the server (which excludes platform workloads before the
+  attestation gate) kept advising — a server/offline parity break.
+  Attestation is now workload-grain, riding the coverage input: the DB
+  reader reports it per row, the CLI AND-collapses it per
+  workload-day (the server's semantics), and the advisory gates USER
+  workloads only. The CSV path is inherently attested. Found by the
+  phase17 branch review.
+- **Populated downgrades fail loud with remediation instead of raw constraint errors ([#846](https://github.com/pgarciaq/ros-ocp-backend/issues/846)):**
+  down-migrations that re-create narrower unique constraints failed
+  mid-rollback with a raw PostgreSQL error on any populated database
+  (the empty-schema roundtrip never caught it), and one restored the
+  wrong contract entirely — 113-down destroyed the five-column
+  term-inclusive PVC key its up-migration's predecessor established
+  and added a four-column constraint that cannot hold legal multi-term
+  rows. 113-down now restores the actual predecessor contract; every
+  narrowing down-migration (000012 accounts, 000028 workload/container,
+  000064 PVC terms, 000125 quota names, 000185 VM business-hours
+  digests, 000189 cross-org GPU rows) begins with a guard that counts
+  the collision groups and refuses with the count and deliberate-dedup
+  remediation — never deleting data silently. 185-down's silent
+  deletion of business-hours digest rows is replaced by the guard
+  carrying the exact deterministic cleanup statement (the
+  business-hours schedule configuration is not affected). Policy
+  documented in `migrations/README.md`; populated downgrade coverage in
+  `migration_down_populated_test.go`. Found by the phase17 branch
+  review.
+- **Timezone-shifted sleep schedules no longer suppressed by UTC weekday checks ([#845](https://github.com/pgarciaq/ros-ocp-backend/issues/845)):**
+  the non-prod sleep evaluator decided whether a UTC day requires
+  business-hours evidence using that UTC day's weekday, but evidence is
+  classified in the schedule's local timezone — a Mon–Fri
+  `00:00–08:00` schedule in `Pacific/Kiritimati` puts its business
+  hours on Sunday–Thursday UTC, so a fully observed Friday was rejected
+  as unknown forever and the advice never fired; the reverse mismatch
+  skipped the activity gates on UTC days carrying real business hours
+  (including the post-midnight portion of overnight windows). A day now
+  requires business-hours evidence exactly when it carries business
+  hours under the schedule, classified at minute granularity in both
+  the server and robne evaluators. Found by the phase17 branch review;
+  the fresh-review pass also fixed a sub-hour-window case that would
+  otherwise have produced false sleep advice.
+- **Ascending namespace cursors no longer strand on NULL sort values ([#850](https://github.com/pgarciaq/ros-ocp-backend/issues/850)):**
+  the namespace list sorts ascending with NULLS FIRST, but the ASC cursor
+  seek compared `sortCol > anchor` — with a NULL anchor (a page boundary
+  inside the NULL block) that predicate is never true, so pagination
+  stopped after the NULL rows and never reached the non-NULL rows that
+  follow. All three namespace seek sites (the keys-page seek, the
+  page-subquery seek, and the stale-inclusive DISTINCT fallback) now
+  special-case a NULL anchor: continue within the NULL block by
+  tiebreaker, then jump to the non-NULL rows. The container path is
+  unaffected (it orders NULLS LAST in ASC, making NULL anchors terminal).
+  Found while fixing #843's numeric cursor walk.
+- **Container variation sorts use the engine's term values ([#852](https://github.com/pgarciaq/ros-ocp-backend/issues/852)):**
+  the container list's 12 variation sort aliases filtered the joined
+  recommendation row on the kruizeplugin API constants
+  (`short_term`/`medium_term`/`long_term`), but the engine writes
+  `short`/`medium`/`long` (librobne/engine/defaults.go) — every variation
+  sort matched zero rows and returned an empty list. The filter now uses
+  the DB term values (the identical namespace-side bug was fixed in
+  #844). The same cycle also stopped variation sorts from dropping
+  containers that lack the selected term row (LEFT JOIN, matching #844)
+  and aligned the seek tie columns with the ORDER BY tie columns
+  (cluster-first, previously the mismatch could skip tied rows across
+  clusters).
+- **Namespace sort aliases now target populated native columns ([#844](https://github.com/pgarciaq/ros-ocp-backend/issues/844)):**
+  the namespace list's request and variation sort aliases
+  (`cpu_request_current`, `cpu_variation_short_cost`, etc.) targeted
+  legacy columns the native writer never populates — sorting by them
+  returned NULL-ordered garbage. The aliases now translate to native
+  columns (`current_cpu_request_millicores`,
+  `variation_*_pct` on the term/engine row the alias encodes), with
+  a LEFT JOIN so namespaces lacking the selected term sort as NULL
+  rather than disappearing. The stale-inclusive DISTINCT path applies
+  the same translation. Found by the phase17 branch review; the
+  identical term-constant bug on the container path is filed
+  separately (#852).
+- **Namespace numeric sorts no longer order lexicographically ([#843](https://github.com/pgarciaq/ros-ocp-backend/issues/843)):**
+  the namespace list's page-sort key was cast to text before ordering,
+  so numeric sorts with different digit lengths compared as strings —
+  descending savings returned 2, 100, 10 instead of 100, 10, 2. A
+  numeric cast now applies to the page-subquery ordering, the detail
+  ordering, and the cursor seek when the sort expression targets a
+  numeric column (suffix detection including the legacy request
+  columns). Cursor continuations follow the numeric order across all
+  pages. Found by the phase17 branch review; the pre-existing
+  ascending-cursor NULL-anchor defect is filed separately (#850).
+- **Accepted category and engine filters no longer silently disappear ([#841](https://github.com/pgarciaq/ros-ocp-backend/issues/841)):**
+  `filter[category]` and the container-side `filter[engine]` were
+  accepted by the API layer but classified into neither query leg —
+  the keys remapper logged "skipping unknown query key" and the filter
+  was silently dropped. All three keys (`rs.engine`, `rs.category`,
+  `ns.category`) are now classified as detail-only predicates, gating
+  counts, page selection, and rows consistently through the
+  eligibility machinery. The same cycle fixed a pre-existing
+  multi-value binding bug: composite filters (GPU model, project,
+  cluster, workload, container) with multiple SQL placeholders over
+  one flat value slice errored with a database function-not-exist
+  message — values now distribute positionally across placeholders on
+  every binding site, with `IN` filters preserving GORM's list
+  expansion. Found by the phase17 branch review; the eligibility
+  conjunction was additionally hardened to require all predicates on
+  ONE row (per-predicate existence could match different rows of the
+  same identity).
+- **Detail-only list filters no longer lie about counts and pagination ([#842](https://github.com/pgarciaq/ros-ocp-backend/issues/842)):**
+  the native container and namespace lists applied detail-only
+  predicates — term, engine, idle state, date ranges — AFTER page
+  selection: counts omitted them, and a page of nonmatching keys
+  swallowed the limit so `HasNext` reported no continuation while
+  matching records remained beyond the selected keys. Both the count
+  and the page-key queries now gate on a per-predicate eligibility
+  EXISTS against the recommendation table (identity-index-backed;
+  a strict no-op when no detail filters are present). Regressions
+  cover the truncation shape end-to-end on both lists, including
+  cursor continuation past the nonmatching page. Found by the phase17
+  branch review. (A pre-existing multi-value gpu_model filter binding
+  error, surfaced by this cycle's review, is tracked with #841.)
+- **Container-list detail expansion can no longer read another tenant's recommendations ([#840](https://github.com/pgarciaq/ros-ocp-backend/issues/840)):**
+  the native container list's detail expansion joined recommendation
+  rows through the CLUSTERS table's organization — never the
+  recommendation row's own — and cluster UUIDs are not globally unique,
+  so another organization's rows for a co-registered cluster could join
+  the expansion by container identity alone, leaking cross-tenant
+  recommendation variants into the caller's serialized result. Both
+  detail expansions (the live keys path and the dormant DISTINCT
+  fallback) now filter by the recommendation row's org_id — the rule
+  the file's own documentation states and every other query site
+  already followed. Regression: two organizations sharing a cluster
+  UUID with identical container identities; the org-scope test suite
+  additionally now asserts the qualified predicate. Found by the
+  phase17 branch review (tenant isolation, the hand-off blocker).
+- **A schedule change can no longer produce sleep advice from evidence split under the old window ([#831](https://github.com/pgarciaq/ros-ocp-backend/issues/831)):**
+  sleep-evidence legs are split at ingest under the schedule resolved
+  at that moment, and nothing recorded which window produced the
+  split. Changing the schedule without re-ingesting left old-split
+  evidence admissible: activity inside the newly proposed sleep hours
+  sat in the old business-hours leg, invisible to every gate, and the
+  evaluator wrote NEW high-confidence advice over hours the workload
+  was actually active in. Every evidence row now carries the
+  fingerprint of the schedule that split it (migration 000222); the
+  evaluator requires every row in the window to match the currently
+  resolved schedule and reads unknown on any mismatch — never
+  wrong-window advice. The gate is self-healing: re-ingestion under
+  the new schedule re-attests the evidence and evaluation proceeds on
+  the truth (an active-evening workload is then correctly vetoed by
+  the off-hours p95). Accepted trade: the sleep advisory goes silent
+  after every schedule change until evidence rebuilds, bounded by the
+  reship/ingest cadence. Existing rows read unattested (unknown)
+  until re-ingestion — the reship-bounded cold start, as before. The
+  robne CSV mode is inherently attested; its DB mode applies the same
+  gate from the rows' fingerprints. ADR-0348 §5 amended.
+- **Sparse observation can no longer pass as complete sleep evidence ([#827](https://github.com/pgarciaq/ros-ocp-backend/issues/827)):**
+  a sleep-evidence leg counted as "measured" as soon as any sample
+  existed — 28 observations (two hours per day) across a 14-day window
+  produced high-confidence `schedule_nonprod_sleep` over 22 unobserved
+  hours per day. Each leg now requires its **distinct observed hours**
+  to meet half the leg's possible hours for that day, rounded up
+  (migration 000221 adds per-leg observed-hour counts; the floor follows
+  the H-leg minimum-observation precedent and is a methodological
+  constant, not a tenant knob). Possible hours derive by classifying
+  each day's hour buckets against the schedule — the same rule the
+  ingestion writer applies — so overnight windows (split across UTC day
+  boundaries) and fractional windows are exact. Hours are counted as
+  distinct hour buckets, never samples; the workload-day's coverage is
+  the minimum over its containers, with a container missing a leg's
+  window entirely reading zero hours — a fully-observed sibling cannot
+  mask an under-observed one. A below-floor day suppresses the advisory
+  (unknown, never certified idle); coverage is evaluated per day, so
+  one sparse day among fourteen full ones still reads unknown. Existing
+  rows read coverage-unmeasured (and therefore unknown via the #826 p95
+  rule) until re-ingested — the reship-bounded cold start, as before.
+  The robne CLI computes the same coverage in CSV mode, writes the
+  hours in DB mode, and reads the columns back — both modes gate.
+  ADR-0348 §5 amended.
+- **Sustained overnight work can no longer hide behind the off-hours median ([#826](https://github.com/pgarciaq/ros-ocp-backend/issues/826)):**
+  the sleep advisory's off-window evidence leg stored a p50 per
+  container-day — but a median reads zero when activity occupies a
+  minority of the window. A workload running 2000m from 00:00–06:00 (6 of
+  16 off-hours) and two containers alternating across the night (workload
+  active 14 of 16 hours, each container's median zero) both produced
+  high-confidence `schedule_nonprod_sleep` with outside=0. The off leg now
+  stores and gates on the **p95** (migration 000220) — the house
+  convention for CPU-usage activity evidence, the same p50→p95 migration
+  the zombie rule made in #747 for the same reason. The BH-activity leg
+  keeps its p50 (its failure direction suppresses advice, which is safe);
+  no threshold changed — the veto is strictly more sensitive against the
+  same floor. The p95 catches sustained per-container activity (≥2 of 16
+  hourly samples); a one-hour-per-container rotation fleet evades it — a
+  known residual tracked separately (#835). Partially-migrated rows (some
+  containers with p95, some without) read unmeasured, so a migrated quiet
+  sibling cannot mask a legacy row's activity. Existing rows read
+  off-unmeasured until re-ingested (the reship-bounded cold start, as
+  before), in both the server and the robne DB mode. ADR-0348 §5 amended.
+- **Tag warnings no longer reveal inaccessible clusters' tag-key existence ([#828](https://github.com/pgarciaq/ros-ocp-backend/issues/828)):**
+  the "known tag key" catalog behind empty-result warnings had two sources,
+  and only one was scoped. The enabled-key catalog (org configuration)
+  correctly stays org-wide — the same distinction Koku's own tag-key
+  validation draws — but the data-derived catalog (keys observed in
+  `resolved_tags`) ran org-wide on five route groups (node utilization, GPU
+  MIG, history, container lists, namespace lists), and a nil-vs-empty
+  conflation let denied identities (settings-only roles, empty grants) read
+  as unrestricted even on the already-scoped PVC path. A cluster-restricted
+  caller could therefore distinguish a key observed only on an inaccessible
+  cluster from a nonexistent one through warning differentials. The
+  data-derived catalog now scopes to the caller's server-owned cluster set
+  on every warning route — resolved lazily, so the happy path pays no extra
+  query — with unresolvable scopes suppressing warnings entirely and client
+  cluster filters never widening the scope.
+- **Sleep advice no longer subtracts percentiles to guess overnight activity ([#760](https://github.com/pgarciaq/ros-ocp-backend/issues/760)):**
+  the non-prod sleep predicate computed outside-BH CPU as all-hours p50
+  minus business-hours p50 — but percentiles are not additive, and the
+  complement of a percentile is not the difference of percentiles. A
+  workload using 300m constantly read outside=0 and received
+  high-confidence `schedule_nonprod_sleep` while running all night. The
+  off-hours signal is now measured and stored directly: a thin
+  `hcp_sleep_evidence` table carries each container-day's in-window and
+  off-window p50s (exact complements, through the canonical digest
+  machinery), and the predicate reads the off-window sum with no
+  subtraction — which also eliminates the container-grain masking
+  instance of the same defect. Days the schedule does not apply to (a
+  weekday schedule's weekends) gate on the off-window leg alone — the
+  BH-activity requirement is vacuous there, and weekend activity still
+  vetoes; without this, weekend days read unknown and the rule never
+  fired for weekday schedules at all. The evidence is split at the
+  cluster schedule (a wider namespace override cannot swallow off-window
+  activity), swept by date retention, and cleaned with its source. Sleep
+  advisories are silent until post-deploy evidence accumulates (up to
+  the 14-day window; a `reship_ros` rebuild closes it per scope).
+  ADR-0348 §5 amended.
+- **A night-only workload can no longer hide from the sleep-safety test ([#761](https://github.com/pgarciaq/ros-ocp-backend/issues/761)):**
+  the non-prod sleep predicate skipped any workload missing one of its two
+  digest streams, and a workload that runs only outside business hours
+  legitimately has no business-hours digest row (the producer drops
+  all-zero-BH groups by design). Its off-hours CPU was therefore invisible:
+  a business-hours web workload established the day's coverage and
+  high-confidence `schedule_nonprod_sleep` fired for a cluster whose
+  night-only CronJob runs exactly in the hours the advisory would sleep
+  away. A user workload with exactly one stream now makes the day unknown
+  — silence, never a wrong advisory (ADR-0348 §5 amendment, workload
+  grain). The gate is deliberately conservative: a single-stream workload
+  whose all-hours total is below the outside-idle floor is provably inert
+  yet still silences the day, keeping the coverage rule threshold-free.
+  System-namespace exclusions are unchanged.
+- **Two management clusters no longer share one api-tax advisory row ([#763](https://github.com/pgarciaq/ros-ocp-backend/issues/763)):**
+  the `hcp_correlation_advisories` key was `(org_id, hc_cluster_id,
+  window_start)`, and api-tax advisories write `hc_cluster_id=''`
+  (shared-plane evidence) — so two management clusters (farms) in one
+  org/window hit the same row and the upsert replaced the evidence while
+  keeping the first farm's identity: one farm's UUID served with another
+  farm's webhook facts, and visible to the wrong farm's cluster-scope
+  grant. The key now includes `management_cluster_uuid` (migration 000218;
+  all four writer conflict targets follow). Per-HC advisories are unchanged
+  — the management cluster is functionally determined by the HC, so
+  at-most-one-advisory-per-HC holds as before (ADR-0349 §3 amendment).
+- **Tag filters no longer lose a cluster that summarized on an older day ([#770](https://github.com/pgarciaq/ros-ocp-backend/issues/770)):**
+  Koku built the push payload from `OCPUsageLineItemDailySummary.all_labels` at
+  one tenant-wide latest `usage_start`. A cluster whose most recent report was
+  even one day older was absent from the payload, and ROS's org-scoped full
+  replace then reset its `resolved_tags` — an entire cluster silently stopped
+  matching tag filters while every other cluster looked fine. The payload is now
+  built from Koku's per-report-period label summaries
+  (`reporting_ocpusagepodlabel_summary` + `reporting_ocpstoragevolumelabel_summary`)
+  for report periods from last month start through this month end — the same
+  sources and month-snapped window the Koku Tags API uses. Values are unioned
+  per `(cluster, namespace, key)` and collapsed to the alphabetically first
+  value, because `resolved_tags` stores one per key. Payload envelope, storage,
+  and full-replace semantics are unchanged (ADR-0353); tag-key batching on
+  Settings toggles is unchanged and intentional. Multi-value storage (#814) and
+  the `db`-mode divergence (#815) remain open.
+
+- **A manifest's container files build one daily distribution per container ([#758](https://github.com/pgarciaq/ros-ocp-backend/issues/758)):**
+  each container CSV was digested through its own stream with a
+  full-replacement upsert per container/day, so count-based producer splits
+  lost every file's samples but the last (two files with 08:00=2000m and
+  09:00=100m produced `sample_count=1, max=100`). The manifest's container
+  files now stream into one shared batch whose digests compute once from the
+  union of samples — complete percentiles, order-independent, replay
+  idempotent, with cross-payload replacement preserved. Memory stays bounded
+  by a staging threshold: past it, raw samples stage to a per-manifest
+  scratch table and the finalize computes per key, streaming — the opt-in
+  flush-batch mode's mid-file boundary loss is fixed for batched files too.
+- **VM companions persist before their files are marked done ([#757](https://github.com/pgarciaq/ros-ocp-backend/issues/757)):**
+  PVC and GPU-device companion CSVs were ingested per-file during batch
+  collection while their usage parents only existed after the flush — so for
+  every genuinely new VM/day the companion skip was guaranteed, the file was
+  still marked done, and same-manifest replay never repaired the loss.
+  Companions are now buffered per file and applied after the flush writes
+  the parents (order-independent, per-file replacement semantics unchanged);
+  a companion whose usage never arrives is no longer treated as successful
+  persistence — the file stays undone and re-enters the manifest retry
+  ladder, escalating visibly to the DLQ instead of silently losing the
+  attachment (#806 tracks the delayed-redrive follow-up).
+- **Weighted digest Max no longer read from pooled storage after returning it ([#759](https://github.com/pgarciaq/ros-ocp-backend/issues/759)):**
+  `ComputeWeightedDigest` built its return value after handing the scratch
+  buffer back to the `sync.Pool`, so a concurrent caller could refill that
+  storage between the handoff and the Max read — a data race (verified by
+  the race detector) that could persist a wrong maximum in digest rows. The
+  complete result is now constructed before the pool return, making a
+  read-after-put structurally impossible; fixed in canonical `librobne` and
+  the vendored copy kept in sync.
+- **Kafka parallel consumption preserves per-partition offset order ([#756](https://github.com/pgarciaq/ros-ocp-backend/issues/756)):**
+  the parallel consumer's shared job channel let a worker dequeue a higher
+  offset and win the per-partition lock before a lower offset — reordering
+  handler execution and letting a commit acknowledge messages that had not
+  processed. Each partition now has an ordered queue served by a dedicated
+  goroutine (execution and commits serial per partition by construction),
+  with cross-partition parallelism bounded by `ROS_KAFKA_WORKERS` (now a cap
+  on concurrent partition handlers, honoring the DB-connection budget). The
+  global commit mutex is removed: per-partition commits are serial by
+  construction and librdkafka commits are thread-safe.
+- **Maintained internal docs links and anchors resolve again, with a gate ([#778](https://github.com/pgarciaq/ros-ocp-backend/issues/778)):**
+  the docs de-duplication pass (#748) left 130 broken links in 32 maintained
+  documentation files: 21 cross-tree pointers into `docs-site/` with the wrong
+  `../` depth, 28 code links to files that moved to `librobne/` or a
+  sub-package, 16 anchors whose heading slug no longer existed, and 9 links to
+  pages that were removed or moved (129 in `docs/`, 1 in `README.md`). All 130
+  now resolve, path and anchor. Every label that spelled out an old path was
+  rewritten with its href so a link never contradicts its own text.
+  `make docs-links` runs the new `scripts/check-internal-links.sh`, which
+  resolves each relative link from its source directory, rejects links that
+  leave the repository, and checks `#fragment` anchors against **GitHub's**
+  heading slugger — the renderer that actually applies to `docs/`, which
+  `mkdocs.yml` never publishes. Point-in-time record trees (`docs/adr/`,
+  `docs/audits/`, `docs/archive/`, `docs/historical/`, `docs/issues/`,
+  `docs/plans/`, `docs/superpowers/`) stay out of scope by design.
+  `docs-lint.yml` runs the gate. No API or recommendation behavior changes.
+
+- **Native-mode container compatibility list date window ([#782](https://github.com/pgarciaq/ros-ocp-backend/issues/782)):**
+  the legacy `/recommendations/openshift/container` list alias now uses the
+  documented current-month `updated_at` window in native mode, matching the
+  canonical list while preserving the compatibility response and UUID alias
+  fallback. Kruize-only mode retains its legacy `monitoring_end_time` filter;
+  the detail alias remains unchanged.
+
+- **Generated docs no longer overwrite the canonical Known Limitations page ([#777](https://github.com/pgarciaq/ros-ocp-backend/issues/777)):**
+  `scripts/generate-docs.sh` copied the internal stub `docs/known-issues.md` over
+  `docs-site/known-issues.md` on every build, so the published page carried no
+  limitations table, pointed its "full guide" link at itself, and linked an
+  internal-only `../agents/` path that 404s on the site. The copy stage (and its
+  now-dead link rewrites) is removed; the canonical page is hand-maintained and
+  committed. `make docs-check-generated` fails when generation changes a
+  committed page or when the page loses its caveats table, and
+  `make docs-check-rendered` asserts the same on the built HTML. Also corrects
+  `CONTRIBUTING.md`'s Go floor (1.25+ → 1.26+, matching `go.mod`). No API or
+  recommendation behavior changes.
+
+- **Settings authorization stops denied writes ([#751](https://github.com/pgarciaq/ros-ocp-backend/issues/751)):**
+  a caller without wildcard `cost-management:settings:write` permission could
+  receive HTTP 403 while the settings handler continued into a PUT or DELETE.
+  Permission denial now terminates processing before persistence,
+  recalculation, business-hours digest pruning, reship/pending-state updates
+  or cache invalidation. The existing denial status and JSON body are unchanged;
+  legitimate writers, environment locks and RBAC-disabled behavior are preserved.
+
+- **HCP `incomplete` no longer fires on management-overhead rows
+  ([#695](https://github.com/pgarciaq/ros-ocp-backend/issues/695)):**
+  previously every `filter[scope]=management` row was flagged
+  `incomplete: true` because the derivation only checked an empty
+  `hosted_cluster_id`. It now requires the row's namespace to be
+  HCP-evidenced (clusters-row `hcp_namespaces` membership or a complete
+  fresh snapshot — the same either-source definition the surface itself
+  uses), restoring the documented meaning: evidenced-but-unassociated.
+  Management-platform namespaces (`multicluster-engine`, hive, …) are no
+  longer mislabeled in the UI.
+
+- **Management-overhead scope ([#694](https://github.com/pgarciaq/ros-ocp-backend/issues/694), [ADR-0343](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/architecture/adr/README.md)):**
   `filter[scope]=management` on `GET /recommendations/openshift/hcp` (list,
   both grouped variants, detail) selects management-overhead rows: container
   rows on `cluster_topology = 'management'` clusters whose namespace is not a
@@ -248,6 +789,118 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `exact:`/`exclude:`) are rejected with 400. Detail IDs are validated under
   the active scope (off-scope IDs 404 in both directions). The UI overhead
   sub-tab drives the scope automatically.
+  ([ADR-0343](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0343-management-overhead-scope.md)).
+
+- **`savings-summary` per-plugin savings/additional-cost breakdown ([#686](https://github.com/pgarciaq/ros-ocp-backend/issues/686)):**
+  `GET /recommendations/openshift/savings-summary` now also returns
+  `by_plugin_breakdown`: per plugin, positive rows summed as `savings` and
+  negative rows (e.g. `Undersized` upsizes) summed as positive-magnitude
+  `additional_cost`, each with its row count. Existing signed `by_plugin`
+  totals are unchanged.
+
+- **Node-pressure signal (code 87 `NODE_PRESSURE`):** operator collects
+  Memory/Disk/PIDPressure conditions per container row; backend digests the
+  worst ordinal per node/day (`daily_node_digests.pressure_state`, migration
+  000213). Pressured nodes keep current sizing, gain the WARNING code, and
+  are excluded from consolidation removal (migration 000214).
+- **Internal TokenReview echoes token audiences:** projected service-account
+  tokens are audience-bound (Koku mounts its ROS sync token with audience
+  `ros-api`); reviewing them without audiences made the API server reject
+  with `token audiences ... invalid`, 401ing every internal push sync (tags
+  and cost-groups) on clusters using projected tokens. The review request now
+  carries the presented JWT's `aud` claim (unverified client-side; the review
+  itself verifies); audience-less tokens keep the legacy path.
+- **Container crash-loop quality gate ([#78](https://github.com/pgarciaq/ros-ocp-backend/issues/78),
+  motivated by [#677](https://github.com/pgarciaq/ros-ocp-backend/issues/677)):**
+  operator collects `restart_count_container_sum` (total restarts, same namespace
+  scope as OOM) into a new `restart_count` CSV column; backend persists
+  `RestartCountSum` digests (migration `000211`) and, at ≥ 3 restarts in a term
+  window, withholds the cost-engine downsize (keep current, zero savings) while
+  attaching notification code **86** (`UNSTABLE_CONTAINER`, WARNING; migration
+  `000212`). Cost upsizes and all performance recs flow unchanged; resume is
+  implicit as restarts age out of the window. See
+  [ADR-0340](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0340-container-crashloop-gate-downsize-withhold.md).
+- **Cost-groups platform-namespace sync ([#675](https://github.com/pgarciaq/ros-ocp-backend/issues/675),
+  build child of [#665](https://github.com/pgarciaq/ros-ocp-backend/issues/665)):**
+  `POST /internal/cost-groups/sync` receives admin-curated Platform
+  namespaces pushed from koku (SA bearer → TokenReview, mirroring
+  `/internal/tags/sync`) into `hcp_platform_namespaces` (migration
+  `000210`, per-org replace semantics so removals stop excluding). The
+  zombie idle leg (both lanes) reads the synced set as an augment to the
+  compiled exclusion — either source excluding is enough, unknown stays
+  user activity, sync failures fall back to compiled defaults. No UI.
+
+- **W3 short lane (Child B, [#674](https://github.com/pgarciaq/ros-ocp-backend/issues/674)):**
+  Pool-zero fast lane over the standard rule: every pool at spec==0 AND
+  status==0 sustained (absolute zero is exact — no epsilon; transitions,
+  flapping, and gaps read unknown), then dual legs over a short window.
+  Same verdict with lane signals; lanes evaluate independently. Three
+  settings (`z_short_window_days` 3, `z_short_required_days` 3,
+  `z_idle_window_days` 14 — the last superseding the const lock, with the
+  Christmas-docs copy in the guide). No migration, no UI.
+
+- **NodePool inventory store ([#673](https://github.com/pgarciaq/ros-ocp-backend/issues/673),
+  Child A of [#660](https://github.com/pgarciaq/ros-ocp-backend/issues/660)):**
+  Operator reads NodePool CRs (one-line RBAC addition beside the HCP rule)
+  and emits `ros-openshift-nodepool-*` snapshots (hourly windows, zero-zero
+  pools land verbatim — never pre-filtered, never fabricated); backend
+  claims, strictly parses (skip-with-counters), and idempotently stores them
+  (`hosted_nodepool_rollups`, 90d sweep) under the never-fails contract.
+  No rule yet (Child B interprets scaled-to-0); no UI.
+
+- **Master-role node flag ([#671](https://github.com/pgarciaq/ros-ocp-backend/issues/671),
+  Track-M child of [#668](https://github.com/pgarciaq/ros-ocp-backend/issues/668)):**
+  `node_role` flows collector→digest→recs→API (new CSV column, digest + recs
+  columns, list/detail/CSV responses). Master-role rows (`master` or
+  `control-plane` labels) on 3+ master clusters carry notification **85**
+  (`NODE_CP_SCOPE`, INFO): CPMS rolling update only, never below install
+  minimums, quorum protected. Quorum-count gate excludes single-master (SNO)
+  structurally; old CSVs without roles read unknown. No catalog, no UI.
+
+- **Infra-scope node flag ([#670](https://github.com/pgarciaq/ros-ocp-backend/issues/670),
+  Track-I child of [#668](https://github.com/pgarciaq/ros-ocp-backend/issues/668)):**
+  Node rows on infra machinesets (`-infra-` infix / `-infra` suffix) carry
+  notification **84** (`NODE_INFRA_SCOPE`, INFO): same sizing math, plus
+  guardrail framing (MachineSet-template change, N+1, drain order;
+  smaller instances, never fewer subscriptions). Narrow-side matching;
+  worker/master rows byte-identical. No catalog, no endpoint, no migration
+  of existing data (one additive migration row).
+
+- **W3 idle-leg redefinition ([#664](https://github.com/pgarciaq/ros-ocp-backend/issues/664),
+  amends [#391](https://github.com/pgarciaq/ros-ocp-backend/issues/391), ADR-0339):**
+  The #658 API-count idle leg never fires on real clusters (measured
+  0.9–3.6M background requests/day vs T=100 — see #662): idle is now
+  zero active non-system workloads every day for 14d, active meaning
+  daily CPU at or above `z_idle_cpu_floor_mc` (new three-tier setting,
+  default 10m, discouraged to tune — raising it manufactures zombies).
+  Platform exclusion is compiled narrow-side (`kube-`/`openshift-` +
+  evidence-grounded addons; koku cost-groups sync deferred to #665).
+  API evidence rides signals as labeled no-gate context; `z_idle_req_per_day`
+  deprecated (accepted, unread). Supersedes the #658 leg; no migration, no UI.
+
+- **W3 zombie advisories ([#658](https://github.com/pgarciaq/ros-ocp-backend/issues/658),
+  child of [#391](https://github.com/pgarciaq/ros-ocp-backend/issues/391)):**
+  Unused-HostedCluster detection over a trailing 14-day window (const):
+  MAX daily hosted requests below `z_idle_req_per_day` (new three-tier
+  setting on `/settings/hcp-correlation`, default 100/day conservative and
+  uncalibrated — recalibration tracked in #662) plus still-on proof (fresh
+  association snapshot + CP-namespace CPU above floor) fires
+  `review_unused_hosted_cluster` advisories (high confidence dual-evidence,
+  medium without digest proof; unknown anywhere is silence). Missing window
+  days read as unknown, subsuming the brand-new-cluster grace period. No
+  migration, no UI, no operator changes; never recommends `pausedUntil`.
+
+- **API tax webhook rollup store + tune_noisy_webhook advisories ([#393](https://github.com/pgarciaq/ros-ocp-backend/issues/393),
+  thin W5):** New `apitax` payload type (`ros-openshift-apitax-*.csv`) persists
+  bounded per-cluster admission-webhook rollups (`hosted_api_tax_rollups`:
+  webhook × `le`, cumulative bucket counts, total/rejected counts, hourly
+  idempotent upserts). The correlator derives per-webhook p99 from bucket
+  deltas and rejected rate from totals deltas (reset-aware), firing
+  `tune_noisy_webhook` advisories (verdict-distinguished, empty HC attribution
+  for shared-plane evidence) when p99 ≥ 2.0s or rejected rate ≥ 5%. API tax
+  ingest never permanently fails (skip-with-counters, always Done) so a
+  poisoned file cannot gate container recommendations. Table swept with
+  history (90d). No routes, no UI, no migration of existing data.
 
 - **HCP grouped savings ([#639](https://github.com/pgarciaq/ros-ocp-backend/issues/639)):**
   `group_by[hosted_cluster_id]` rows now carry `estimated_savings`
@@ -326,47 +979,73 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   list (either source protects; pre-migration keeps row-list behavior).
   Association still demands strict proof; only routing is unioned.
 
-- **HCP list rows carry all term/engine variants ([#651](https://github.com/pgarciaq/ros-ocp-backend/issues/651)):**
-  the dedicated surface now does the classic batched sibling fan-out, so
-  term/engine projection is display-side (accepted and tolerated, effect in
-  rendering) and CSV exports all variants — previously list rows carried
-  short/cost only and CSV exports were silently empty. Grouped rollups stay
-  pinned to short/cost; detail already synthesized. No API, schema, or
-  recommendation-math change.
+- **Security: settings-only roles no longer inherit unrestricted OpenShift data access ([#753](https://github.com/pgarciaq/ros-ocp-backend/issues/753)):**
+  data-side RBAC helpers treated an absent OpenShift grant as
+  unrestricted, so a role holding only `cost-management:settings:read`
+  or `:write` could read all infrastructure telemetry and
+  recommendations. Authorization now mirrors Koku's permission lattice
+  (resources start empty; inheritance only from an affirmative parent):
+  eligibility requires an affirmative non-empty `openshift.*` grant or a
+  wildcard — absent AND explicitly-empty grants deny with 200+empty.
+  Applied across all data helpers plus three routes that had bypassed
+  them entirely (snapshot cost-by-type, snapshot age-distribution,
+  cluster instance-types). Settings routes remain fully usable by
+  settings-only roles; no-access responses are unchanged (200 + empty).
 
-- **Management control-plane guardrail floors ([#584](https://github.com/pgarciaq/ros-ocp-backend/issues/584) W1.1):**
-  Container groups in known HCP namespaces take the controlplane floor
-  profile — `max(100m CPU / 128MiB absolute, 70% of window-median current
-  request)` on cost and perf engines alike — and receive no replica
-  recommendations (operators own CP topology). All other groups keep the
-  generic profile and no rows leave the pipeline. CLI wired from payload
-  manifest (Path 1); server path tracked in #590. Internal routing only:
-  no API change, no `recommendation_type` value yet.
+- **Cluster filter by alias on nodes, storage, snapshots, quota and cluster-quota ([#790](https://github.com/pgarciaq/ros-ocp-backend/issues/790)):**
+  `filter[cluster]=<alias>` (the form the UI cluster filter sends)
+  returned 503 on those five endpoints — they bound the raw value against
+  a uuid column. Alias values now resolve through an org-scoped
+  case-insensitive substring lookup on the cluster alias, matching the
+  container endpoints and Koku; UUID filters are unchanged, and an
+  unknown alias returns an empty result (200) rather than an error.
+  Savings currency also resolves correctly for alias filters now —
+  previously the raw alias silently fell back to USD for non-USD
+  organizations.
 
-- **Processor persists the HCP namespace list for guardrail routing ([#590](https://github.com/pgarciaq/ros-ocp-backend/issues/590) W1.1 server path):**
-  `KafkaMsg.metadata.topology.hostedControlPlaneNamespaces` (populated when
-  masu enriches the message) is persisted to `clusters.hcp_namespaces`
-  alongside the #580 classification, and deferred recommendation runs
-  (processor + threshold recalc) read the list back from the database rather
-  than the message, so the #584 controlplane floors apply to management-plane
-  namespaces without re-reading the ingest message. Best-effort with
-  warn-and-continue: absent, empty, or unreadable lists leave guardrail
-  routing off and never fail the run. Migration `000198` backfills existing
-  rows to an empty list. Internal routing only: no API change.
+- **Security: fleet heatmap cache no longer serves nodes outside the caller RBAC scope ([#754](https://github.com/pgarciaq/ros-ocp-backend/issues/754)):**  the cache key carried only the cluster dimension, so a
+  wildcard-cluster role with a narrow `openshift.node` grant shared the
+  `org:all` entry with an unrestricted role — cache hits bypassed the
+  node filter (secret nodes served to restricted users; restricted
+  users could poison the entry with a partial view). The cache now
+  holds the org-level node pool; node RBAC scope, maxNodes truncation
+  and counts are applied per request, cold and warm. The pool ordering
+  also gained a `cluster_uuid` tie-breaker so cap truncation is
+  deterministic across clusters sharing machineset and node names.
 
-- **Startup plugin dependency validation ([#588](https://github.com/pgarciaq/ros-ocp-backend/issues/588)):**
-  `ROS_ENABLED_PLUGINS` allowlists with `gpu`, `quota`, or `node` but
-  without `container` now refuse to start, naming the missing plugin
-  (previously such deployments ran degraded silently). Declare further
-  requirements via the `DependencyDeclarer` trait; nothing is ever
-  auto-enabled.
+- **Security: resource readers ignore explicit cluster RBAC restrictions ([#752](https://github.com/pgarciaq/ros-ocp-backend/issues/752)):**
+  the PVC, quota, cluster-quota, HCP advisories and workload-types readers
+  used org scoping only, so a cluster-A-only role could enumerate cluster
+  B's storage and quota groups, advisories and workload types, read a
+  known B container's OOM timeline, and a client cluster filter
+  substituted for authorization. Every reader now resolves its
+  server-owned allowed clusters and appends an `ANY()` scope clause to
+  count/list/group/CSV queries (an empty set — settings-only or
+  explicitly-empty grants — denies). Resolved-ID detail and trend paths
+  (OOM timeline, PVC/quota/CRQ detail, quota trend) return 404
+  indistinguishable from unknown IDs (Koku's RBAC-filtered-queryset
+  convention), and quota-ID resolution itself is cluster-scoped, closing
+  a timing oracle. The data-derived tag-key catalog is cluster-scoped
+  too: a scoped empty response can no longer reveal tag keys that exist
+  elsewhere in the org.
 
-- **Generation respects plugin enablement for pvc, node, snapshot ([#591](https://github.com/pgarciaq/ros-ocp-backend/issues/591)):**
-  Processor generation (`runStorageRecommendations`, `runNodeRecommendations`,
-  `runSnapshotRecommendations`) and threshold recalculation
-  (`defaultRecalculateCluster`) skip disabled plugins, mirroring the
-  existing gpu/quota/vm gates. Previously recs were computed and persisted
-  for disabled plugins (serving already 404'd). No API change.
+- **HCP advisory visibility: HC grant OR management grant ([#791](https://github.com/pgarciaq/ros-ocp-backend/issues/791)):**
+  a user granted a hosted cluster now sees that HC's advisories; a user
+  granted the management cluster sees the management cluster's advisories
+  and all its HCs'. Shared-plane advisories (no HC association) remain
+  management-gated.
+
+- **VM multi-file payload digest merging ([#707](https://github.com/pgarciaq/ros-ocp-backend/issues/707)):**
+  VM CSV files within one payload are now digested in a single pass — a day
+  split across files (row-limit splits, multi-part payloads) merges instead
+  of keeping only the last file's rows. Previously each file was digested
+  independently with a full-replacement upsert: same-day rows from earlier
+  files were lost, and a partial last file could fall below the 20-sample
+  guest-agent percentile minimum, silently degrading VM recommendations to
+  the usage branch. Cross-payload semantics are unchanged (a re-sent
+  monthly accumulator still replaces). The ≥20 agent-sample percentile
+  minimum is now a shared constant between the processor and the robne
+  in-memory digest builder.
 
 ### Performance
 
@@ -403,6 +1082,68 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     [ADR-0338](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0338-column-descriptors-over-extractor-closures.md).
 
 ### Fixed
+
+- **HCP list rows carry all term/engine variants ([#651](https://github.com/pgarciaq/ros-ocp-backend/issues/651)):**
+  the dedicated surface now does the classic batched sibling fan-out, so
+  term/engine projection is display-side (accepted and tolerated, effect in
+  rendering) and CSV exports all variants — previously list rows carried
+  short/cost only and CSV exports were silently empty. Grouped rollups stay
+  pinned to short/cost; detail already synthesized. No API, schema, or
+  recommendation-math change.
+
+- **Unhandled manifest file types no longer stall manifests ([#650](https://github.com/pgarciaq/ros-ocp-backend/issues/650)):**
+  `ros-openshift-vm-pvc-*` files route through the VM ingest case (the plugin
+  claim and header sniff were already wired; only the switch routing missed
+  them), files of a disabled plugin's types are skipped to Done with a warning,
+  and a `default` warn+Done guard means no recognized-but-unhandled type can
+  silently stall a manifest again. Previously either shape left the file
+  `pending` forever (neither Done nor Failed, invisible to retry/DLQ triage)
+  and gated the whole manifest's recommendations. No API, schema, or
+  recommendation-math change.
+
+### Added
+
+- **Startup plugin dependency validation ([#588](https://github.com/pgarciaq/ros-ocp-backend/issues/588)):**
+  `ROS_ENABLED_PLUGINS` allowlists with `gpu`, `quota`, or `node` but
+  without `container` now refuse to start, naming the missing plugin
+  (previously such deployments ran degraded silently). Declare further
+  requirements via the `DependencyDeclarer` trait; nothing is ever
+  auto-enabled.
+
+- **Processor persists manifest topology facts ([#580](https://github.com/pgarciaq/ros-ocp-backend/issues/580)):**
+  `KafkaMsg.metadata.topology` (populated when masu enriches the message
+  per the companion koku-side request) is classified and persisted to
+  `clusters.cluster_topology`, best-effort — absent facts degrade to
+  unknown and never fail the run. Unenriched messages behave exactly as
+  before. No API change.
+
+- **Generation respects plugin enablement for pvc, node, snapshot ([#591](https://github.com/pgarciaq/ros-ocp-backend/issues/591)):**
+  Processor generation (`runStorageRecommendations`, `runNodeRecommendations`,
+  `runSnapshotRecommendations`) and threshold recalculation
+  (`defaultRecalculateCluster`) skip disabled plugins, mirroring the
+  existing gpu/quota/vm gates. Previously recs were computed and persisted
+  for disabled plugins (serving already 404'd). No API change.
+
+- **Management control-plane guardrail floors ([#584](https://github.com/pgarciaq/ros-ocp-backend/issues/584) W1.1):**
+  Container groups in known HCP namespaces take the controlplane floor
+  profile — `max(100m CPU / 128MiB absolute, 70% of window-median current
+  request)` on cost and perf engines alike — and receive no replica
+  recommendations (operators own CP topology). All other groups keep the
+  generic profile and no rows leave the pipeline. CLI wired from payload
+  manifest (Path 1); server path tracked in #590. Internal routing only:
+  no API change, no `recommendation_type` value yet.
+
+- **Processor persists the HCP namespace list for guardrail routing ([#590](https://github.com/pgarciaq/ros-ocp-backend/issues/590) W1.1 server path):**
+  `KafkaMsg.metadata.topology.hostedControlPlaneNamespaces` (populated when
+  masu enriches the message) is persisted to `clusters.hcp_namespaces`
+  alongside the #580 classification, and deferred recommendation runs
+  (processor + threshold recalc) read the list back from the database rather
+  than the message, so the #584 controlplane floors apply to management-plane
+  namespaces without re-reading the ingest message. Best-effort with
+  warn-and-continue: absent, empty, or unreadable lists leave guardrail
+  routing off and never fail the run. Migration `000198` backfills existing
+  rows to an empty list. Internal routing only: no API change.
+
 ### Changed
 
 - **Public Business Hours persist/history/read-time contract ([#527](https://github.com/pgarciaq/ros-ocp-backend/issues/527)):**
@@ -446,6 +1187,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (PR-4) and use `idx_gpu_container_digests_org_cluster_sched_start`. Keeps
   `migrations/000186_*.sql` and the 000061 / 000080 GPU indexes. Large DBs:
   `DROP INDEX CONCURRENTLY` first (`migrations/README.md`). No API change.
+
+- **Drop unused pre-000187 GPU digest interval indexes ([#526](https://github.com/pgarciaq/ros-ocp-backend/issues/526)):**
+  Migration `000195` drops `idx_ros_gpu_digest_cluster_interval` (000061) and
+  `idx_gpu_digest_cluster_interval_node` (000080). EXPLAIN gate recorded on the
+  issue: zero scans on both across a full ingest/API/rec workload; tenant-scoped
+  reads use `idx_gpu_container_digests_org_cluster_sched_start` (000187) and the
+  natural key. Keeps `migrations/000061_*.sql` and `migrations/000080_*.sql`.
+  Large DBs: `DROP INDEX CONCURRENTLY` first (`migrations/README.md`). No API change.
 
 - **GPU digest reads filter `org_id` ([#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-4):**
   GPU SELECTs (`QueryGPURecommendations`, MIG/timeslicing helpers, librobne
@@ -584,14 +1333,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   maps. Timeout, row cap, and Prometheus stay on `loadDigestRows`, not the
   page path. Namespace digest queries are unchanged. No API change.
 
-- **Drop unused pre-000187 GPU digest interval indexes ([#526](https://github.com/pgarciaq/ros-ocp-backend/issues/526)):**
-  Migration `000195` drops `idx_ros_gpu_digest_cluster_interval` (000061) and
-  `idx_gpu_digest_cluster_interval_node` (000080). EXPLAIN gate recorded on the
-  issue: zero scans on both across a full ingest/API/rec workload; tenant-scoped
-  reads use `idx_gpu_container_digests_org_cluster_sched_start` (000187) and the
-  natural key. Keeps `migrations/000061_*.sql` and `migrations/000080_*.sql`.
-  Large DBs: `DROP INDEX CONCURRENTLY` first (`migrations/README.md`). No API change.
-
 - **Tenant-scoped `clusters` alias joins on machinesets + GPU MIG list ([#525](https://github.com/pgarciaq/ros-ocp-backend/issues/525)):**
   The alias-only `LEFT JOIN clusters` in the machineset list and the GPU MIG
   list now predicates `c.org_id`, matching fleet savings and heatmap (#445
@@ -627,53 +1368,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   order) is unchanged and OFFSET pagination is kept. The `clusters` alias
   joins are now tenant-scoped (`c.org_id`) in all five. No API change.
 
-### Fixed
-
-- **Processor image CGO for Kafka ([#522](https://github.com/pgarciaq/ros-ocp-backend/issues/522)):**
-  Dockerfile and `make build` set `CGO_ENABLED=1` (`confluent-kafka-go` /
-  librdkafka). July `CGO_ENABLED=0` could not compile `rosocp`. robne stays
-  `CGO_ENABLED=0`. No API change.
-
-- **`MergeNotificationCodes` keeps codes ≥ 1 ([#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509)):**
-  Merge is slice-based (`AppendUnique` + sort). Codes 64 (VM), 70 (quota),
-  and 79 (Peak hours) no longer vanish. `NotificationCodeBitmap` and
-  `NotificationCodesFromSlice` are removed. Codes `< 1` still skipped.
-  Emit paths were already `append` / `AppendUnique`. No API shape change.
-
-- **CLI PVC digest `org_id` on conflict ([#508](https://github.com/pgarciaq/ros-ocp-backend/issues/508)):**
-  Docs state YAML `org_id` must match existing PVC rows for that
-  `cluster_uuid`. Conflict SQL already shipped with
-  [#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505) (does not
-  rewrite `org_id`). Unique key still omits `org_id`; a mismatched tenant
-  still merges into the existing row. GPU schema unchanged. No API change.
-
-- **CLI `pgdigest` PVC/quota merge matches ingest ([#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505)):**
-  `WritePVCDigests`, `WriteNamespaceQuotaDigests`, and `WriteClusterQuotaDigests`
-  use the same `ON CONFLICT` as processor ingest (`GREATEST`/`LEAST`, weighted
-  PVC average, `sample_count+=`, empty pod/VM/namespaces keep the existing
-  value). PVC conflict does not rewrite `org_id`. Container, namespace usage,
-  node, GPU, and VM writers stay last-write-wins. A second `--output` of the
-  same full PVC day doubles `sample_count`; a thinner day cannot shrink that
-  day’s extrema. No API change.
-
-- **CLI `Load` directory vs tar missing-column policy ([#506](https://github.com/pgarciaq/ros-ocp-backend/issues/506)):**
-  Directory `Load` now fails when a classified primary ROS CSV (container,
-  namespace, storage, VM usage, cluster-quota, snapshot) is missing required
-  columns, matching tarball `Load`. Cost-only / unknown files still skip in a
-  mixed input. Malformed VM-PVC / VM-GPU companions still skip. No API change.
-
-- **Ingest CSV skip counts for container, namespace, and PVC ([#504](https://github.com/pgarciaq/ros-ocp-backend/issues/504)):**
-  Processor wrappers now increment `rosocp_csv_rows_skipped_total{report_type}`
-  and warn when `ForEach*` drops unparseable rows, matching VM/snapshot/quota.
-  Container and namespace also count belt-and-suspenders validator drops.
-  Empty PVC names stay dropped and uncounted. Payload still succeeds if some
-  rows skip. No API change.
-
-- **Namespace list omits `business_hours` ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)):**
-  Unfiltered `GET .../namespaces` no longer nests `business_hours` on list
-  rows. Slim projection already omitted it. Detail (`GET .../namespaces/{id}`)
-  is unchanged. Fat list DTO is not collapsed (ADR-0294).
-
 ### Deprecated
 
 - **Legacy container/namespace alias routes in OpenAPI ([#572](https://github.com/pgarciaq/ros-ocp-backend/issues/572)):**
@@ -683,15 +1377,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   paths. New reverse contract test `TestOpenAPI_AllRoutesHaveSpecPaths` locks
   spec↔route parity in both directions. No API change.
 
-- **Unhandled manifest file types no longer stall manifests ([#650](https://github.com/pgarciaq/ros-ocp-backend/issues/650)):**
-  `ros-openshift-vm-pvc-*` files route through the VM ingest case (the plugin
-  claim and header sniff were already wired; only the switch routing missed
-  them), files of a disabled plugin's types are skipped to Done with a warning,
-  and a `default` warn+Done guard means no recognized-but-unhandled type can
-  silently stall a manifest again. Previously either shape left the file
-  `pending` forever (neither Done nor Failed, invisible to retry/DLQ triage)
-  and gated the whole manifest's recommendations. No API, schema, or
-  recommendation-math change.
+### Fixed
 
 - **Stale HCP namespace lists defer to fresher rows ([#613](https://github.com/pgarciaq/ros-ocp-backend/issues/613)):**
   When several `clusters` rows share org+uuid, a non-empty
@@ -840,6 +1526,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   drops the unused arg (before numbering further placeholders on the tag
   path). No API change.
 
+- **Processor image CGO for Kafka ([#522](https://github.com/pgarciaq/ros-ocp-backend/issues/522)):**
+  Dockerfile and `make build` set `CGO_ENABLED=1` (`confluent-kafka-go` /
+  librdkafka). July `CGO_ENABLED=0` could not compile `rosocp`. robne stays
+  `CGO_ENABLED=0`. No API change.
+
+- **`MergeNotificationCodes` keeps codes ≥ 1 ([#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509)):**
+  Merge is slice-based (`AppendUnique` + sort). Codes 64 (VM), 70 (quota),
+  and 79 (Peak hours) no longer vanish. `NotificationCodeBitmap` and
+  `NotificationCodesFromSlice` are removed. Codes `< 1` still skipped.
+  Emit paths were already `append` / `AppendUnique`. No API shape change.
+
+- **CLI PVC digest `org_id` on conflict ([#508](https://github.com/pgarciaq/ros-ocp-backend/issues/508)):**
+  Docs state YAML `org_id` must match existing PVC rows for that
+  `cluster_uuid`. Conflict SQL already shipped with
+  [#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505) (does not
+  rewrite `org_id`). Unique key still omits `org_id`; a mismatched tenant
+  still merges into the existing row. GPU schema unchanged. No API change.
+
+- **CLI `pgdigest` PVC/quota merge matches ingest ([#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505)):**
+  `WritePVCDigests`, `WriteNamespaceQuotaDigests`, and `WriteClusterQuotaDigests`
+  use the same `ON CONFLICT` as processor ingest (`GREATEST`/`LEAST`, weighted
+  PVC average, `sample_count+=`, empty pod/VM/namespaces keep the existing
+  value). PVC conflict does not rewrite `org_id`. Container, namespace usage,
+  node, GPU, and VM writers stay last-write-wins. A second `--output` of the
+  same full PVC day doubles `sample_count`; a thinner day cannot shrink that
+  day’s extrema. No API change.
+
+- **CLI `Load` directory vs tar missing-column policy ([#506](https://github.com/pgarciaq/ros-ocp-backend/issues/506)):**
+  Directory `Load` now fails when a classified primary ROS CSV (container,
+  namespace, storage, VM usage, cluster-quota, snapshot) is missing required
+  columns, matching tarball `Load`. Cost-only / unknown files still skip in a
+  mixed input. Malformed VM-PVC / VM-GPU companions still skip. No API change.
+
+- **Ingest CSV skip counts for container, namespace, and PVC ([#504](https://github.com/pgarciaq/ros-ocp-backend/issues/504)):**
+  Processor wrappers now increment `rosocp_csv_rows_skipped_total{report_type}`
+  and warn when `ForEach*` drops unparseable rows, matching VM/snapshot/quota.
+  Container and namespace also count belt-and-suspenders validator drops.
+  Empty PVC names stay dropped and uncounted. Payload still succeeds if some
+  rows skip. No API change.
+
 - **Deterministic namespace digest order + deadlock retries ([#578](https://github.com/pgarciaq/ros-ocp-backend/issues/578)):**
   Namespace digest batches queued rows in Go map order, deadlocking concurrent
   same-cluster manifests. Keys are now sorted (mirroring container digests) and
@@ -859,6 +1585,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   exhaustion the message commits, `rosocp_kafka_dlq_failed_total` fires, and
   its files leave non-terminal `report_file_status` states. The routed counter
   now increments only after successful delivery. No API change.
+
+- **Namespace list omits `business_hours` ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)):**
+  Unfiltered `GET .../namespaces` no longer nests `business_hours` on list
+  rows. Slim projection already omitted it. Detail (`GET .../namespaces/{id}`)
+  is unchanged. Fat list DTO is not collapsed (ADR-0294).
 
 - **Hourly digest metric columns widened to BIGINT ([#573](https://github.com/pgarciaq/ros-ocp-backend/issues/573)):**
   `hourly_node_digests` and `hourly_vm_digests` used `INTEGER`, aborting the
@@ -908,7 +1639,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `robne recommend` JSON BH siblings with sizing set `notification_codes` to
   **79** (node), **80** (GPU container), **81** (GPU timeslicing), or **82** (VM)
   only. All-hours siblings omit the key. Do not copy the engine catalog.
-  Envelope stays **11**. Empty BH arrays stay `[]` with no codes.
+  Envelope stays **11**. Empty BH arrays stay `[]` with no codes. Stdout
+  mapping only — rec structs and PG upsert are unchanged.
 
 - **robne CLI business-hours JSON siblings ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)):**
   YAML `business_hours` with explicit `--plugins node|gpu|vm` is allowed.
@@ -917,9 +1649,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `business_hours_gpu_timeslicing_recommendations`, and
   `business_hours_vm_recommendations` are arrays (never `null`); omit the key
   when that plugin is off. Container/namespace BH only still uses envelope
-  **10**. CLI siblings are full DTOs — **not** the product thin nest.
-  Dual-write node/GPU/VM BH **digests**; do not upsert BH recs.
-  `explain --schedule business_hours` is unlocked for node/gpu/timeslicing/vm.
+  **10**. CLI siblings are full DTOs (idle/abandoned/SKU/GPU/disk) — **not**
+  the product thin nest. Dual-write node/GPU/VM BH **digests**; do not upsert
+  BH recs (namespace BH rec overwrite removed). GPU/VM weighting is
+  drop-or-full; node scales usage when `0 < w < 1`. Path A + explicit plugin +
+  empty BH digests is a hard error; implicit default emits `[]`. Files-path
+  weekend + explicit plugin succeeds with empty arrays. `explain --schedule
+  business_hours` is unlocked for node/gpu/timeslicing/vm (PVC/quota/snapshot
+  still error). `csv`/`table` stay JSON-only when BH is on.
 
 - **VM business-hours detail ([#486](https://github.com/pgarciaq/ros-ocp-backend/issues/486)):**
   Ingest dual-writes `daily_vm_digests` (`all_hours` and `business_hours`) using
@@ -1259,17 +1996,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   only, PostgreSQL in **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)), tarball `./` prefix). Samples:
   `cmd/robne/robne.yaml.sample`, `cmd/robne/rate-card.json.sample`. Public
   overlay manual:
-  [`features/robne-cli.md`](features/robne-cli.md)
+  [`docs-site/features/robne-cli.md`](features/robne-cli.md)
   (GitHub Pages Features; planned-features URL is a bookmark stub).
   Trackers:
   [#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) (NISE headers),
   [#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466) (koku tar `./`).
 
 - **robne CLI public page graduated to Features ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469)):**
-  [`features/robne-cli.md`](features/robne-cli.md) is the
+  [`docs-site/features/robne-cli.md`](features/robne-cli.md) is the
   user manual. Spec §3 documents `--now` as the decay/staleness clock (term
   windows stay on latest digest day, same as the processor). Old
-  [`planned-features/robne-cli.md`](planned-features/robne-cli.md)
+  [`docs-site/planned-features/robne-cli.md`](planned-features/robne-cli.md)
   is a bookmark stub. Incomplete YAML `sizing:` is an error (copy the sample
   block or omit the key). Unparseable CSV data rows are counted on stderr;
   all-unparseable ROS files error.

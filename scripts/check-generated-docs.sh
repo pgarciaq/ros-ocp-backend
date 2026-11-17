@@ -18,12 +18,9 @@
 #   ./scripts/check-generated-docs.sh --site-dir _site
 #   asserts the rendered page still carries the caveats table.
 #
-# Exemption: docs-site/changelog.md is regenerated over a committed copy that
-# has diverged both ways in content (#800). It cannot pass the no-op check until
-# that reconciliation lands; add it to GATED_PAGES when #800 closes.
-#
-# NOTE: the pre-build mode runs the generator, so it also refreshes the
-# (ungated) changelog copy — the same side effect as `make docs-generate`.
+# docs-site/changelog.md is gated since #800's reconciliation: regeneration
+# is a no-op from the committed pair, so the pre-build generator run no
+# longer mutates it.
 #
 # Requires bash 4+ and GNU coreutils (`sha256sum`), matching CI (ubuntu-24.04)
 # and the documented Linux dev environment.
@@ -50,6 +47,7 @@ GATED_PAGES=(
     "$KNOWN_ISSUES"
     "docs-site/contributing.md"
     "docs-site/development.md"
+    "docs-site/changelog.md"
 )
 
 fail=0

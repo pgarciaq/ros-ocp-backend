@@ -19,6 +19,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   generates requests/limits from usage percentiles for those rows, giving
   users an indication of what to set instead of silence.
 
+- **HCP capacity header contract is name-based ([#704](https://github.com/pgarciaq/ros-ocp-backend/issues/704)):**
+  the capacity CSV parser now locates columns by header name (the family
+  convention used by every other ROS CSV parser) instead of requiring the
+  exact 25-column name sequence. A reordered header is harmless; an
+  operator adding an extra column is tolerated with a reported warning
+  (stderr on the CLI, log on ingestion) instead of rejecting the whole
+  file; a missing or renamed required column remains a file-level error
+  naming the absent columns; `native_model_version` keeps gating the math
+  model. KMO writers are unaffected — future column additions no longer
+  require coordinated reader changes.
+
 ### Added
 
 - **HCP fleet-capacity advisory API ([#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392)):**
@@ -40,8 +51,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   pressure state, source versions, and warnings: `stale` (age over 2× the
   row's own max cadence), `below_version_floor` (known `ocp_version`
   under 4.17 — data still served, never suppressed), `pressured` /
-  `pressure_unknown`, and `mce_may_be_stale` (MCE references frozen
-  across the freshness window while native inputs moved). Authorization
+  `pressure_unknown`, `mce_may_be_stale` (MCE references frozen
+  across the freshness window while native inputs moved), and
+  `shared_infrastructure` (shared-plane rows). Ingests the operator's
+  25-column `ros-openshift-hcp-capacity-*.csv` (KMO emission rides the
+  rosocp fork branch; upstream release pending); serve-time derivation
+  shared with the robne CLI in `librobne/hcp/serve.go`. Authorization
   is org identity plus cluster RBAC before any read; unauthorized or
   unknown clusters are non-disclosing (200 with empty data). Responses
   are `Cache-Control: no-store`.
@@ -71,7 +86,168 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and the HCP facts (`hosted_cluster_id`, `management`, `incomplete`) ride
   on the shared native shape.
 
+- **Zombie activity measure: p50 → p95, server and robne ([#747](https://github.com/pgarciaq/ros-ocp-backend/issues/747)):**
+  the zombie idle leg's activity measure is now the daily **p95** per
+  workload on both sides. The p50 read partial-day activity (daytime
+  active, night idle) as idle — the median sample is an off-hours one —
+  so on non-BH orgs both sides could fire `review_unused_hosted_cluster`
+  on a cluster used 8 hours a day. The p95 reads the active window: a
+  used cluster is never a zombie, with or without a business-hours
+  stream. Constant-usage and truly-idle workloads are measure-invariant
+  (p95 == p50 for constants; 0 for idle) — every existing fixture and
+  its expected value carries over unchanged. The floor now means "any
+  ~5% of the day above it counts as activity."
+
+- **robne CLI: zombie activity measure aligned with the server ([#746](https://github.com/pgarciaq/ros-ocp-backend/issues/746)):**
+  the zombie idle leg now sums BOTH digest streams when the
+  business-hours stream is present (robne's `business_hours` config
+  matching the org schedule) — a daytime-active workload reads active
+  and the zombie stays silent, matching the server's both-streams
+  contract discovered by the first recorded parity run. Without a BH
+  config, the all-hours p50 alone reads partial-day activity as idle —
+  the p50 measure's shared limitation, now tracked as #747 (the
+  all-hours p95 fix).
+
+- **robne CLI: W5 api-tax advisory ([#724](https://github.com/pgarciaq/ros-ocp-backend/issues/724)):**
+  the `tune_noisy_webhook` advisory joins the `hcp_advisories` sibling
+  with full parity to the server's thin W5 rule — the hottest webhook on
+  the primary payload's api-tax CSVs fires when its p99 >= 2.0 s or its
+  rejected rate >= 5% (consts, not knobs). Cluster-scoped by design: the
+  advisory carries an empty `hosted_cluster_id` (shared-plane evidence
+  names no single HC). Per-source histogram coherence and counter-reset
+  resolution mirror the server; the fire window shares the headroom
+  rule's hours.
+
+- **robne CLI: W2 headroom advisory ([#723](https://github.com/pgarciaq/ros-ocp-backend/issues/723)):**
+  the `do_not_add_workers_first` advisory joins the `hcp_advisories`
+  sibling with full parity to the server's precision-first correlator —
+  H (hosted API p99 from the SLO bucket rollups, baseline-relative
+  threshold via the shared quantile math ported verbatim), C (CP
+  usage/requests ratio over the association namespaces), !N (no
+  overcommitted/scheduling-limited codes on the computed node
+  recommendations), and the window proof (a complete association
+  snapshot observed for the window with one incarnation). Unknown legs
+  and pressured workers produce nothing — the silence cases are pinned
+  by the ported verdict-matrix tests. `headroom_advisory` YAML
+  configures the policy fields.
+
+- **robne CLI: W3 unused-hosted-cluster (zombie) advisory ([#722](https://github.com/pgarciaq/ros-ocp-backend/issues/722), [ADR-0333](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0333-unused-hostedcluster-lifecycle-w3.md)):**
+  the `review_unused_hosted_cluster` advisory joins the `hcp_advisories`
+  sibling with full parity to the server's correlator rule — the standard
+  14-day idle window (full-coverage guest digests, platform exclusions
+  shared with sleep, one busy user day vetoes) plus the pool-zero short
+  lane (#674) over the NodePool rows. The still-on leg reads the
+  management payload's digests over the association namespaces (the first
+  context-digest consumer of the multi-payload input); missing CP proof
+  fires medium, present-but-zero CP is silence, days without digests read
+  unknown. `zombie_advisory` YAML configures the policy fields and the
+  synced platform-namespace exclusions. Restored the evidence-grounded
+  `open-cluster-management-hc01` entry to the shared compiled platform
+  set (the #721 copy had dropped it — a sleep/zombie parity fix).
+
+- **robne CLI: multi-payload input and the W8 sleep advisory ([#721](https://github.com/pgarciaq/ros-ocp-backend/issues/721), [ADR-0350](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0350-robne-multi-payload-input.md)):**
+  `--input` is now repeatable — the first payload is the primary
+  (recommendation cluster), additional payloads are advisory context
+  (typically the HCP management cluster's topology emission). The W8
+  non-prod sleep-candidate advisory appears in the JSON envelope as the
+  `hcp_advisories` sibling (envelope version 13 when present), matching
+  the server's serving contract (#717). The `sleep_advisory` YAML section
+  configures the policy fields and the optional synced platform-namespace
+  exclusions. Per-payload manifest/CSV consistency is enforced
+  independently (a mismatched context payload fails fast). The advisory is
+  independent of the HCP capacity plugin — gated on the business-hours
+  schedule, the context facts, and the dual digests.
+
+- **W8 non-prod HC sleep advisory ([#716](https://github.com/pgarciaq/ros-ocp-backend/issues/716), [ADR-0348](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0348-w8-nonprod-sleep-advisory.md)):**
+  the correlator now emits `schedule_nonprod_sleep` advisories for hosted
+  clusters that are **declared** non-prod (label
+  `insights.cost-management/hc-tier=non-prod`, carried by the operator's
+  topology emission) **and** show the business-hours usage signature (user
+  workloads active during the org's org/cluster-level business hours, idle
+  outside them — a labeled cluster with overnight workloads is never
+  advised). The advisory recommends the two-step sleep from the validated
+  experiment (NodePool→0 + pause with a finite drain timeout), states that
+  only worker capacity is reclaimed (the control plane keeps running) and
+  that waking takes ~20 minutes of reprovision, and estimates the reclaim
+  in node-hours/week. Three per-org policy fields join the correlator
+  settings (`sleep_window_days`, `sleep_bh_activity_floor_mc`,
+  `sleep_outside_bh_idle_floor_mc`). The tier is read latest-wins
+  (mid-window relabels and label removal take effect immediately), and the
+  advisory is partitioned from the zombie rule by predicate.
+
+- **HCP advisories serving API ([#717](https://github.com/pgarciaq/ros-ocp-backend/issues/717), [ADR-0349](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0349-hcp-advisories-serving-api-contract.md)):**
+  `GET /api/cost-management/v1/recommendations/openshift/hcp/advisories`
+  returns the org's live correlator advisories — the first serving surface
+  for any HCP advisory. All verdicts are served with typed per-verdict
+  `details` (plus the raw correlator `evidence` for provenance):
+  `do_not_add_workers_first` (W2 headroom), `tune_noisy_webhook` (W5
+  api-tax; `hosted_cluster_id` is null on these management-cluster-scoped
+  rows), and `review_unused_hosted_cluster` (W3 zombie; the W8
+  `schedule_nonprod_sleep` verdict joins when that feature ships). One
+  advisory exists per hosted cluster per window (predicate partition);
+  the response is unpaginated with a 500-row cap, and the field vocabulary
+  evolves additively only. Requires the `hcp` plugin.
+
+- **Per-plugin term windows ([#705](https://github.com/pgarciaq/ros-ocp-backend/issues/705), [ADR-0346](docs-site/architecture/adrs.md)):**
+  robne resolves term windows per plugin — `plugin_terms:` in robne.yaml when
+  configured, else the plugin's documented table (container family 1/7/15,
+  VM 7/15/30, PVC 7/30/90 days). The top-level `terms:` list becomes
+  container-family-scoped (it never reached VM/PVC correctly before — that
+  fall-through was the #705 parity root cause); unknown plugin keys and the
+  term-less plugins are errors; `terms:` + `plugin_terms.container` is an
+  ambiguity error; validation mirrors the server's Settings-API bounds.
+  **Pre-release output change:** VM and PVC recommendations now follow their
+  documented tables (VM short 1→7 days, long-term withheld below 15 days of
+  data; PVC medium 7→30 days clamped to available).
+
+- **robne CLI HCP fleet-capacity ([#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)):**
+  `robne recommend --plugins hcp` renders the same advisory as the service
+  from management-cluster payloads (disconnected-mode tarball/dir or reports
+  directory): JSON envelope v12 `hcp_recommendations` sibling carrying the
+  full observation series newest-first, table/CSV rendering of the latest
+  observation, capacity clock (`--now` > YAML > wall), manifest identity
+  (UUID-validated, `"unknown"` fallback), and `validate`/`diff`/`explain`
+  selectors (`--scenario`, `--observed-at`; latest-per-side diff; BH schedule
+  rejection). Shared 25-column parser in `librobne/csv` (single source with
+  backend ingestion). Two pre-release renames: plugin spelling
+  `cluster_quota` → `cluster-quota` (flag/YAML/registry; JSON sibling key
+  `cluster_quota_recommendations` unchanged) and JSON envelope root
+  `recommendations` → `container_recommendations`.
+
+- **nise HCP capacity generator ([#702](https://github.com/pgarciaq/ros-ocp-backend/issues/702), [pgarciaq/nise](https://github.com/pgarciaq/nise) `185d1e0`):**
+  `nise report ocp` emits the KMO-contract file
+  `ros-openshift-hcp-capacity-YYYYMM.csv` (one monthly accumulator, no
+  cluster id, part-number split rejected) from an `hcp_capacity`
+  static-YAML block; deterministic QPS variation against frozen MCE
+  references; defaults pinned to the hand-verified healthy-fleet fixture
+  (scenarios 7/7/7/5/3).
+
+- **Term-table single source ([ADR-0346](docs-site/architecture/adrs.md)):** the six
+  documented per-plugin term tables live in librobne (PVC's added;
+  container-family and VM's already there); the server plugins'
+  `DefaultTerms()` delegate to the same constants — behavior identical,
+  pinned by the existing term-config tests. robne's Path-A digest SELECT
+  window sizes from the maximum effective lookback (90d default) instead of
+  the container maximum (15d), so VM/PVC long-term data is no longer
+  truncated.
+
 ### Fixed
+
+- **The published changelog carries every entry again, with a freshness gate ([#800](https://github.com/pgarciaq/ros-ocp-backend/issues/800)):**
+  `docs-site/changelog.md` was both committed and regenerated from
+  `CHANGELOG.md`, and the pair had diverged both ways: 18 issue
+  entries (plus one ref-less ADR entry) lived only in the site copy
+  and were silently dropped at every deploy, while every entry added
+  since the divergence never reached the published page — including
+  this campaign's. The pair is reconciled (entry text moved verbatim;
+  the uniquely-carried facts of the both-sides-diverged entries
+  merged), the generator's link rewrite now maps `docs-site/` paths
+  site-relatively (healing three dead links on the deployed page),
+  and regeneration is a no-op from the committed pair — enforced by
+  the #777 freshness gate, which now covers the changelog. From this
+  change on, every `CHANGELOG.md` edit must run
+  `./scripts/generate-docs.sh` and commit the site copy; the gate
+  fails the build otherwise.
 
 - **Kafka commit fallbacks no longer silently lose reports when every redelivery produce fails ([#803](https://github.com/pgarciaq/ros-ocp-backend/issues/803)):**
   when a report exhausted its retries and every produce path failed
@@ -803,6 +979,74 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   list (either source protects; pre-migration keeps row-list behavior).
   Association still demands strict proof; only routing is unioned.
 
+- **Security: settings-only roles no longer inherit unrestricted OpenShift data access ([#753](https://github.com/pgarciaq/ros-ocp-backend/issues/753)):**
+  data-side RBAC helpers treated an absent OpenShift grant as
+  unrestricted, so a role holding only `cost-management:settings:read`
+  or `:write` could read all infrastructure telemetry and
+  recommendations. Authorization now mirrors Koku's permission lattice
+  (resources start empty; inheritance only from an affirmative parent):
+  eligibility requires an affirmative non-empty `openshift.*` grant or a
+  wildcard — absent AND explicitly-empty grants deny with 200+empty.
+  Applied across all data helpers plus three routes that had bypassed
+  them entirely (snapshot cost-by-type, snapshot age-distribution,
+  cluster instance-types). Settings routes remain fully usable by
+  settings-only roles; no-access responses are unchanged (200 + empty).
+
+- **Cluster filter by alias on nodes, storage, snapshots, quota and cluster-quota ([#790](https://github.com/pgarciaq/ros-ocp-backend/issues/790)):**
+  `filter[cluster]=<alias>` (the form the UI cluster filter sends)
+  returned 503 on those five endpoints — they bound the raw value against
+  a uuid column. Alias values now resolve through an org-scoped
+  case-insensitive substring lookup on the cluster alias, matching the
+  container endpoints and Koku; UUID filters are unchanged, and an
+  unknown alias returns an empty result (200) rather than an error.
+  Savings currency also resolves correctly for alias filters now —
+  previously the raw alias silently fell back to USD for non-USD
+  organizations.
+
+- **Security: fleet heatmap cache no longer serves nodes outside the caller RBAC scope ([#754](https://github.com/pgarciaq/ros-ocp-backend/issues/754)):**  the cache key carried only the cluster dimension, so a
+  wildcard-cluster role with a narrow `openshift.node` grant shared the
+  `org:all` entry with an unrestricted role — cache hits bypassed the
+  node filter (secret nodes served to restricted users; restricted
+  users could poison the entry with a partial view). The cache now
+  holds the org-level node pool; node RBAC scope, maxNodes truncation
+  and counts are applied per request, cold and warm. The pool ordering
+  also gained a `cluster_uuid` tie-breaker so cap truncation is
+  deterministic across clusters sharing machineset and node names.
+
+- **Security: resource readers ignore explicit cluster RBAC restrictions ([#752](https://github.com/pgarciaq/ros-ocp-backend/issues/752)):**
+  the PVC, quota, cluster-quota, HCP advisories and workload-types readers
+  used org scoping only, so a cluster-A-only role could enumerate cluster
+  B's storage and quota groups, advisories and workload types, read a
+  known B container's OOM timeline, and a client cluster filter
+  substituted for authorization. Every reader now resolves its
+  server-owned allowed clusters and appends an `ANY()` scope clause to
+  count/list/group/CSV queries (an empty set — settings-only or
+  explicitly-empty grants — denies). Resolved-ID detail and trend paths
+  (OOM timeline, PVC/quota/CRQ detail, quota trend) return 404
+  indistinguishable from unknown IDs (Koku's RBAC-filtered-queryset
+  convention), and quota-ID resolution itself is cluster-scoped, closing
+  a timing oracle. The data-derived tag-key catalog is cluster-scoped
+  too: a scoped empty response can no longer reveal tag keys that exist
+  elsewhere in the org.
+
+- **HCP advisory visibility: HC grant OR management grant ([#791](https://github.com/pgarciaq/ros-ocp-backend/issues/791)):**
+  a user granted a hosted cluster now sees that HC's advisories; a user
+  granted the management cluster sees the management cluster's advisories
+  and all its HCs'. Shared-plane advisories (no HC association) remain
+  management-gated.
+
+- **VM multi-file payload digest merging ([#707](https://github.com/pgarciaq/ros-ocp-backend/issues/707)):**
+  VM CSV files within one payload are now digested in a single pass — a day
+  split across files (row-limit splits, multi-part payloads) merges instead
+  of keeping only the last file's rows. Previously each file was digested
+  independently with a full-replacement upsert: same-day rows from earlier
+  files were lost, and a partial last file could fall below the 20-sample
+  guest-agent percentile minimum, silently degrading VM recommendations to
+  the usage branch. Cross-payload semantics are unchanged (a re-sent
+  monthly accumulator still replaces). The ≥20 agent-sample percentile
+  minimum is now a shared constant between the processor and the robne
+  in-memory digest builder.
+
 ### Performance
 
 - **Decay evaluation prepared once per row walk ([#618](https://github.com/pgarciaq/ros-ocp-backend/issues/618)):**
@@ -1467,7 +1711,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **robne CLI binary identity / envelope capability ([#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489)):**
   `robne version` prints binary identity and the plugin → envelope bump table
   this binary can emit (`json_envelope_max`, then container=1 … snapshot=9,
-  `business_hours`=10). JSON recommend `"version"` stays per-run (ADR-0336);
+  `business_hours`=10, `business_hours_plugins`=11). JSON recommend `"version"` stays per-run (ADR-0336);
   container-only is still `1`. `business_hours` in the table is the YAML bump,
   not a `--plugins` name. No `--version` flag. `make robne` injects
   `git describe --always --dirty`; `go test` / `go build` stay `devel`.

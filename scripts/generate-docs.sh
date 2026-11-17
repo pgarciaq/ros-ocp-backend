@@ -139,6 +139,11 @@ def rewrite(url: str) -> str | None:
     if "#" in path:
         path, frag = path.split("#", 1)
         frag = "#" + frag
+    if path.startswith("docs-site/"):
+        # A docs-site/ path targets a MkDocs-rendered page, not a repo file —
+        # link it site-relatively (docs-site/x/y.md → x/y.md), as ../-prefixed
+        # site links already do (#800: the verbatim passthrough published 404s).
+        return path[len("docs-site/"):] + frag + ((" " + title) if title else "")
     if not path.startswith(repo_prefixes) and path not in ("openapi.json", "CONTRIBUTING.md", "LICENSE"):
         return None
     return f"{gh}/{path}{frag}" + ((" " + title) if title else "")
