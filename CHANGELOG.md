@@ -253,6 +253,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   until the upstream fix ships and the pinned WeasyPrint version is
   bumped past it.
 
+- **The link gate's slugger matches github-slugger's exact character class ([#869](https://github.com/pgarciaq/ros-ocp-backend/issues/869)):**
+  the gate's heading-anchor algorithm filtered with Python's `\w`
+  keep-list, which disagrees with GitHub's generated removal class in
+  both directions — superscripts (`²`), `×`, and `÷` were kept here
+  and stripped by GitHub (the live case: the performance audit page's
+  MERGE-ALLOC heading produced an anchor no GitHub link could ever
+  target). The filter is now a faithful port of the reference
+  implementation's generated class (Flet/github-slugger master): the
+  BMP portion verbatim, the UTF-16 surrogate-pair alternatives
+  translated to code-point ranges and merged. Fixtures pin the
+  superscript strip, the accented/CJK keep, and the emoji strip (the
+  reference strips emoji; so does `\w` — the fixture guards the port
+  against naively keeping them).
+
 - **The published changelog carries every entry again, with a freshness gate ([#800](https://github.com/pgarciaq/ros-ocp-backend/issues/800)):**
   `docs-site/changelog.md` was both committed and regenerated from
   `CHANGELOG.md`, and the pair had diverged both ways: 18 issue

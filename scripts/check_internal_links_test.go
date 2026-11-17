@@ -147,3 +147,17 @@ func TestCheckInternalLinks_BrokenAnchorStillFails(t *testing.T) {
 	require.Contains(t, out, "no heading #this-heading-does-not-exist in docs/page-a.md")
 	require.False(t, strings.Contains(out, "soft mode"), "the gate must not run in soft mode from tests")
 }
+
+// TestCheckInternalLinks_UnicodeHeadingSlugsGitHubExact pins #869: the
+// slugger uses github-slugger's exact removal class, not Python's \w
+// keep-list. Superscripts (²) are stripped (the live case: the audit page's
+// MERGE-ALLOC heading); accented letters and CJK are kept (the
+// must-not-regress direction); emoji are stripped (the reference strips
+// them — \w also did, so this pins the port against naively keeping them).
+func TestCheckInternalLinks_UnicodeHeadingSlugsGitHubExact(t *testing.T) {
+	out, err := runLinkGate(t, map[string]string{
+		"docs/page-a.md": "## Merge/alloc is on² — extra copy\n\nbody\n\n## Café münchen 中\n\nbody\n\n## 🚀 Launch checklist\n\nbody\n",
+		"docs/page-b.md": "see [merge](page-a.md#mergealloc-is-on--extra-copy), [café](page-a.md#café-münchen-中), [launch](page-a.md#-launch-checklist)\n",
+	})
+	require.NoError(t, err, "the unicode anchors must match github-slugger exactly; output: %s", out)
+}
