@@ -552,7 +552,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	// server-owned cluster set — the list is already in hand from the data
 	// query, so this adds no query.
 	attachTagWarningsToNodeUtil(&resp, c, orgID, len(pagedRecs),
-		staticTagWarningScope(fleetSummaryNeedsClusterFilter(userPerms), allowedClusters))
+		staticTagWarningScope(userPerms, fleetSummaryNeedsClusterFilter(userPerms), allowedClusters))
 	resp.Warnings = resp.Meta.Warnings
 
 	setRecommendationNoStore(c)

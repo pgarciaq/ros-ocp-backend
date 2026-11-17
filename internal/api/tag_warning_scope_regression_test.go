@@ -45,10 +45,16 @@ func seedV16TagKeys(t *testing.T, ctx context.Context) {
 		testutil.TestClusterUUID, fmt.Sprintf(`{"%s": "y"}`, v16AOnlyTagKey))
 	require.NoError(t, err)
 
-	// The tag-filter join needs the tenant tag table (per-org schema), as in
-	// the tags integration tests.
+	ensureV16TenantTagTables(t, ctx)
+}
+
+// ensureV16TenantTagTables creates the per-org tenant tag tables the
+// db-mode tag-filter join needs (shared by the cluster and project scope
+// fixtures).
+func ensureV16TenantTagTables(t *testing.T, ctx context.Context) {
+	t.Helper()
 	schema := strings.ReplaceAll(testutil.TestOrgID, "-", "_")
-	_, err = database.GetPool().Exec(ctx, `
+	_, err := database.GetPool().Exec(ctx, `
 		CREATE SCHEMA IF NOT EXISTS `+schema+`;
 		CREATE TABLE IF NOT EXISTS `+schema+`.reporting_ocptags_values (
 			uuid UUID PRIMARY KEY,
@@ -296,5 +302,172 @@ func TestTagWarningClusterScope_BranchCoverage(t *testing.T) {
 		assert.True(t, v16Warns(bodies[v16BOnlyTagKey]),
 			"client-filter-miss: the B-only key must warn — a client filter is not authorization and must not widen the warning scope")
 		assert.True(t, v16Warns(bodies[v16NoSuchTagKey]))
+	})
+}
+
+// #834 (approach A): the data-derived tag-key catalog also scopes to the
+// caller's PROJECT set — an explicit non-"*" openshift.project grant adds
+// the namespace predicate, mirroring query_builder's applyProjectFilter.
+// A project-restricted reader must receive the SAME unknown-key treatment
+// for a key observed in another project of an ACCESSIBLE cluster as for a
+// nonexistent key — the within-cluster existence oracle #834 closes.
+const (
+	projOtherNSTagKey = "proj-secret-ns" // observed only in other-ns-rs (cluster A)
+	projKnownTagKey   = "proj-known-key" // observed in ns-rs (the reader's project)
+	projReaderNS      = "ns-rs"
+	projOtherNS       = "other-ns-rs"
+)
+
+// seedProjectTagKeys seeds cluster A with keys in two namespaces: the
+// reader's project (ns-rs) and another project of the same cluster
+// (other-ns-rs). The secret lives only in the other project.
+func seedProjectTagKeys(t *testing.T, ctx context.Context) {
+	t.Helper()
+	_, err := database.GetPool().Exec(ctx, `INSERT INTO org_container_keys
+		(org_id, cluster_uuid, namespace, workload, workload_type, container_name, last_reported, resolved_tags)
+		VALUES ($1, $2, $3, 'wl-proj-a', 'Deployment', 'ctr-proj-a', now(), $4::jsonb),
+		       ($1, $2, $5, 'wl-proj-b', 'Deployment', 'ctr-proj-b', now(), $6::jsonb)`,
+		testutil.TestOrgID, testutil.TestClusterUUID, projReaderNS,
+		fmt.Sprintf(`{"%s": "y"}`, projKnownTagKey),
+		projOtherNS, fmt.Sprintf(`{"%s": "x"}`, projOtherNSTagKey))
+	require.NoError(t, err)
+	ensureV16TenantTagTables(t, ctx)
+}
+
+// projWarnsForKey requests one route under one identity filtered by the
+// given key and reports whether the unknown-key warning fired.
+func projWarnsForKey(t *testing.T, app *echo.Echo, path, key string) bool {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("%s?filter[tag:%s]=x", path, key), nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "key %s body: %s", key, rec.Body.String())
+	return v16Warns(rec.Body.String())
+}
+
+// readerProjectPerms: cluster A granted, project-restricted to ns-rs.
+func readerProjectPerms() map[string][]string {
+	return map[string][]string{
+		"openshift.cluster": {testutil.TestClusterUUID},
+		"openshift.project": {projReaderNS},
+	}
+}
+
+// TestTagWarningProjectScope_NoCrossProjectKeyOracle is #834's RED: a
+// project-restricted reader must not distinguish a key observed in another
+// project of an accessible cluster from a nonexistent key. Baseline: the
+// data-derived catalog scopes only by cluster, so the secret key suppresses
+// its warning while the nonexistent key warns — the existence oracle.
+// Both resolver shapes are covered: the request-scope route (containers,
+// resolving lazily) and the static-scope route (PVCs, holding the cluster
+// list from the data query).
+func TestTagWarningProjectScope_NoCrossProjectKeyOracle(t *testing.T) {
+	t.Setenv("ROS_TAGS_ENABLED", "true")
+	config.ResetForTest()
+	t.Cleanup(config.ResetForTest)
+	setupEligibilityTest(t)
+	ctx := context.Background()
+	seedReaderScopeOrg(t, ctx)
+	seedProjectTagKeys(t, ctx)
+	require.True(t, config.TagsFeatureEnabled(), "tag feature must be force-enabled")
+
+	cases := []struct {
+		name string
+		path string
+	}{
+		{"request-scope-containers", "/api/cost-management/v1/tw/containers-fallback"},
+		{"static-scope-pvcs", "/api/cost-management/v1/tw/pvcs"},
+		{"static-scope-node-utilization", "/api/cost-management/v1/tw/nodes"},
+		{"static-scope-gpu-mig", "/api/cost-management/v1/tw/mig"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := permsApp(readerProjectPerms(), v16Routes)
+			secretWarns := projWarnsForKey(t, app, tc.path, projOtherNSTagKey)
+			noSuchWarns := projWarnsForKey(t, app, tc.path, v16NoSuchTagKey)
+			assert.True(t, secretWarns,
+				"project-restricted reader: the other-project key must warn as unknown (project-scoped catalog)")
+			assert.True(t, noSuchWarns,
+				"the nonexistent key must warn (warning functionality intact)")
+		})
+	}
+}
+
+// TestTagWarningProjectScope_Controls pins the correct behaviors that must
+// hold before AND after the fix.
+func TestTagWarningProjectScope_Controls(t *testing.T) {
+	t.Setenv("ROS_TAGS_ENABLED", "true")
+	config.ResetForTest()
+	t.Cleanup(config.ResetForTest)
+	setupEligibilityTest(t)
+	ctx := context.Background()
+	seedReaderScopeOrg(t, ctx)
+	seedProjectTagKeys(t, ctx)
+	require.True(t, config.TagsFeatureEnabled())
+
+	t.Run("authorized-key-no-unknown-warning", func(t *testing.T) {
+		// A key observed WITHIN the reader's project must not warn.
+		app := permsApp(readerProjectPerms(), v16Routes)
+		assert.False(t, projWarnsForKey(t, app, "/api/cost-management/v1/tw/pvcs", projKnownTagKey),
+			"a key observed within the caller's project must not warn as unknown")
+	})
+
+	t.Run("project-unrestricted-sees-other-project-keys", func(t *testing.T) {
+		// A cluster-restricted user with NO project grants inherits the
+		// whole cluster's projects (query_builder's absent-child-grant
+		// semantics): the secret key is legitimately known.
+		perms := readerClusterAPerms()
+		app := permsApp(perms, v16Routes)
+		assert.False(t, projWarnsForKey(t, app, "/api/cost-management/v1/tw/pvcs", projOtherNSTagKey),
+			"a project-unrestricted cluster-A reader legitimately knows the other-project key")
+		assert.True(t, projWarnsForKey(t, app, "/api/cost-management/v1/tw/pvcs", v16NoSuchTagKey))
+	})
+
+	t.Run("wildcard-sees-org-wide-keys", func(t *testing.T) {
+		app := permsApp(map[string][]string{"*": {}}, v16Routes)
+		assert.False(t, projWarnsForKey(t, app, "/api/cost-management/v1/tw/pvcs", projOtherNSTagKey))
+		assert.True(t, projWarnsForKey(t, app, "/api/cost-management/v1/tw/pvcs", v16NoSuchTagKey))
+	})
+}
+
+// TestTagWarningProjectScope_GateAndEmptyGrant pins the two shapes the plain
+// oracle cannot reach:
+//   - the gate: a cluster-UNRESTRICTED user (openshift.cluster: *) who is
+//     project-restricted still gets the namespace filter — the scope must
+//     not short-circuit to unscoped because the cluster half is unscoped;
+//   - the nil-vs-empty pin: an EMPTY project grant is no access (Koku
+//     semantics), not "all projects" — the catalog scopes to nothing.
+func TestTagWarningProjectScope_GateAndEmptyGrant(t *testing.T) {
+	t.Setenv("ROS_TAGS_ENABLED", "true")
+	config.ResetForTest()
+	t.Cleanup(config.ResetForTest)
+	setupEligibilityTest(t)
+	ctx := context.Background()
+	seedReaderScopeOrg(t, ctx)
+	seedProjectTagKeys(t, ctx)
+	require.True(t, config.TagsFeatureEnabled())
+
+	t.Run("cluster-wildcard-project-restricted", func(t *testing.T) {
+		perms := map[string][]string{
+			"openshift.cluster": {"*"},
+			"openshift.project": {projReaderNS},
+		}
+		app := permsApp(perms, v16Routes)
+		assert.True(t, projWarnsForKey(t, app, "/api/cost-management/v1/tw/containers-fallback", projOtherNSTagKey),
+			"the namespace filter must apply even when the cluster half is unscoped")
+		assert.True(t, projWarnsForKey(t, app, "/api/cost-management/v1/tw/containers-fallback", v16NoSuchTagKey))
+	})
+
+	t.Run("empty-project-grant-scopes-to-nothing", func(t *testing.T) {
+		perms := map[string][]string{
+			"openshift.cluster": {testutil.TestClusterUUID},
+			"openshift.project": {},
+		}
+		app := permsApp(perms, v16Routes)
+		assert.True(t, projWarnsForKey(t, app, "/api/cost-management/v1/tw/pvcs", projOtherNSTagKey),
+			"an empty project grant is no access — the secret key must warn as unknown")
+		assert.True(t, projWarnsForKey(t, app, "/api/cost-management/v1/tw/pvcs", projKnownTagKey),
+			"an empty project grant is no access — even the in-project key must warn as unknown")
 	})
 }

@@ -287,7 +287,7 @@ func GetPVCRecommendations(c echo.Context) error {
 		resp.Data = []PVCRecommendationResponse{}
 	}
 
-	attachTagWarningsToPVC(&resp, c, orgID, len(resp.Data), staticTagWarningScope(scoped, allowedClusters))
+	attachTagWarningsToPVC(&resp, c, orgID, len(resp.Data), staticTagWarningScope(get_user_permissions(c), scoped, allowedClusters))
 	if responseFormat == listoptions.ResponseFormatCSV {
 		if resp.Data == nil {
 			resp.Data = []PVCRecommendationResponse{}

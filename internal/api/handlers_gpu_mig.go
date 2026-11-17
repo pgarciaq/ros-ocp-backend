@@ -57,7 +57,7 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	// cluster filter composes — a client filter narrows data, never the
 	// tag-key catalog's scope.
 	rbacAllowedClusters := clusterUUIDs
-	warningScope := staticTagWarningScope(fleetSummaryNeedsClusterFilter(userPerms), rbacAllowedClusters)
+	warningScope := staticTagWarningScope(userPerms, fleetSummaryNeedsClusterFilter(userPerms), rbacAllowedClusters)
 
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
 	clusterUUIDs, clusterFilterMiss := restrictClustersToQueryFilter(clusterUUIDs, clusterFilter)
