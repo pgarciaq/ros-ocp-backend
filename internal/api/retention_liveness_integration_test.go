@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -215,4 +216,76 @@ func TestRunRetentionSweep_KeepsListCountAndRowsAgreeing(t *testing.T) {
 				"%s: the purged cluster must leave the stale view too", name)
 		}
 	}
+}
+
+// TestRunRetentionSweep_PagedListsMatchCount walks every page a UI could ask
+// for with limit=1, which no earlier test does: the count is catalog-derived
+// while rows come from the detail leg, so a sweep that moves one and not the
+// other is invisible to a single limited request and only shows up as a page
+// the reader reaches and cannot fill — or as a row served twice.
+//
+// It asserts per surface: meta.count is constant on every page, walking pages
+// until has_next is false yields exactly meta.count distinct rows, and the page
+// one past the end is empty rather than a duplicate or a phantom.
+func TestRunRetentionSweep_PagedListsMatchCount(t *testing.T) {
+	ctx := context.Background()
+	app := setupRetentionLivenessListTest(t)
+	seedRetentionLivenessLists(t, ctx)
+	require.NoError(t, engine.RunRetentionSweep(ctx, database.GetPool(), 6))
+
+	cases := []struct {
+		name  string
+		path  string
+		query string
+		want  int
+	}{
+		{"containers default", "/api/cost-management/v1/recommendations/openshift", "", 1},
+		{"containers only", "/api/cost-management/v1/recommendations/openshift", "filter%5Bstale%5D=only", 2},
+		{"namespaces default", "/api/cost-management/v1/recommendations/openshift/namespace", "", 1},
+		{"namespaces only", "/api/cost-management/v1/recommendations/openshift/namespace", "filter%5Bstale%5D=only", 2},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			urlAt := func(offset int) string {
+				u := fmt.Sprintf("%s?limit=1&offset=%d", tc.path, offset)
+				if tc.query != "" {
+					u += "&" + tc.query
+				}
+				return u
+			}
+
+			seen := make(map[string]int, tc.want)
+			for offset := 0; offset < tc.want; offset++ {
+				page, body := getLivenessList(t, app, urlAt(offset))
+				assert.Equalf(t, tc.want, page.Meta.Count,
+					"offset %d: meta.count must not move between pages; body %s", offset, body)
+				require.Lenf(t, page.Data, 1, "offset %d: a page before the end must be filled; body %s", offset, body)
+
+				key := rowIdentity(t, page.Data[0])
+				prior, dup := seen[key]
+				require.Falsef(t, dup, "offset %d: row already served by offset %d; body %s", offset, prior, body)
+				seen[key] = offset
+
+				assert.Equalf(t, offset < tc.want-1, page.Meta.HasNext,
+					"offset %d: has_next must describe whether a further page exists", offset)
+			}
+
+			// The page past the end: reachable by a UI that trusts a stale count.
+			over, overBody := getLivenessList(t, app, urlAt(tc.want))
+			assert.Emptyf(t, over.Data, "page past the end must be empty; body %s", overBody)
+			assert.Falsef(t, over.Meta.HasNext, "the last page must not advertise a next page")
+			assert.Equalf(t, tc.want, over.Meta.Count, "the count must survive paging past the end; body %s", overBody)
+		})
+	}
+}
+
+// rowIdentity keys a list row by its full content. Two pages serving the same
+// row produce equal identities; distinct rows cannot collide the way a
+// hand-picked subset of columns could.
+func rowIdentity(t *testing.T, row map[string]interface{}) string {
+	t.Helper()
+	blob, err := json.Marshal(row)
+	require.NoError(t, err, "marshal row for identity")
+	return string(blob)
 }

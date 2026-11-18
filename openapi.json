@@ -531,9 +531,9 @@
             }
           },
           {
-            "name": "stale",
+            "name": "filter[stale]",
             "in": "query",
-            "description": "Filter by staleness state. A recommendation is 'stale' when no new usage data has been received within the staleness threshold (default 72 hours). Values: 'false' (default, exclude stale), 'true' (include all), 'only' (show only stale recommendations).",
+            "description": "Filter by staleness state. Values: 'false' (default, exclude stale), 'only' (only stale), 'true' (no filter — returns both). A recommendation becomes stale when its cluster stops reporting (14 days by default, ROS_CLUSTER_LIVENESS_HOURS) or when its row stops being refreshed (ROS_STALENESS_THRESHOLD_HOURS, default 48 hours). The flat 'stale' alias is accepted.",
             "required": false,
             "schema": {
               "type": "string",
@@ -4273,10 +4273,12 @@
               "type": "string",
               "enum": [
                 "true",
-                "false"
-              ]
+                "false",
+                "only"
+              ],
+              "default": "false"
             },
-            "description": "Include stale recommendations: true returns only stale, false (default) excludes them."
+            "description": "Filter by staleness state. Values: 'false' (default, exclude stale), 'only' (only stale), 'true' (no filter — returns both). A recommendation becomes stale when its cluster stops reporting (14 days by default, ROS_CLUSTER_LIVENESS_HOURS) or when its row stops being refreshed (ROS_STALENESS_THRESHOLD_HOURS, default 48 hours). The flat 'stale' alias is accepted."
           },
           {
             "name": "filter[idle_state]",
@@ -5748,6 +5750,21 @@
               "type": "string"
             },
             "description": "Filter by tag key:value (example: filter[tag:environment]=production)"
+          },
+          {
+            "name": "filter[stale]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false",
+                "only"
+              ],
+              "default": "false"
+            },
+            "description": "Filter by staleness state. Values: 'false' (default, exclude stale), 'only' (only stale), 'true' (no filter — returns both). A recommendation becomes stale when its cluster stops reporting (14 days by default, ROS_CLUSTER_LIVENESS_HOURS) or when its row stops being refreshed (ROS_STALENESS_THRESHOLD_HOURS, default 48 hours). The flat 'stale' alias is accepted."
           }
         ]
       }
@@ -6294,9 +6311,9 @@
             }
           },
           {
-            "name": "stale",
+            "name": "filter[stale]",
             "in": "query",
-            "description": "Filter by staleness state. A recommendation is 'stale' when no new usage data has been received within the staleness threshold (default 72 hours). Values: 'false' (default, exclude stale), 'true' (include all), 'only' (show only stale recommendations).",
+            "description": "Filter by staleness state. Values: 'false' (default, exclude stale), 'only' (only stale), 'true' (no filter — returns both). A recommendation becomes stale when its cluster stops reporting (14 days by default, ROS_CLUSTER_LIVENESS_HOURS) or when its row stops being refreshed (ROS_STALENESS_THRESHOLD_HOURS, default 48 hours). The flat 'stale' alias is accepted.",
             "required": false,
             "schema": {
               "type": "string",
@@ -7108,9 +7125,9 @@
                 }
             },
             {
-                "name": "stale",
+                "name": "filter[stale]",
                 "in": "query",
-                "description": "Filter by staleness state. A recommendation is 'stale' when no new usage data has been received within the staleness threshold (default 72 hours). Values: 'false' (default, exclude stale), 'true' (include all), 'only' (show only stale recommendations).",
+                "description": "Filter by staleness state. Values: 'false' (default, exclude stale), 'only' (only stale), 'true' (no filter — returns both). A recommendation becomes stale when its cluster stops reporting (14 days by default, ROS_CLUSTER_LIVENESS_HOURS) or when its row stops being refreshed (ROS_STALENESS_THRESHOLD_HOURS, default 48 hours). The flat 'stale' alias is accepted.",
                 "required": false,
                 "schema": {
                     "type": "string",

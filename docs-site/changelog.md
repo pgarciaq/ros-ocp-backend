@@ -338,7 +338,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   counter, `total_containers` and `cluster_count` included: the card divides
   idle and abandoned counts by `total_containers`, so a filtered numerator over
   an unfiltered denominator would understate idleness by exactly the dead
-  cluster's weight.
+  cluster's weight. `openapi.json` now documents the tri-state
+  (`false` / `only` / `true`) as `filter[stale]` on every list that applies it —
+  the container list, `/container`, `/hcp`, `/namespaces` and `/namespace` — where
+  three operations named the flat alias instead and the fourth described `true`
+  as "returns only stale", the opposite of what the code does.
 
 - **api-mode wildcard tag filtering works again ([#872](https://github.com/pgarciaq/ros-ocp-backend/issues/872)):**
   `filter[tag:key]=*` on the container list and the namespace list answered

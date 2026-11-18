@@ -82,7 +82,7 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 | GPU presence | `has_gpu` | `filter[has_gpu]` | GPU presence (`true` / `false`) |
 | GPU model | `gpu_model` | `filter[gpu_model]` | GPU model substring match |
 | GPU classification | `gpu_classification` | `filter[gpu_classification]` | GPU classification exact match |
-| Staleness | `stale` | `filter[stale]` | Container and namespace lists: exclude/include/only stale rows (default `false`; threshold 48h via `ROS_STALENESS_THRESHOLD_HOURS`) |
+| Staleness | `stale` | `filter[stale]` | Container and namespace lists: `false` (default) excludes stale rows, `only` returns only stale rows, `true` disables the filter. A row becomes stale when its cluster stops reporting (14 days by default, `ROS_CLUSTER_LIVENESS_HOURS`) or when a cycle stops refreshing it (`ROS_STALENESS_THRESHOLD_HOURS`, default 48h) |
 | Category | `category` | `filter[category]` | Unified node classification filter ([details](#node-utilization-filters)). Values: `idle`, `overcommitted`, `stranded_cpu`, `stranded_memory`, `underutilized`, `optimized` |
 | Recommendation type | `recommendation_type` | `filter[recommendation_type]` | Recommendation category (PVC/snapshot endpoints) |
 | Tag | `tag=key:value` (repeatable) | `filter[tag:<key>]` | Tag key filter (when tags feature enabled) |
