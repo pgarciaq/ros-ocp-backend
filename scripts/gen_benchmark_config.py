@@ -387,6 +387,16 @@ class YAMLBuilder:
         name = pod["name"]
         pod_type = pod["type"]
 
+        # cpu_usage.full_period is the intended steady-state draw, and the two
+        # CSVs nise emits read it differently (#891): ocp_ros_usage samples each
+        # 15-minute interval from full_period +/-5%, while ocp_pod_usage applies
+        # pod_seconds (uptime), so the ROS file carries roughly twice the CPU
+        # usage of the pod file for the same pods (measured on the previous
+        # fixture: median 1.94x, range 0.95-92x). That is nise's modelling, not a
+        # ROS pipeline defect. It was visible as 147%/122% node utilisation only
+        # because the request bands above had pushed every node past its cores;
+        # the per-node budget check below keeps the CPU axis inside allocatable
+        # so the same doubling cannot hide an oversubscribed fixture.
         if pod_type == "idle":
             # Keep the high-request / near-zero-usage shape on purpose: that is
             # what makes the row an idle recommendation. Only the unit was wrong,
