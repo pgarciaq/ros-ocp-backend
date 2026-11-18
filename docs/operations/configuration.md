@@ -177,7 +177,7 @@ See **Performance Tuning** above for `ROS_DB_*` pool variables.
 |----------|-----------------|---------|
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` | Broker list (comma-separated). |
 | `KAFKA_CONSUMER_GROUP_ID` | `ros-ocp` | Consumer group for processor and poller. |
-| `KAFKA_AUTO_COMMIT` | `false` | Auto-commit offsets. `false` = manual commit after successful processing (recommended). |
+| `KAFKA_AUTO_COMMIT` | `false` | Auto-commit offsets. **`false` is required for the retry/DLQ ladder to run**: with `true`, librdkafka commits an offset ~5 s after the message is polled — before the pipeline finishes — so transient failures are neither retried nor dead-lettered and no `report_file_status` row is written (#893). Only override it if you accept that loss window. |
 | `UPLOAD_TOPIC` | `hccm.ros.events` | Topic for cluster upload events (processor). |
 | `RECOMMENDATION_TOPIC` | `rosocp.kruize.recommendations` | Topic for Kruize recommendation requests (legacy poller). |
 | `SOURCES_EVENT_TOPIC` | `platform.sources.event-stream` | Platform Sources lifecycle events. |

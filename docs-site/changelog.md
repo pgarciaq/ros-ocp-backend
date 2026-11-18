@@ -315,6 +315,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **The Kafka retry/DLQ ladder is reachable on the processor, and a dead-lettered file leaves a terminal status row ([#893](https://github.com/pgarciaq/ros-ocp-backend/issues/893)):**
+  The product default was already `KAFKA_AUTO_COMMIT=false`, but both deployment
+  surfaces overrode the processor to `true`. In that mode nothing sets
+  `enable.auto.offset.store`, so librdkafka stored an offset when the message was
+  polled and committed it ~5 s later — before the pipeline finished, since the
+  dispatcher reads up to 16 messages per partition ahead of the handler. A DB
+  hiccup therefore discarded accepted uploads with no retry, no DLQ entry and no
+  `report_file_status` row: 15 of 36 files vanished that way in a lab re-ingest,
+  and the loss was found only by diffing fixtures against the status table. Two
+  independent gaps are closed on the code side. First, the route that
+  *succeeds* — the message reaching `hccm.ros.events.dlq` — never marked its
+  files; only the drop paths did, so a dead-lettered file kept its `pending` row
+  while nothing consumed the topic. It now records `failed` with
+  `error_message = "dlq: <error>"` (drop paths: `"dlq-drop: <error>"`), and
+  registers the manifest's file expectations first because `MarkReportFileFailed`
+  is an UPDATE and a message that dies before the file loop (the `CreateRHAccount`
+  failure in a DB outage) had no row at all. Second, the offset-settlement gate
+  had no test in either mode; it is now a named seam pinned by tests for manual
+  commit (commit on success, requeue-then-commit on a transient error), the
+  auto-commit loss window, and the nil-committer path, plus an end-to-end
+  handler test that drives a transient fetch failure through the ladder. The
+  retry/DLQ producer is also created lazily, so a successful message no longer
+  spawns one. Flipping the deployment value requires a recreate: during a rolling
+  update, old auto-commit pods ack offsets the new pods are still processing.
+  Delayed redrive (the ladder spans seconds, not an outage) stays with
+  [#806](https://github.com/pgarciaq/ros-ocp-backend/issues/806).
 - **Node usage and requests are no longer four times their true value ([#889](https://github.com/pgarciaq/ros-ocp-backend/issues/889)):**
   The hourly node digest added every container row that fell inside the hour
   (`intervalCPUUse[h] += r.CPUUsageMC`), but a 15-minute producer contributes

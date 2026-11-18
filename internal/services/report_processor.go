@@ -12,6 +12,7 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/go-playground/validator/v10"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/sirupsen/logrus"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/clustercache"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
@@ -149,7 +150,18 @@ func persistTopologyFacts(ctx context.Context, pool *pgxpool.Pool, kafkaMsg type
 	}
 }
 
+// ProcessReport handles one ROS upload event. It adapts kafka.MessageHandler's
+// concrete consumer to the committer interface the settlement path needs; a nil
+// consumer stays nil so no interface wrapping a nil pointer reaches CommitMessage.
 func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Consumer) {
+	var committer kafkaCommitter
+	if consumer != nil {
+		committer = consumer
+	}
+	processReport(ctx, msg, committer, kafkaProducerForRetry())
+}
+
+func processReport(ctx context.Context, msg *kafka.Message, committer kafkaCommitter, producer kafkaMessageProducer) {
 	log := logging.GetLogger()
 	validate := validator.New()
 
@@ -165,8 +177,8 @@ func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Cons
 
 	commitOnPermanentFailure := func(reason string) {
 		logPoisonMessage(log, msg, reason, nil)
-		if consumer != nil {
-			if err := kafka_internal.CommitMessage(consumer, msg); err != nil {
+		if committer != nil {
+			if err := kafka_internal.CommitMessage(committer, msg); err != nil {
 				log.Errorf("unable to commit poison message: %v", err)
 			}
 		}
@@ -267,19 +279,48 @@ func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Cons
 	}
 
 	appCfg := config.GetConfig()
-	if consumer != nil && !appCfg.KafkaAutoCommit {
-		if kafkaTransientErr != nil {
-			handleKafkaTransientError(consumer, kafkaProducerForRetry(), msg, kafkaTransientErr)
-		} else if err := kafka_internal.CommitMessage(consumer, msg); err != nil {
-			log.Errorf("kafka: unable to commit offset after successful processing (%s): %v", msg.TopicPartition, err)
-		} else {
-			metrics.KafkaMessagesProcessed.Inc()
-			pipelineSucceeded = true
-		}
-	} else if appCfg.KafkaAutoCommit && kafkaTransientErr == nil && !reportProcessingFailed {
-		metrics.KafkaMessagesProcessed.Inc()
+	if settleKafkaMessage(log, appCfg, msg, committer, producer, kafkaTransientErr, reportProcessingFailed) {
 		pipelineSucceeded = true
 	}
+}
+
+// settleKafkaMessage is the handler tail: it decides how the consumed offset is
+// settled once the pipeline has run.
+//
+// Manual commit (KAFKA_AUTO_COMMIT=false, the product default) owns the outcome:
+// transient failures are handed to the retry/DLQ ladder and only completed work
+// is committed. Auto-commit leaves the outcome to librdkafka, which stores an
+// offset when the message is polled and commits it ~5s later regardless of
+// processing (#893) — so that mode can neither retry nor dead-letter, and the
+// pipeline's own error is the only record.
+//
+// Returns whether the message counts as successfully processed.
+func settleKafkaMessage(
+	log *logrus.Entry,
+	cfg *config.Config,
+	msg *kafka.Message,
+	committer kafkaCommitter,
+	producer kafkaMessageProducer,
+	kafkaTransientErr error,
+	reportProcessingFailed bool,
+) bool {
+	if committer != nil && !cfg.KafkaAutoCommit {
+		if kafkaTransientErr != nil {
+			handleKafkaTransientError(committer, producer, msg, kafkaTransientErr)
+			return false
+		}
+		if err := kafka_internal.CommitMessage(committer, msg); err != nil {
+			log.Errorf("kafka: unable to commit offset after successful processing (%s): %v", msg.TopicPartition, err)
+			return false
+		}
+		metrics.KafkaMessagesProcessed.Inc()
+		return true
+	}
+	if cfg.KafkaAutoCommit && kafkaTransientErr == nil && !reportProcessingFailed {
+		metrics.KafkaMessagesProcessed.Inc()
+		return true
+	}
+	return false
 }
 
 // processContainerCSVNative runs ingest and recommendations (used by unit tests).

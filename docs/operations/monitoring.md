@@ -91,7 +91,8 @@ All application metrics use the `rosocp_` prefix except business-hours reship me
 
 | Metric | Type | Labels | What it measures |
 |--------|------|--------|------------------|
-| `rosocp_kafka_dlq_messages_total` | Counter | — | Messages routed to Dead Letter Queue after exhausting retry budget |
+| `rosocp_kafka_dlq_messages_total` | Counter | — | Messages routed to Dead Letter Queue after exhausting retry budget. The files they carry are marked terminal `failed` (`error_message` prefix `dlq:`) and counted in `ros_ingestion_file_failures_total{error_class="dlq"}` |
+| `rosocp_kafka_dlq_failed_total` | Counter | — | Reports dropped with an alert: DLQ attempts exhausted, or a retry/DLQ produce failed while the commit path still worked (#803). Files are marked `failed` with the `dlq-drop:` prefix and counted under the same `error_class="dlq"` |
 | `rosocp_ingestion_errors_total` | Counter | `stage` | Native pipeline failures. `stage`: `csv_parse`, `digest`, `recommend`, `write` |
 | `rosocp_invalid_csv_total` | Counter | — | Malformed container ROS CSV |
 | `rosocp_invalid_namespace_csv_total` | Counter | — | Malformed namespace ROS CSV |

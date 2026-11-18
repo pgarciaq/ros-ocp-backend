@@ -134,7 +134,7 @@ Pool tuning variables are listed under [Performance Tuning](#performance-tuning)
 |----------|---------|-------------|
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` | Broker addresses (comma-separated). |
 | `KAFKA_CONSUMER_GROUP_ID` | `ros-ocp` | Consumer group ID. |
-| `KAFKA_AUTO_COMMIT` | `false` | Auto-commit offsets (`false` recommended). |
+| `KAFKA_AUTO_COMMIT` | `false` | Auto-commit offsets. Must stay `false` on the processor: with `true` the offset is committed about 5 seconds after the message is read, before processing finishes, so transient failures are never retried or dead-lettered. |
 | `UPLOAD_TOPIC` | `hccm.ros.events` | Upload event topic (processor). |
 | `RECOMMENDATION_TOPIC` | `rosocp.kruize.recommendations` | Kruize request topic (legacy poller). |
 | `SOURCES_EVENT_TOPIC` | `platform.sources.event-stream` | Sources lifecycle events. |

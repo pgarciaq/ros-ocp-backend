@@ -41,11 +41,13 @@ func (f *fakeKafkaProducer) Produce(msg *kafka.Message, deliveryChan chan kafka.
 
 type fakeKafkaCommitter struct {
 	committed bool
+	commits   int
 	err       error
 }
 
 func (f *fakeKafkaCommitter) CommitMessage(m *kafka.Message) ([]kafka.TopicPartition, error) {
 	f.committed = true
+	f.commits++
 	return nil, f.err
 }
 

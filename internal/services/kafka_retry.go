@@ -203,10 +203,27 @@ func produceDLQRedeliveryImpl(producer kafkaMessageProducer, msg *kafka.Message,
 	return produceToTopicImpl(producer, retryMsg, *topic, nil)
 }
 
-// markDLQFilesFailed moves a dropped message's files out of non-terminal
-// report_file_status states and records the ingestion failure metric.
+// Dispositions recorded in report_file_status.error_message by
+// markDLQFilesFailed. They answer the operator's first question after an alert:
+// can this file be replayed from the DLQ topic, or does it need a reship?
+const (
+	// dlqDispositionRouted — the payload reached the DLQ topic; replay from there.
+	dlqDispositionRouted = "dlq"
+	// dlqDispositionDropped — the payload never reached the DLQ (attempts
+	// exhausted, or every produce failed); replay requires a reship/re-upload.
+	dlqDispositionDropped = "dlq-drop"
+)
+
+// markDLQFilesFailed moves a dropped or dead-lettered message's files to a
+// terminal report_file_status row and records the ingestion failure metric.
+//
+// Expectations are registered first: MarkReportFileFailed is UPDATE-only, and a
+// message that dies before ensureManifestExpectations — the October shape, where
+// CreateRHAccount fails during a DB outage (#893) — has no row to update. Without
+// this, the terminal path would leave no trace of the file at all.
+//
 // Best-effort: unparsable payloads and missing DB pools are logged and skipped.
-func markDLQFilesFailed(log *logrus.Entry, msg *kafka.Message, reason string) {
+func markDLQFilesFailed(log *logrus.Entry, msg *kafka.Message, disposition, reason string) {
 	if msg == nil || len(msg.Value) == 0 {
 		return
 	}
@@ -222,10 +239,20 @@ func markDLQFilesFailed(log *logrus.Entry, msg *kafka.Message, reason string) {
 	}
 	ctx := context.Background()
 	manifestID := manifestIDFromMsg(kafkaMsg)
+	expected := make([]string, 0, len(kafkaMsg.Files))
+	for i, file := range kafkaMsg.Files {
+		expected = append(expected, filenameForFileIndex(kafkaMsg, file, i))
+	}
+	if err := model.EnsureReportFileExpectations(ctx, pool, manifestID,
+		kafkaMsg.Metadata.Cluster_uuid, kafkaMsg.Metadata.Org_id,
+		expected, reportTypeForFilename); err != nil {
+		log.Errorf("kafka: unable to register expected files before DLQ marking: %v", err)
+	}
+	errMsg := fmt.Sprintf("%s: %s", disposition, reason)
 	for i, file := range kafkaMsg.Files {
 		filename := filenameForFileIndex(kafkaMsg, file, i)
 		reportType := reportTypeForFilename(filename)
-		if err := model.MarkReportFileFailed(ctx, pool, manifestID, filename, reason); err != nil {
+		if err := model.MarkReportFileFailed(ctx, pool, manifestID, filename, errMsg); err != nil {
 			log.Errorf("kafka: failed to record DLQ file failure for %s: %v", filename, err)
 			continue
 		}
@@ -250,7 +277,7 @@ func handleKafkaTransientError(consumer kafkaCommitter, producer kafkaMessagePro
 			log.Errorf("kafka: message exhausted %d DLQ attempts (partition=%s), dropping with alert: %v",
 				defaultMaxDLQAttempts, msg.TopicPartition, kafkaTransientErr)
 			metrics.KafkaDLQFailedTotal.Inc()
-			markDLQFilesFailed(log, msg, kafkaTransientErr.Error())
+			markDLQFilesFailed(log, msg, dlqDispositionDropped, kafkaTransientErr.Error())
 			if consumer != nil {
 				if err := kafka_internal.CommitMessage(consumer, msg); err != nil {
 					log.Errorf("kafka: unable to commit after DLQ exhaustion: %v", err)
@@ -278,7 +305,7 @@ func handleKafkaTransientError(consumer kafkaCommitter, producer kafkaMessagePro
 				// filed as #870.
 				log.Errorf("kafka: failed to produce DLQ redelivery: %v (committing with alert — an uncommitted return would be silently acked by the next commit, #803)", rerr)
 				metrics.KafkaDLQFailedTotal.Inc()
-				markDLQFilesFailed(log, msg, kafkaTransientErr.Error())
+				markDLQFilesFailed(log, msg, dlqDispositionDropped, kafkaTransientErr.Error())
 				if consumer != nil {
 					if err := kafka_internal.CommitMessage(consumer, msg); err != nil {
 						log.Errorf("kafka: unable to commit after DLQ redelivery failure: %v", err)
@@ -294,6 +321,10 @@ func handleKafkaTransientError(consumer kafkaCommitter, producer kafkaMessagePro
 			return
 		}
 		metrics.KafkaDLQMessagesTotal.Inc()
+		// #893: a DLQ'd message is a terminal disposition, not a pending one.
+		// Mark before the commit so a commit failure cannot hide the file; the
+		// payload is on the DLQ topic for replay either way.
+		markDLQFilesFailed(log, msg, dlqDispositionRouted, kafkaTransientErr.Error())
 		if consumer != nil {
 			if err := kafka_internal.CommitMessage(consumer, msg); err != nil {
 				log.Errorf("kafka: unable to commit after DLQ: %v", err)
@@ -313,7 +344,7 @@ func handleKafkaTransientError(consumer kafkaCommitter, producer kafkaMessagePro
 		// #870.
 		log.Errorf("kafka: failed to produce retry: %v (committing with alert — an uncommitted return would be silently acked by the next commit, #803)", retryErr)
 		metrics.KafkaDLQFailedTotal.Inc()
-		markDLQFilesFailed(log, msg, kafkaTransientErr.Error())
+		markDLQFilesFailed(log, msg, dlqDispositionDropped, kafkaTransientErr.Error())
 		if consumer != nil {
 			if err := kafka_internal.CommitMessage(consumer, msg); err != nil {
 				log.Errorf("kafka: unable to commit after retry produce failure: %v", err)
@@ -328,6 +359,16 @@ func handleKafkaTransientError(consumer kafkaCommitter, producer kafkaMessagePro
 	}
 }
 
+// lazyKafkaProducer resolves the shared producer on first Produce. The
+// settlement path only needs it for a retry or DLQ produce, and constructing a
+// confluent producer eagerly spawns background goroutines a successful message
+// never uses (the package's goleak check catches the leak).
+type lazyKafkaProducer struct{}
+
+func (lazyKafkaProducer) Produce(msg *kafka.Message, deliveryChan chan kafka.Event) error {
+	return kafka_internal.GetProducer().Produce(msg, deliveryChan)
+}
+
 func kafkaProducerForRetry() kafkaMessageProducer {
-	return kafka_internal.GetProducer()
+	return lazyKafkaProducer{}
 }

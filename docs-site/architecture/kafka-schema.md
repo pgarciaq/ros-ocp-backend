@@ -1,6 +1,6 @@
 # Kafka Message Schema
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-11-18
 
 This document describes the Kafka message formats used by ROS-OCP-Backend.
 
@@ -20,10 +20,25 @@ Messages that exhaust the transient retry budget (`ROS_KAFKA_MAX_TRANSIENT_RETRI
 | Property | Value |
 |----------|-------|
 | **Purpose** | Preserve failed messages for forensic analysis and manual replay |
-| **Partitions** | 3 |
+| **Partitions** | 12 (`kafka.topics.hccmRosEventsDlq.partitions` in the on-prem chart) |
 | **Replication factor** | Matches cluster config (same as other ROS topics) |
 | **Retention** | 30 days (`retention.ms: 2592000000`) — longer than the source topic for forensics |
 | **Segment** | 1 day (`segment.ms: 86400000`) |
+
+The topic has no consumer group: nothing drains it automatically. Routing a
+message there is a terminal disposition for the files it carries, not a pending
+one. Each file is recorded `failed` in `report_file_status` — `dlq: <error>`
+when the payload reached this topic (replayable), `dlq-drop: <error>` when it did
+not (a reship is required) — so the affected files are queryable without
+consuming the topic.
+
+The ladder only runs with `KAFKA_AUTO_COMMIT=false`, the product default. With
+auto-commit enabled, the offset is committed about 5 seconds after the message is
+read and no retry, DLQ route, or status row is produced.
+
+A replayed message re-downloads its CSVs from the object store; the message
+carries URLs, not payloads. Replay therefore depends on the referenced objects
+outliving the DLQ retention window.
 
 ### Forensic headers
 

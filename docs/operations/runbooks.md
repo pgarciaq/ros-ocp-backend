@@ -228,12 +228,16 @@ All metrics use the `rosocp_` prefix.
 
 1. List incomplete or failed manifests:
    ```sql
-   SELECT manifest_id, filename, status, error_class, error_message, updated_at
+   SELECT manifest_id, filename, report_type, status, error_message, updated_at
    FROM report_file_status
    WHERE status IN ('failed', 'processing', 'pending')
    ORDER BY updated_at DESC
    LIMIT 50;
    ```
+   `error_message` carries the detail for `failed` rows (and the `dlq`/`dlq-drop`
+   disposition for dead-lettered ones — see the DLQ runbook). The failure
+   *class* is a metric label, not a column:
+   `ros_ingestion_file_failures_total{error_class=...}`.
 
 2. Check manifest completion for a specific manifest:
    ```sql
@@ -258,7 +262,7 @@ All metrics use the `rosocp_` prefix.
 
 ### Resolution
 
-1. **Investigate failed files** — check `error_class` and `error_message` in `report_file_status` (S3 403/404, corrupt CSV, parse errors).
+1. **Investigate failed files** — check `error_message` in `report_file_status` (S3 403/404, corrupt CSV, parse errors) and the `error_class` label on `ros_ingestion_file_failures_total` (fetch, parse, ingest, transient, dlq, other).
 
 2. **Fix root cause** (object storage access, operator CSV format, missing file in payload).
 
@@ -363,7 +367,22 @@ See [GPU Catalog Maintenance](gpu-catalog.md) for the update procedure and
      --property print.headers=true
    ```
 
-4. Key headers on DLQ messages:
+4. Find the files the message carried — a dead-lettered message leaves a
+   terminal row per file, so the blast radius is queryable without parsing the
+   payload:
+   ```sql
+   SELECT manifest_id, filename, report_type, status, error_message, completed_at
+   FROM report_file_status
+   WHERE error_message LIKE 'dlq%'
+   ORDER BY completed_at DESC
+   LIMIT 50;
+   ```
+   `error_message` is prefixed with the disposition:
+   - `dlq: <error>` — the payload reached the DLQ topic and can be replayed.
+   - `dlq-drop: <error>` — it did **not** reach the topic (attempts exhausted,
+     or every produce failed). Replay needs a reship/re-upload, not a DLQ read.
+
+5. Key headers on DLQ messages:
    - `X-Original-Topic` — source topic
    - `X-Original-Partition` — source partition
    - `X-Failure-Reason` — error that caused permanent failure
@@ -406,7 +425,33 @@ See [GPU Catalog Maintenance](gpu-catalog.md) for the update procedure and
 
 - DLQ messages are preserved with 30-day retention (configured on the KafkaTopic CR).
 - The retry mechanism uses Kafka message headers (`X-Retry-Count`), which survive pod restarts and consumer rebalances.
-- If the DLQ produce itself fails, the offset is NOT committed — natural Kafka redeliver continues (infinite retry as fallback).
+- **This ladder only runs with `KAFKA_AUTO_COMMIT=false`** (the product default).
+  With auto-commit on, librdkafka commits the offset ~5 s after the message is
+  polled, before the pipeline finishes: no retry, no DLQ, no `report_file_status`
+  row. Both deployment surfaces must keep it `false` for `ros-processor`
+  (`cost-onprem` chart `ros.processor.kafkaAutoCommit`, `koku-service-operator`
+  `internal/resources/ros.go`).
+- **Flipping it requires a recreate, not a rolling update.** During a rolling
+  update old pods (auto-commit) and new pods (manual) share the
+  `ros-processor` consumer group, and the old ones ack offsets the new ones are
+  still processing — the loss window reopens for the length of the rollout.
+- **A dead-lettered message is terminal for its files.** The successful route
+  records `failed` with `error_message = "dlq: <error>"`; the drop paths record
+  `"dlq-drop: <error>"`. Both increment
+  `ros_ingestion_file_failures_total{error_class="dlq"}`, and the two are
+  distinguished by `rosocp_kafka_dlq_messages_total` (routed) versus
+  `rosocp_kafka_dlq_failed_total` (dropped/alert). No status row stays
+  `pending` because of a DLQ disposition.
+- **If a retry or DLQ produce itself fails, the offset is committed with the
+  alert** (`rosocp_kafka_dlq_failed_total`, #803): an uncommitted return would
+  be silently acked by the next message's cumulative commit. The files are then
+  marked `dlq-drop`. The zero-loss alternative (a contiguous commit watermark)
+  is tracked as #870, not solved here.
+- **Replay needs the payload, and the message only carries URLs.** A replayed
+  message re-downloads the CSVs from the object store; if the object has
+  expired, replay fails and the file needs a reship. Confirm the quarantine
+  bucket's retention covers the DLQ's 30 days, or copy the payload out before
+  the object expires.
 
 ---
 
