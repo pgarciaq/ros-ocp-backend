@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Alias-form cluster filters resolve org-scoped ([#797](https://github.com/pgarciaq/ros-ocp-backend/issues/797)):**
+  `parseClusterParams` resolved alias-form `filter[cluster]` values
+  through an org-unscoped `clusters` subquery — a residual of the #525
+  joins sweep (which covered joins but not subqueries). No rows leaked
+  (the outer queries are org-scoped), but when the same `cluster_uuid`
+  is registered under two tenants, filtering by the *other* tenant's
+  alias resolved the shared UUID and returned this org's row for it —
+  revealing the alias's existence across tenants. The exclude form had
+  the same channel in boolean form: `filter[exclude:cluster]=<other
+  tenant's alias>` *removed* this org's rows for the shared UUID; it no
+  longer does (the exclusion now ignores the other tenant's
+  registration) — the correct direction, recorded so a future diff
+  does not "restore" it. The subqueries now carry the caller's org
+  predicate (mirroring #790's `clusterFilterPredicate`): within-org
+  alias resolution is unchanged (the predicate is a no-op for
+  own-tenant aliases), UUID-form filters are untouched, and an
+  identity-less context fails closed. Affected surfaces: the compat
+  container list (`/recommendations/openshift` in plugin mode,
+  `/container` in both modes) and the HCP list (which reuses the same
+  mapper); in native mode `/recommendations/openshift` serves the
+  fallback path (direct branch, not vulnerable), and the namespace
+  list, history, and quality surfaces filter the alias column directly
+  through org-scoped joins (verified by the regression's controls).
+
 - **Tag-warning catalog scopes to the caller's project set ([#834](https://github.com/pgarciaq/ros-ocp-backend/issues/834)):**
   the data-derived half of the tag-warning key catalog (the
   `resolved_tags` scan behind the "not in the known tag catalog" warning)
