@@ -6,11 +6,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
 func TestParseKokuTagFilterParams_EmptyValueRejected(t *testing.T) {
@@ -166,4 +168,79 @@ func TestTagFilterExistsClauseForCommaSeparatedNamespaces_DBSource(t *testing.T)
 	assert.Equal(t, strings.Count(clause, "("), strings.Count(clause, ")"))
 	require.GreaterOrEqual(t, len(args), 3)
 	assert.Greater(t, next, 4)
+}
+
+// TestAPITagFilters_WildcardRendersExecutableSQL pins the api-mode wildcard
+// predicate's SQL shape (#872). gorm consumes every "?" in a predicate string
+// as a bind placeholder, so the jsonb key-existence operator cannot be spelled
+// directly: writing "column ? ?" makes gorm bind the operator's left operand
+// and renders "column $2 ?" — a statement Postgres rejects, which the list
+// endpoints surfaced as 503.
+//
+// The postgres dialector is deliberate: sqlite renders "?" placeholders, which
+// would hide exactly the collision this test exists to catch.
+func TestAPITagFilters_WildcardRendersExecutableSQL(t *testing.T) {
+	config.ResetTagsForTest()
+	t.Setenv("ROS_TAGS_ENABLED", "true")
+	t.Setenv("ROS_TAGS_SOURCE", "api")
+	require.True(t, config.TagsFeatureEnabled())
+	t.Cleanup(config.ResetTagsForTest)
+
+	// DryRun with no reachable server: the statement is built, never sent.
+	gdb, err := gorm.Open(
+		postgres.New(postgres.Config{DSN: "host=127.0.0.1 user=none dbname=none"}),
+		&gorm.Config{DryRun: true, DisableAutomaticPing: true},
+	)
+	require.NoError(t, err)
+
+	filters := []model.TagFilter{{Key: "environment", Values: []string{"*"}}}
+
+	for _, tc := range []struct {
+		name   string
+		table  string
+		column string
+		apply  func(*gorm.DB) *gorm.DB
+	}{
+		{
+			name:   "container keys",
+			table:  "org_container_keys ock",
+			column: "ock.resolved_tags",
+			apply: func(q *gorm.DB) *gorm.DB {
+				return model.ApplyTagFiltersToKeys(q, testutil.TestOrgID, filters)
+			},
+		},
+		{
+			name:   "namespace keys",
+			table:  "org_namespace_keys onk",
+			column: "onk.resolved_tags",
+			apply: func(q *gorm.DB) *gorm.DB {
+				return model.ApplyTagFiltersToNSKeys(q, testutil.TestOrgID, filters)
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out []map[string]interface{}
+			tx := tc.apply(
+				gdb.Table(tc.table).Select(tc.column).Where("org_id = ?", testutil.TestOrgID),
+			).Find(&out)
+			require.NoError(t, tx.Error)
+			sql := tx.Statement.SQL.String()
+
+			// Pre-fix this renders "ock.resolved_tags $2 ?": the operator position
+			// is consumed as a bind, so Postgres never sees a valid predicate —
+			// the wildcard cannot execute at all.
+			require.Contains(t, sql, "jsonb_exists("+tc.column+", $",
+				"wildcard must use the function form; rendered SQL: %s", sql)
+
+			// A surviving "?" is the operator gorm failed to place, i.e. the
+			// malformed statement itself.
+			require.NotContains(t, sql, "?",
+				"rendered SQL must carry no stray '?'; got: %s", sql)
+
+			// The key travels as a bind, never as SQL text.
+			require.NotEmpty(t, tx.Statement.Vars)
+			assert.Equal(t, "environment", tx.Statement.Vars[len(tx.Statement.Vars)-1],
+				"the tag key must stay a bind parameter; vars: %v", tx.Statement.Vars)
+		})
+	}
 }

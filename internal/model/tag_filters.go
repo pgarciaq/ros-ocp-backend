@@ -308,6 +308,26 @@ func tagValueContainmentGorm(column string, f TagFilter) (string, []interface{})
 	return "(" + strings.Join(clauses, " OR ") + ")", args
 }
 
+// tagKeyExistsGorm builds the api-mode wildcard predicate: "this tag key is
+// present on the row, whatever its value". It MUST be the function form.
+// gorm treats every "?" in a predicate string as a bind placeholder, so the
+// jsonb key-existence operator cannot be spelled here: "column ? ?" makes
+// gorm bind the operator's left operand and leave the second "?" literal,
+// rendering "column $2 ?" — a statement that fails at execution time (#872).
+//
+// jsonb_exists(col, ?) is the function form of that operator: same meaning,
+// one bind, and no character gorm can mistake for a placeholder. It has no
+// GIN path of its own (the operator does), which costs nothing here — every
+// caller is already org-scoped by the primary-key prefix, and the wildcard
+// arm is non-selective by definition (#872 measured the org index winning
+// either way).
+//
+// column is the qualified jsonb column ("ock.resolved_tags" /
+// "onk.resolved_tags").
+func tagKeyExistsGorm(column string) string {
+	return "jsonb_exists(" + column + ", ?)"
+}
+
 // applyAPITagFiltersToKeys applies api-mode (resolved_tags) filters.
 // #814: values are stored as sorted arrays; see tagValueContainmentGorm
 // for the both-shapes match.
@@ -317,7 +337,7 @@ func applyAPITagFiltersToKeys(query *gorm.DB, filters []TagFilter) *gorm.DB {
 			continue
 		}
 		if len(f.Values) == 1 && f.Values[0] == "*" {
-			query = query.Where("ock.resolved_tags ? ?", f.Key)
+			query = query.Where(tagKeyExistsGorm("ock.resolved_tags"), f.Key)
 			continue
 		}
 		pred, args := tagValueContainmentGorm("ock.resolved_tags", f)

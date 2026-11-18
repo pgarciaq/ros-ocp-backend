@@ -405,6 +405,54 @@ func TestTagFilters_ContainerList_FlatSyntax(t *testing.T) {
 	assert.Equal(t, 1, countProjects(body))
 }
 
+// TestTagFilters_ContainerList_Wildcard pins filter[tag:key]=* on the api
+// (resolved_tags) source (#872). Pre-fix the gorm predicate rendered as
+// "ock.resolved_tags $2 ?", so every wildcard request answered 503 with
+// "unable to fetch records from database".
+func TestTagFilters_ContainerList_Wildcard(t *testing.T) {
+	withTagsEnabled(t)
+
+	app, identity, ctx, cleanup := setupTagsIntegrationApp(t)
+	defer cleanup()
+
+	// The helper seeds both keys in the pre-#814 scalar shape; give one of them
+	// the post-#814 array shape so a wildcard has to match both storage worlds.
+	_, err := database.Pool.Exec(ctx, `
+		UPDATE org_container_keys
+		SET resolved_tags = '{"environment":["staging"]}'::jsonb
+		WHERE org_id = $1 AND namespace = 'other-ns'`, testutil.TestOrgID)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name string
+		key  string
+		want int
+	}{
+		// "environment" is on both rows, one array-shaped and one scalar: a
+		// wildcard must return both.
+		{name: "key on every row", key: "environment", want: 2},
+		// "team" is on one row only: rules out a fix that over-matches.
+		{name: "key on one row", key: "team", want: 1},
+		// An absent key must match nothing: rules out degrading the wildcard to
+		// "any row" (the LIKE '%%' failure mode koku's wildcard has, #871).
+		{name: "key on no row", key: "owner", want: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet,
+				"/api/cost-management/v1/recommendations/openshift?limit=50&filter%5Btag%3A"+tc.key+"%5D=*", nil)
+			req.Header.Set("X-Rh-Identity", identity)
+			rec := httptest.NewRecorder()
+			app.ServeHTTP(rec, req)
+
+			// #872's symptom: the malformed statement surfaced as 503.
+			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+			var body map[string]interface{}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+			assert.Equal(t, tc.want, countProjects(body))
+		})
+	}
+}
+
 func TestTagFilters_IgnoredWhenDisabled(t *testing.T) {
 	withTagsDisabled(t)
 
@@ -554,6 +602,74 @@ func TestTagFilters_NamespaceList(t *testing.T) {
 	require.Len(t, data, 1)
 	item := data[0].(map[string]interface{})
 	assert.Equal(t, testutil.TestNamespace, item["project"])
+}
+
+// TestTagFilters_NamespaceList_Wildcard is the org_namespace_keys twin of the
+// container-list wildcard test (#872): the two gorm predicates are separate
+// code paths, so each needs its own 503-to-200 pin.
+func TestTagFilters_NamespaceList_Wildcard(t *testing.T) {
+	withTagsEnabled(t)
+
+	app, identity, ctx, cleanup := setupTagsIntegrationApp(t)
+	defer cleanup()
+
+	monEnd := time.Now().UTC()
+	monStart := monEnd.Add(-7 * 24 * time.Hour)
+	_, err := database.Pool.Exec(ctx, `
+		INSERT INTO namespace_recommendation_sets (
+			org_id, cluster_uuid, namespace_name, term, engine, stale,
+			rec_cpu_request_millicores, rec_cpu_limit_millicores,
+			rec_memory_request_kib, rec_memory_limit_kib,
+			current_cpu_request_millicores, current_cpu_limit_millicores,
+			current_memory_request_kib, current_memory_limit_kib,
+			variation_cpu_request_pct, variation_cpu_limit_pct,
+			variation_memory_request_pct, variation_memory_limit_pct,
+			confidence_level, notification_codes, monitoring_start_time, monitoring_end_time, updated_at
+		) VALUES
+			($1, $2, $3, 'medium', 'cost', false,
+			 4000, 8000, 8388608, 16777216, 5000, 10000, 10485760, 20971520,
+			 -10, -10, -10, -10, 0.9, '{}', $5, $4, NOW()),
+			($1, $2, 'other-ns', 'medium', 'cost', false,
+			 4000, 8000, 8388608, 16777216, 5000, 10000, 10485760, 20971520,
+			 -10, -10, -10, -10, 0.9, '{}', $5, $4, NOW())
+		ON CONFLICT DO NOTHING`,
+		testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace, monEnd, monStart)
+	require.NoError(t, err)
+
+	// One scalar (pre-#814) row and one array (post-#814) row: the wildcard has
+	// to match both storage worlds.
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO org_namespace_keys (org_id, cluster_uuid, namespace_name, last_reported, resolved_tags)
+		VALUES ($1, $2, $3, NOW(), '{"environment":"production","team":["platform"]}'::jsonb),
+		       ($1, $2, 'other-ns', NOW(), '{"environment":["staging"]}'::jsonb)
+		ON CONFLICT (org_id, cluster_uuid, namespace_name)
+		DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags`,
+		testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name string
+		key  string
+		want int
+	}{
+		{name: "key on every row", key: "environment", want: 2},
+		{name: "key on one row", key: "team", want: 1},
+		{name: "key on no row", key: "owner", want: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet,
+				"/api/cost-management/v1/recommendations/openshift/namespaces?limit=50&filter%5Btag%3A"+tc.key+"%5D=*", nil)
+			req.Header.Set("X-Rh-Identity", identity)
+			rec := httptest.NewRecorder()
+			app.ServeHTTP(rec, req)
+
+			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+			var body map[string]interface{}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+			data, _ := body["data"].([]interface{})
+			assert.Len(t, data, tc.want)
+		})
+	}
 }
 
 func TestTagFilters_VMList(t *testing.T) {

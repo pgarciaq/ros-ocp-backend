@@ -139,7 +139,7 @@ func applyAPITagFiltersToNSKeys(query *gorm.DB, filters []TagFilter) *gorm.DB {
 			continue
 		}
 		if len(f.Values) == 1 && f.Values[0] == "*" {
-			query = query.Where("onk.resolved_tags ? ?", f.Key)
+			query = query.Where(tagKeyExistsGorm("onk.resolved_tags"), f.Key)
 			continue
 		}
 		pred, args := tagValueContainmentGorm("onk.resolved_tags", f)
