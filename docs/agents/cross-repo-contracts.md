@@ -40,9 +40,13 @@ confirm scope rather than assuming ros-ocp-backend-only.
 
 Two-repo change (operator + backend), branch `pgarciaq-rosocp-superpowers-phase17`
 in both. Operator joins `kube_node_status_condition` (Memory/Disk/PID, status
-true) onto container identity via the CPU-requests carrier on(node), emitting
-`node_pressure_{memory,disk,pid}` container columns (1 when pressured in window,
-empty otherwise); backend parses (optional, absent stays 0), digests the worst
+true **== 1** — the filter compares the VALUE; the status='true' series always
+exists at 0 when healthy, so an existence-only `and` marks everything) onto
+container identity via the CPU-requests carrier on(node), gated by the opt-in
+namespace labels, emitting
+`node_pressure_{memory,disk,pid}` container columns (clamp_min(request, 1)
+— max(cpu_request, 1) — when pressured in window, empty otherwise; the
+backend treats > 0 as pressured); backend parses (optional, absent stays 0), digests the worst
 ordinal per node/day (`PressureOrdinal`: memory 3 > disk 2 > pid 1) into
 `daily_node_digests.pressure_state` (migration `000213`), and notifies with
 code **87** `NODE_PRESSURE` (WARNING) (migration `000214`) while excluding
