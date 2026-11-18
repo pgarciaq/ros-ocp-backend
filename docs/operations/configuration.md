@@ -289,7 +289,8 @@ Unleash (feature flags) — configured by Clowder in SaaS; local defaults:
 | `ROS_RETENTION_MONTHS` | `6` | Monthly digest partition retention. |
 | `ROS_HISTORY_RETENTION_DAYS` | `90` | Recommendation history snapshot retention (days). |
 | `ROS_STALENESS_THRESHOLD_HOURS` | `48` | Hours without cluster report before recommendations marked stale. |
-| `ROS_STALE_CLEANUP_DAYS` | `30` | Delete stale recommendations older than N days. (`ROS_STALE_ARCHIVE_DAYS` deprecated alias) |
+| `ROS_CLUSTER_LIVENESS_HOURS` | `336` | Mark a cluster's recommendations stale when its last report is older than this (14 days). Independent of `ROS_MAX_LOOKBACK_DAYS`. |
+| `ROS_STALE_CLEANUP_DAYS` | `30` | Delete recommendations N days after they were marked stale. (`ROS_STALE_ARCHIVE_DAYS` deprecated alias) |
 | `ROS_MAX_LOOKBACK_DAYS` | `90` | Max digest lookback for recommendation queries. |
 
 ---

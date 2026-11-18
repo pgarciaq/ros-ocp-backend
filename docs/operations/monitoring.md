@@ -279,9 +279,16 @@ The `/recommendations/openshift/quality` API returns `stability_pct` on a **0.0�
 
 | Metric | Type | Labels | What it measures |
 |--------|------|--------|------------------|
-| `rosocp_retention_partitions_dropped_total` | Counter | — | Monthly partitions dropped by the retention sweep |
+| `rosocp_retention_partitions_dropped_total` | Counter | — | Monthly partitions dropped by the retention sweep, plus purged stale recommendation rows |
+| `rosocp_retention_rows_marked_stale_total` | Counter | — | Recommendation rows marked stale because their cluster stopped reporting |
 
-Retention is controlled by `ROS_RETENTION_MONTHS`, `ROS_HISTORY_RETENTION_DAYS`, `ROS_STALE_CLEANUP_DAYS`, `ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS`. See [retention.md](retention.md).
+Retention is controlled by `ROS_RETENTION_MONTHS`, `ROS_HISTORY_RETENTION_DAYS`,
+`ROS_CLUSTER_LIVENESS_HOURS`, `ROS_STALE_CLEANUP_DAYS`, `ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS`.
+See [retention.md](retention.md).
+
+A non-zero, steadily climbing `rosocp_retention_rows_marked_stale_total` means clusters are
+going silent faster than they are being cleaned up. It does not fire on a fleet where every
+registered cluster keeps reporting; a cluster registered but never reported is not marked.
 
 ### Legacy / non-prefixed metrics
 
@@ -630,7 +637,12 @@ sum by (reason) (rate(ros_reship_provider_resolution_failures_total[1h]))
 
 ```promql
 increase(rosocp_retention_partitions_dropped_total[24h])
+increase(rosocp_retention_rows_marked_stale_total[24h])
 ```
+
+The second counter is the early-warning series for #874: it rises only when a cluster's last
+report crossed `ROS_CLUSTER_LIVENESS_HOURS`, and the rows it counts are still listable under
+`filter[stale]=only` until the purge deletes them `ROS_STALE_CLEANUP_DAYS` later.
 
 ---
 

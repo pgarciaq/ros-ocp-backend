@@ -95,6 +95,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI GitHub Releases ([#877](https://github.com/pgarciaq/ros-ocp-backend/issues/877)):**
+  pushing a `robne-0.<phase>.YYYYMMDD-HHMM-<sha7>` tag (`make robne-release`
+  computes and pushes it) builds the CGO-free `linux/amd64` and `linux/arm64`
+  binaries on GitHub Actions and publishes them — with `robne.yaml.sample`,
+  `rate-card.json.sample`, and `SHA256SUMS` — as a GitHub Release. The version
+  is deterministic per commit: the phase comes from the branch, the UTC stamp
+  from the commit time, and the first-7 SHA joins the release 1:1 with the
+  processor image tag built from the same commit (`publish-quay.yml` uses the
+  same `${GITHUB_SHA::7}` convention). Release tags are deliberately not
+  `v`-prefixed so the Go module proxy ignores them. The workflow re-asserts
+  the stamp and SHA against the commit before building, refuses a dirty
+  vendored `librobne` (`make vendor-librobne-check`), and smoke-tests both
+  binaries (`robne version` self-identification plus a recommend over the
+  HCP capacity fixture) before publishing. One commit = one immutable
+  release; re-releasing means deleting the tag and release first. `build.yml`
+  now also lints all workflow files with a pinned actionlint at push/PR time —
+  a workflow can never catch its own syntax error at run time — which required
+  bumping two stale action versions in the inherited `test-ros-kruize-rm.yml`
+  and quoting `$GITHUB_OUTPUT` redirects in `update-go-deps.yml`.
 - **HCP fleet-capacity advisory API ([#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392)):**
   two new GET endpoints (hcp plugin required) serving the W4 native
   published-sizing advisory for management-cluster fleets.
@@ -295,6 +314,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   truncated.
 
 ### Fixed
+
+- **Abandoned clusters are marked stale and reclaimed ([#874](https://github.com/pgarciaq/ros-ocp-backend/issues/874)):**
+  `stale` was written only from inside a cluster's own processing cycle, so a
+  cluster that stopped reporting was never marked: it kept appearing in default
+  lists, in the active/idle container counts and in savings totals
+  indefinitely, and the 30-day stale purge had nothing to delete. A
+  retention-sweep pass now marks rows in both `recommendation_sets` and
+  `namespace_recommendation_sets` when every `clusters` row for that cluster
+  reports older than `ROS_CLUSTER_LIVENESS_HOURS` (new, default 336 = 14 days;
+  independent of `ROS_MAX_LOOKBACK_DAYS`). The purge is keyed on the new
+  `staled_at` column ("when was this marked") and re-verifies liveness at
+  delete time, so marking is reversible: the next report clears it, and a
+  hidden cluster stays visible to `filter[stale]=only` for
+  `ROS_STALE_CLEANUP_DAYS` (30) before deletion. Marking no longer touches
+  `updated_at`, so a container that merely missed a cycle stops claiming
+  `last_reported: today`. The fleet summary card excludes stale rows from every
+  counter, `total_containers` and `cluster_count` included: the card divides
+  idle and abandoned counts by `total_containers`, so a filtered numerator over
+  an unfiltered denominator would understate idleness by exactly the dead
+  cluster's weight.
 
 - **api-mode wildcard tag filtering works again ([#872](https://github.com/pgarciaq/ros-ocp-backend/issues/872)):**
   `filter[tag:key]=*` on the container list and the namespace list answered

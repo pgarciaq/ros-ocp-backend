@@ -1,6 +1,6 @@
 # Visual Insights (Shipped)
 
-> **Last verified:** 2026-09-14
+> **Last verified:** 2026-11-18
 
 !!! success "Status: Complete — All Phases Shipped"
     Visual Insights adds charts, gauges, and heatmaps to recommendation detail
@@ -253,11 +253,25 @@ GET /api/cost-management/v1/recommendations/openshift/fleet-summary
 ```
 
 Organization-wide container health rollup. Counts only **medium-term,
-cost-engine** rows in `recommendation_sets`; `active_containers` and
-`idle_containers` are mutually exclusive (idle = non-stale rows with
-notification code **5**; active = non-stale rows without code 5), so
-`active + idle` ≤ non-stale count. `abandoned_containers` counts rows with
-`idle_state = 'zombie'`. No query parameters (OpenAPI `parameters: []`).
+cost-engine**, **non-stale** rows in `recommendation_sets`; `active_containers`
+and `idle_containers` are mutually exclusive (idle = rows with notification
+code **5**; active = rows without code 5), so `active + idle` equals
+`total_containers`. `abandoned_containers` counts rows with
+`idle_state = 'zombie'`, and `cluster_count` counts distinct clusters, both
+over the same non-stale population. No query parameters (OpenAPI
+`parameters: []`).
+
+Every counter describes the live fleet, because the card divides
+`idle_containers` and `abandoned_containers` by `total_containers`: an
+unfiltered denominator against filtered numerators would understate the idle
+share by exactly the stale cluster's weight. `total_containers` also drives the
+UI's has-data check, so an org whose clusters have all gone silent renders no
+card rather than a phantom one. A cluster leaves these counts once the
+retention sweep marks it stale (`ROS_CLUSTER_LIVENESS_HOURS`, default 14 days,
+see [Tag filtering](tag-filtering.md#tag-lifecycle)); the counts
+are as reversible as the flag — the next report restores them — and the
+Koku-owned cluster picker still lists the cluster until the rows are purged,
+`ROS_STALE_CLEANUP_DAYS` (default 30) after the mark. ADR-0358.
 
 **Response shape** (`FleetSummaryResponse` in `openapi.json`, handler
 `GetFleetSummary` in `internal/api/handlers_fleet.go`):

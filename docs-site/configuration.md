@@ -1,6 +1,6 @@
 # Configuration Reference
 
-> **Last verified:** 2026-11-06
+> **Last verified:** 2026-11-18
 
 Environment variables for ROS-OCP Backend deployments. Set these on the
 **API**, **processor**, and **recommendation-poller** (Kruize-legacy only —
@@ -360,7 +360,8 @@ Details: [Cost Integration — Savings recalculation](architecture/cost-integrat
 | `ROS_VM_REC_HISTORY_RETENTION_DAYS` | `90` | VM recommendation history snapshot retention (`vm_recommendation_history`). Exposed read-only as `history_retention_days` on `GET /settings/vm`. See [Configurability — VM](architecture/configurability.md#vm--admin-only-no-settings-api-field). |
 | `ROS_STALENESS_THRESHOLD_HOURS` | `48` | Hours before recommendations marked stale. |
 | `ROS_STALE_DATA_THRESHOLD_HOURS` | (alias) | Same as `ROS_STALENESS_THRESHOLD_HOURS`. |
-| `ROS_STALE_CLEANUP_DAYS` | `30` | Delete stale recommendations after N days. (`ROS_STALE_ARCHIVE_DAYS` deprecated alias) |
+| `ROS_CLUSTER_LIVENESS_HOURS` | `336` | Mark a cluster's recommendations stale when its last report is older than this (14 days). Independent of `ROS_MAX_LOOKBACK_DAYS`. |
+| `ROS_STALE_CLEANUP_DAYS` | `30` | Delete recommendations N days after they were marked stale. (`ROS_STALE_ARCHIVE_DAYS` deprecated alias) |
 | `ROS_MAX_LOOKBACK_DAYS` | `90` | Max digest lookback for queries. |
 
 ---

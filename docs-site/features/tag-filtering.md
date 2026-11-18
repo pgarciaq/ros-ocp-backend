@@ -200,10 +200,15 @@ summarized after the enable contribute values.
 | ROS pod restart | No state loss; tags live in PostgreSQL | No state loss; reads are stateless |
 
 Row visibility is a separate question from tag matching, and neither mode applies a recency
-gate of its own. A cluster that stops reporting keeps its place in lists, fleet figures and
-savings totals until its recommendation rows are purged; tag filtering only narrows the rows
-that are already visible. Koku behaves the same way — its cluster resource-type list applies
-no time or recency predicate either.
+gate of its own. The retention sweep owns the recency clock: once every `clusters` row for a
+cluster reports older than `ROS_CLUSTER_LIVENESS_HOURS` (default 14 days), its recommendation
+rows are marked stale — they leave default lists, every counter on the fleet summary card
+(including `total_containers`, `abandoned_containers` and `cluster_count`), and savings totals,
+while `filter[stale]=only` still lists them and the next report restores them. The rows are
+deleted `ROS_STALE_CLEANUP_DAYS` (default 30) after the mark, so a decommissioned cluster
+disappears from active figures at day 14 and is reclaimed at day 44. Tag filtering only narrows
+the rows that are already visible. Koku behaves the same way for tag matching — its cluster
+resource-type list applies no time or recency predicate either.
 
 ## Advanced on-prem startup health check (`ROS_TAGS_SOURCE=db`)
 
