@@ -6,6 +6,8 @@ Accepted — implemented in #770 (Koku `masu/processor/ros_tag_sync.py`).
 Amended 2026-11-17: `db` mode moved to this source and window (#815), and the
 `reporting_ocptags_values` arrays became a window rebuild rather than a per-run
 snapshot (#867).
+Amended 2026-11-18: the row axis (#820) accepts this same two-period window and
+adds no recency gate; row liveness is tracked separately (#874).
 
 ## Phase
 
@@ -132,7 +134,7 @@ alternatives lost are:
   gate is a different, implementable choice: `org_container_keys.last_reported`
   freezes when a cluster stops being processed, and `is_stale` records a missed
   cycle for clusters that still are. Neither addresses value staleness, so they
-  are tracked separately in #820.
+  were tracked separately in #820 and closed by the row-axis amendment below.
 
 **What would reopen this:** a tenant where a value must stop matching
 immediately, e.g. a key removed for compliance reasons, or users reporting stale
@@ -190,6 +192,49 @@ pair present and the true pair missing.
 **What would reopen this:** a db-mode query that has to answer "which cluster
 and namespace" from the catalog arrays alone, where the label summaries are not
 reachable.
+
+## Amended (2026-11-18): the row axis (#820) — no recency gate
+
+Both modes bound a *row* by the same month-snapped window the push uses, and
+neither applies a separate recency predicate.
+
+| Row axis | `api` | `db` |
+|----------|-------|------|
+| Bound | the org-wide full replace (ADR-0120/ADR-0226), driven by Koku's 6-hour safety-net beat | `report_period_start ∈ [last_month_start, this_month_end)`, evaluated at query time |
+| Wall clock | ~2 months + at most one sync cycle | ~2 months |
+| External dependency | Koku beat and the push path | none |
+| Sites | six functions, ~15 call sites | six decision points, one predicate (`labelSummaryTagMatch`) |
+
+**Decision: accept.** No row-recency predicate is added to the tag paths.
+
+- A tag-only gate would make `filter[tag:k]=v` return fewer rows than the same
+  request without a tag filter — a liveness rule expressed as a filter. Koku has
+  no such mechanism: `koku/api/` contains no `last_reported` reference, and
+  `resource-types/openshift/clusters/` applies no time or recency predicate, so
+  there is no parity precedent to follow.
+- A row window shorter than the value window would produce "the value still
+  matches but the cluster is hidden". Reusing `ROS_STALENESS_THRESHOLD_HOURS`
+  (48 h) would hide a cluster that merely missed a cycle — the #770 failure
+  class recorded above.
+- No configuration key is added: no Koku equivalent exists, and no observed
+  ingestion cadence supports a value.
+- Parity note: ~2 months is already *tighter* than Koku's cluster list, which
+  has no recency bound at all.
+
+**Residual risk.** In `api` mode the bound depends on the pusher running. A
+silent Koku beat or push failure makes api-mode tag matching unbounded with no
+alarm; `db` mode has no such dependency.
+
+**What is genuinely unbounded is row liveness, not tag matching.** A cluster
+that stops reporting is never marked `stale`, so the 30-day stale retention
+never reclaims it and it keeps appearing in default lists, fleet/savings
+aggregates and recommendation counts. Tag matching only inherits it. That is
+tracked in #874; the tag paths follow whatever liveness rule is decided there.
+
+**What would reopen this:** a tenant where a decommissioned cluster is still
+matching a tag filter once its last report period has left the window, or a
+product decision that tag filters must be scoped to live clusters only — the
+latter requires the unfiltered list to adopt the same bound.
 
 ## Verification
 

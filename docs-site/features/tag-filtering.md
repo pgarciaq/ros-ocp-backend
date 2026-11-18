@@ -1,6 +1,6 @@
 # Tag filtering
 
-> **Last verified:** 2026-11-17
+> **Last verified:** 2026-11-18
 
 !!! info "Quick Facts"
     **Filter syntax:** `filter[tag:key]=value` (bracket notation, preferred) or `?tag=key:value` (legacy flat)  
@@ -195,8 +195,15 @@ summarized after the enable contribute values.
 | Key disappears from a cluster (still enabled) | Values already summarized for the period are kept and keep being pushed until the period leaves the window | Same semantics (#815): the filter reads the label summaries with the same month-snapped window, so the cluster keeps matching until its report period leaves the window |
 | New tag value appears | Visible after summarization + a successful push | Visible after the next summarization (query-time read) |
 | Values disappear (pods deleted or relabeled) | The summarized value list is a union, never pruned — the stale value keeps matching until the period leaves the window or the key is disabled | Same union semantics, read at query time (#815) — kept until the period leaves the window or the key is disabled |
+| Cluster stops reporting | Its tags keep matching until its last report period leaves the window (~2 months); the next sync then clears them, because the payload omits the cluster and the sync is a full replace | Same window, evaluated at query time (#815): a row stops matching once its last report period leaves the window |
 | Sync failure (network, ROS down) | Previous tags retained; the failed org retries on the next event or the 6-hour cycle; other orgs unaffected | Not applicable — no HTTP sync |
 | ROS pod restart | No state loss; tags live in PostgreSQL | No state loss; reads are stateless |
+
+Row visibility is a separate question from tag matching, and neither mode applies a recency
+gate of its own. A cluster that stops reporting keeps its place in lists, fleet figures and
+savings totals until its recommendation rows are purged; tag filtering only narrows the rows
+that are already visible. Koku behaves the same way — its cluster resource-type list applies
+no time or recency predicate either.
 
 ## Advanced on-prem startup health check (`ROS_TAGS_SOURCE=db`)
 
