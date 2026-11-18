@@ -18,6 +18,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 )
 
@@ -37,6 +38,14 @@ func init() {
 var retentionDropped = promauto.NewCounter(prometheus.CounterOpts{
 	Name: "rosocp_retention_partitions_dropped_total",
 	Help: "Number of partitions dropped by retention sweep",
+})
+
+// retentionMarkedStale counts recommendation rows the liveness sweep marked
+// stale (#874). It is separate from retentionDropped: marking is reversible and
+// deletes nothing, so the two must not share a series.
+var retentionMarkedStale = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "rosocp_retention_rows_marked_stale_total",
+	Help: "Number of recommendation rows marked stale because their cluster stopped reporting",
 })
 
 // Tables retained by the general ROS_RETENTION_MONTHS setting.
@@ -190,20 +199,47 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 		}
 	}
 
-	// Stale recommendation cleanup: delete stale recommendations that haven't
-	// received new data in staleCleanupDays (default 30 days).
+	// Stale recommendation cleanup: delete recommendations that were MARKED stale
+	// longer ago than staleCleanupDays (default 30 days). The clock is the mark,
+	// not the last report (see purgeStaleRecommendations).
 	staleCleanupDays := cfg.StaleCleanupDays
 	if staleCleanupDays <= 0 {
 		staleCleanupDays = 30
 	}
 	staleCutoff := time.Now().UTC().AddDate(0, 0, -staleCleanupDays)
-	purgedStale, invalidateErr := purgeStaleRecommendations(ctx, pool, staleCutoff)
+
+	// #874: a cluster that stopped reporting never runs its own cycle, so no
+	// per-cycle writer can ever mark it. The liveness sweep is the only actor that
+	// notices. It runs before the purge so every row the purge evaluates in this
+	// pass has already been through the mark stage, and so a crash between the two
+	// phases leaves a reversible mark rather than a half-evaluated purge. A fresh
+	// mark is never due in the same sweep: the visible window is 30 days from the
+	// mark (marked at day 14, deleted at day 44).
+	livenessHours := cfg.ClusterLivenessHours
+	if livenessHours <= 0 {
+		livenessHours = 336
+	}
+	livenessCutoff := time.Now().UTC().Add(-time.Duration(livenessHours) * time.Hour)
+	markedStale, markErr := markAbandonedClustersStale(ctx, pool, livenessCutoff)
+	// Count first, report second: when one table fails the other has still
+	// committed, and the metric must describe the work that happened.
+	if markedStale > 0 {
+		retentionMarkedStale.Add(float64(markedStale))
+		logging.GetLogger().Infof("retention: marked %d recommendation rows stale for clusters silent since %s",
+			markedStale, livenessCutoff.Format(time.RFC3339))
+	}
+	if markErr != nil {
+		logging.GetLogger().Warnf("retention: marking abandoned clusters stale: %v", markErr)
+		errs = append(errs, fmt.Errorf("mark abandoned clusters stale: %w", markErr))
+	}
+	purgedStale, invalidateErr := purgeStaleRecommendations(ctx, pool, staleCutoff, livenessCutoff)
+	if purgedStale > 0 {
+		retentionDropped.Add(float64(purgedStale))
+		logging.GetLogger().Infof("retention: purged %d stale recommendations (marked before %s)", purgedStale, staleCutoff.Format("2006-01-02"))
+	}
 	if invalidateErr != nil {
 		logging.GetLogger().Warnf("retention: purging stale recommendations: %v", invalidateErr)
 		errs = append(errs, fmt.Errorf("purge stale recommendations: %w", invalidateErr))
-	} else if purgedStale > 0 {
-		retentionDropped.Add(float64(purgedStale))
-		logging.GetLogger().Infof("retention: purged %d stale recommendations (older than %s)", purgedStale, staleCutoff.Format("2006-01-02"))
 	}
 
 	// Snapshot inventory retention: purge raw rows older than configured hours (default 48h).
@@ -267,37 +303,63 @@ func purgeDateRetainedTable(ctx context.Context, pool *pgxpool.Pool, dt Retentio
 	return tag.RowsAffected(), nil
 }
 
-func purgeStaleRecommendations(ctx context.Context, pool *pgxpool.Pool, staleCutoff time.Time) (int64, error) {
-	rows, err := pool.Query(ctx,
-		"DELETE FROM recommendation_sets WHERE stale = true AND updated_at < $1 RETURNING org_id",
-		staleCutoff,
+func purgeStaleRecommendations(ctx context.Context, pool *pgxpool.Pool, staleCutoff, livenessCutoff time.Time) (int64, error) {
+	var (
+		purged       int64
+		errs         []error
+		affectedOrgs = make(map[string]struct{})
 	)
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
+	for _, table := range recommendationLivenessTables {
+		// #874: the deadline runs from staled_at (when the row was MARKED), so a
+		// row stays visible for ROS_STALE_CLEANUP_DAYS after it was hidden, never
+		// from its last report. COALESCE covers rows that were already stale
+		// before staled_at existed (000223): they keep the deadline they had.
+		//
+		// The NOT EXISTS guard sits on the irreversible step: a cluster whose
+		// clusters row is gone still purges (empty subquery, the Sources destroy
+		// path), but a cluster that is in fact reporting survives a mistaken mark.
+		query := fmt.Sprintf(`
+			DELETE FROM %s rs
+			WHERE rs.stale = true
+			  AND COALESCE(rs.staled_at, rs.updated_at) < $1
+			  AND NOT EXISTS (SELECT 1 FROM clusters c
+			                  WHERE c.org_id = rs.org_id AND c.cluster_uuid = rs.cluster_uuid
+			                    AND c.last_reported_at >= $2)
+			RETURNING rs.org_id`,
+			pgx.Identifier{table}.Sanitize())
 
-	affectedOrgs := make(map[string]struct{})
-	var purged int64
-	for rows.Next() {
-		var orgID string
-		if err := rows.Scan(&orgID); err != nil {
-			return purged, err
+		rows, err := pool.Query(ctx, query, staleCutoff, livenessCutoff)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("purge stale %s: %w", table, err))
+			continue
 		}
-		purged++
-		if orgID != "" {
-			affectedOrgs[orgID] = struct{}{}
+		for rows.Next() {
+			var orgID string
+			if err := rows.Scan(&orgID); err != nil {
+				errs = append(errs, fmt.Errorf("scan purged org from %s: %w", table, err))
+				break
+			}
+			purged++
+			if orgID != "" {
+				affectedOrgs[orgID] = struct{}{}
+			}
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return purged, err
+		if err := rows.Err(); err != nil {
+			errs = append(errs, fmt.Errorf("purge stale %s rows: %w", table, err))
+		}
+		rows.Close()
 	}
 	for orgID := range affectedOrgs {
 		fleetsummary.InvalidateOrg(orgID)
 		fleetheatmap.InvalidateOrg(orgID)
 		clustercache.InvalidateOrg(orgID)
+		// Deleting rows leaves their catalog entries behind; the refresh prunes
+		// them, so filter[stale]=only stops counting rows that no longer exist.
+		if err := refreshOrgListCatalogs(ctx, pool, orgID); err != nil {
+			errs = append(errs, err)
+		}
 	}
-	return purged, nil
+	return purged, errors.Join(errs...)
 }
 
 // SweepPartitionedTables drops monthly partitions older than cutoffYM (YYYYMM)
@@ -412,4 +474,112 @@ func StartRetentionTicker(ctx context.Context, pool *pgxpool.Pool, retentionMont
 			}
 		}
 	}
+}
+
+// recommendationLivenessTables are the two recommendation tables the liveness
+// sweep marks and the stale purge reclaims.
+// Both carry cluster_uuid as UUID -- 000032 for the namespace table, and 000041
+// for recommendation_sets (which also deletes rows whose text value was not a
+// UUID), so the equality to clusters.cluster_uuid needs no cast.
+//
+// Legacy Kruize namespace rows carry cluster_uuid NULL; the equality never
+// matches, so they are never marked by this sweep.
+var recommendationLivenessTables = []string{
+	"recommendation_sets",
+	"namespace_recommendation_sets",
+}
+
+// markAbandonedClustersStale marks recommendation rows stale when every
+// clusters row for their (org_id, cluster_uuid) reported before livenessCutoff.
+//
+// The first EXISTS skips a cluster that was registered but never reported
+// (last_reported_at IS NULL): it is not abandoned, it is unknown, and marking it
+// would make a fresh registration invisible. The second uses NOT EXISTS rather
+// than a plain comparison so a cluster with several alias rows stays live while
+// any one of them is recent.
+//
+// Marking is reversible: both upserts clear stale and staled_at when the cluster
+// reports again. Nothing is deleted here, so this runs before the purge rather
+// than instead of it.
+func markAbandonedClustersStale(ctx context.Context, pool *pgxpool.Pool, livenessCutoff time.Time) (int64, error) {
+	var (
+		marked       int64
+		errs         []error
+		affectedOrgs = make(map[string]struct{})
+	)
+	for _, table := range recommendationLivenessTables {
+		query := fmt.Sprintf(`
+			UPDATE %s rs
+			SET stale = true, staled_at = COALESCE(rs.staled_at, now())
+			WHERE rs.stale = false
+			  AND EXISTS (SELECT 1 FROM clusters c
+			              WHERE c.org_id = rs.org_id AND c.cluster_uuid = rs.cluster_uuid
+			                AND c.last_reported_at IS NOT NULL)
+			  AND NOT EXISTS (SELECT 1 FROM clusters c
+			                  WHERE c.org_id = rs.org_id AND c.cluster_uuid = rs.cluster_uuid
+			                    AND c.last_reported_at >= $1)
+			RETURNING rs.org_id`,
+			pgx.Identifier{table}.Sanitize())
+
+		rows, err := pool.Query(ctx, query, livenessCutoff)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("mark %s: %w", table, err))
+			continue
+		}
+		for rows.Next() {
+			var orgID string
+			if err := rows.Scan(&orgID); err != nil {
+				errs = append(errs, fmt.Errorf("scan %s marked org: %w", table, err))
+				break
+			}
+			marked++
+			if orgID != "" {
+				affectedOrgs[orgID] = struct{}{}
+			}
+		}
+		if err := rows.Err(); err != nil {
+			errs = append(errs, fmt.Errorf("mark %s rows: %w", table, err))
+		}
+		rows.Close()
+	}
+	// #874: marking must reach the key catalogs, not only the caches. Default
+	// list requests count and page through org_container_keys.is_stale and
+	// org_namespace_keys (internal/model/native_list_keys.go,
+	// native_ns_list_keys.go), and the in-cycle writer always follows
+	// MarkUnreportedContainersStale with exactly these two refreshes
+	// (internal/services/report_processor.go). Skipping them leaves meta.count
+	// and filter[stale]=only reading a catalog that still believes the cluster is
+	// alive: default lists then report a count larger than the rows they can
+	// return, and walk past an invisible tail. Both calls are org-wide upserts,
+	// so this costs one pass per affected org per sweep, not per row.
+	for orgID := range affectedOrgs {
+		if org := refreshOrgListCatalogs(ctx, pool, orgID); org != nil {
+			errs = append(errs, org)
+		}
+	}
+	return marked, errors.Join(errs...)
+}
+
+// refreshOrgListCatalogs rebuilds the org's list key catalogs and the caches that
+// describe the fleet, after a sweep changed which rows are live.
+//
+// Both refreshes are required and both prune orphans (librobne/pgrec/metadata.go
+// for containers, internal/model/org_namespace_keys.go for namespaces), so this
+// also cleans up after a purge: without it a deleted cluster's catalog entries
+// outlive its rows, and filter[stale]=only would count rows that no longer exist.
+//
+// A catalog failure falls back to cache invalidation so no cached summary keeps
+// describing the fleet as it was before the sweep.
+func refreshOrgListCatalogs(ctx context.Context, pool *pgxpool.Pool, orgID string) error {
+	var errs []error
+	if err := RefreshOrgMetadata(ctx, pool, orgID); err != nil {
+		errs = append(errs, fmt.Errorf("refresh org metadata %s: %w", orgID, err))
+		fleetsummary.InvalidateOrg(orgID)
+		fleetheatmap.InvalidateOrg(orgID)
+		clustercache.InvalidateOrg(orgID)
+	}
+	if err := model.RefreshOrgNamespaceKeys(ctx, pool, orgID); err != nil {
+		errs = append(errs, fmt.Errorf("refresh org namespace keys %s: %w", orgID, err))
+	}
+	return errors.Join(errs...)
 }

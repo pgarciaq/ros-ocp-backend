@@ -170,6 +170,12 @@ type Config struct {
 	// during the retention sweep. Defaults to 30.
 	StaleCleanupDays int `mapstructure:"ROS_STALE_CLEANUP_DAYS"`
 
+	// Cluster liveness window in hours. A cluster whose clusters.last_reported_at
+	// is older than this is marked stale by the retention sweep. Defaults to 336
+	// (14 days). Deliberately independent of ROS_MAX_LOOKBACK_DAYS, which is the
+	// window the engine reasons over. See ADR-0358.
+	ClusterLivenessHours int `mapstructure:"ROS_CLUSTER_LIVENESS_HOURS"`
+
 	// Koku masu API URL for fetching cost data (savings estimates)
 	KokuMasuURL string `mapstructure:"KOKU_MASU_URL"`
 
@@ -750,6 +756,7 @@ func initConfig() {
 	viper.SetDefault("ROS_HISTORY_RETENTION_DAYS", 90)
 	viper.SetDefault("ROS_STALENESS_THRESHOLD_HOURS", 48)
 	viper.SetDefault("ROS_STALE_CLEANUP_DAYS", 30)
+	viper.SetDefault("ROS_CLUSTER_LIVENESS_HOURS", 336)
 	viper.SetDefault("ROS_MAX_LOOKBACK_DAYS", 90)
 	viper.SetDefault("ROS_MAX_DIGEST_ROWS_PER_CLUSTER", 500000)
 	viper.SetDefault("MAXIMUM_COUNT_PER_QUERY_PARAM", 5)
@@ -1068,6 +1075,10 @@ func validateLoadedConfig(c *Config) {
 	if c.StaleCleanupDays <= 0 {
 		log.Printf("config: ROS_STALE_CLEANUP_DAYS (%d) is invalid; using 30", c.StaleCleanupDays)
 		c.StaleCleanupDays = 30
+	}
+	if c.ClusterLivenessHours <= 0 {
+		log.Printf("config: ROS_CLUSTER_LIVENESS_HOURS (%d) is invalid; using 336", c.ClusterLivenessHours)
+		c.ClusterLivenessHours = 336
 	}
 	if c.DBMaxConns <= 0 {
 		log.Printf("config: ROS_DB_MAX_CONNS (%d) is invalid; using %d", c.DBMaxConns, defaultDBMaxConns)
