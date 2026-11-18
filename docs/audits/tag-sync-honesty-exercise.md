@@ -14,6 +14,29 @@ The tag sync feature is **well-implemented and comprehensive**. Tags flow correc
 
 **No code bugs found.** The implementation matches the documented requirements across all components.
 
+> **Post-audit correction (2026-11-18, [#872](https://github.com/pgarciaq/ros-ocp-backend/issues/872)).**
+> The "no code bugs found" conclusion above was too broad for one row of the
+> matrix: **api-mode wildcard tag filtering (`filter[tag:key]=*`) never
+> executed**. Both gorm predicates were spelled `"<col>.resolved_tags ? ?"`;
+> gorm consumes every `?` in a predicate string as a bind placeholder, so it
+> bound the operator's left operand and left the second `?` literal
+> (`WHERE ... ock.resolved_tags $2 ?`). Postgres answered
+> `syntax error at or near "$<n>"` and the list endpoints surfaced **503
+> "unable to fetch records from database"** — reproducibly, for every tenant,
+> since the predicate was introduced in `bfbb6be6` (2026-05-25).
+>
+> The audit marked the wildcard ✅ on the strength of a db-mode-only test
+> (`tag_filters_db_exec_test.go`); no test exercised the api-mode path, so
+> the ✅ was asserted, not verified. Fixed by routing both gorm arms through a
+> `tagKeyExistsGorm(column)` helper that emits the function form
+> `jsonb_exists(col, ?)`; the three pgx arms were already correct (pgx does not
+> rewrite `?`). Regression pins now exist at both tiers: SQL-shape
+> (postgres dialector, `DryRun`) and HTTP (testcontainers, 200 + expected row
+> counts for key-on-every-row / key-on-one-row / key-on-no-row).
+>
+> Lesson for this document's future readers: a ✅ in the matrix means a test
+> *executes* the cell, not that the code reads correctly.
+
 ---
 
 ## Tag Flow: End-to-End Path
@@ -52,7 +75,7 @@ User API: filter[tag:key]=value on list endpoints
 | Legacy `?tag=key:value` syntax | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ | — | — |
 | Multi-tag AND logic | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | — |
 | OR within same key (comma) | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — |
-| Wildcard `filter[tag:key]=*` | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ | — | — |
+| Wildcard `filter[tag:key]=*` ([#872](https://github.com/pgarciaq/ros-ocp-backend/issues/872)) | ✅ | ⚠️→✅ | ✅ | ✅ | — | — | ⚠️→✅ | — | — | ✅ | — | — |
 | Tags in list response (`tags` field) | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ | — | — |
 | Tag enrichment (api mode, container + namespace) | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ | — | — |
 | Tag keys/values endpoint (ROS) | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
