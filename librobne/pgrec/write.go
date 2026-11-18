@@ -38,7 +38,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []types.
 			current_memory_request_kib, current_memory_limit_kib,
 			variation_cpu_request_pct, variation_cpu_limit_pct,
 			variation_memory_request_pct, variation_memory_limit_pct,
-			notification_codes, confidence_level, stale,
+			notification_codes, confidence_level, stale, staled_at,
 			pod_count_min, pod_count_max, pod_count_avg,
 			desired_replicas, available_replicas,
 			recommended_replicas, replica_confidence, replica_explanation,
@@ -49,7 +49,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []types.
 			monitoring_start_time, monitoring_end_time,
 			category, category_cpu, category_memory,`+types.ContainerExplSQLColumns+`,
 			updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,`+types.ContainerExplValuePlaceholders(47)+`,now())
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,CASE WHEN $24 THEN now() ELSE NULL END,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,`+types.ContainerExplValuePlaceholders(47)+`,now())
 		ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine)
 		DO UPDATE SET
 			rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
@@ -67,6 +67,9 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []types.
 			notification_codes = EXCLUDED.notification_codes,
 			confidence_level = EXCLUDED.confidence_level,
 			stale = EXCLUDED.stale,
+			-- #874: when the row is (re)marked stale, record when; a report that
+			-- clears the flag clears the clock with it.
+			staled_at = CASE WHEN EXCLUDED.stale THEN now() ELSE NULL END,
 			pod_count_min = EXCLUDED.pod_count_min,
 			pod_count_max = EXCLUDED.pod_count_max,
 			pod_count_avg = EXCLUDED.pod_count_avg,
@@ -139,9 +142,13 @@ func WriteRecommendationsAndRefreshOrg(ctx context.Context, pool *pgxpool.Pool, 
 // were not refreshed in this cycle (updated_at older than cycleStart minus grace).
 func MarkUnreportedContainersStale(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, cycleStart time.Time) (int64, error) {
 	grace := cycleStart.Add(-5 * time.Minute)
+	// #874: updated_at is the report time (projected as last_reported), so marking
+	// stale must not move it — a dead cluster would claim it reported just now.
+	// staled_at carries the mark instead, and keeps its first value on re-mark so
+	// repeated sweeps cannot extend the visible stale window.
 	tag, err := pool.Exec(ctx, `
 		UPDATE recommendation_sets
-		SET stale = true, updated_at = now()
+		SET stale = true, staled_at = COALESCE(staled_at, now())
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND stale = false
 		  AND updated_at < $3`,

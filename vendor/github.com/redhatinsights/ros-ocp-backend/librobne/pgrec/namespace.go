@@ -37,11 +37,11 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 				current_memory_request_kib, current_memory_limit_kib,
 				variation_cpu_request_pct, variation_cpu_limit_pct,
 				variation_memory_request_pct, variation_memory_limit_pct,
-				notification_codes, confidence_level, stale,
+				notification_codes, confidence_level, stale, staled_at,
 				monitoring_start_time, monitoring_end_time,
 				estimated_savings_cents, estimated_cpu_savings_cents, estimated_memory_savings_cents,
 				category, category_cpu, category_memory,`+types.ContainerExplSQLColumns+`, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,`+types.ContainerExplValuePlaceholders(30)+`, now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,CASE WHEN $21 THEN now() ELSE NULL END,$22,$23,$24,$25,$26,$27,$28,$29,`+types.ContainerExplValuePlaceholders(30)+`, now())
 			ON CONFLICT (org_id, cluster_uuid, namespace_name, term, engine)
 			  WHERE term IS NOT NULL
 			DO UPDATE SET
@@ -60,6 +60,8 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 				notification_codes = EXCLUDED.notification_codes,
 				confidence_level = EXCLUDED.confidence_level,
 				stale = EXCLUDED.stale,
+				-- #874: mirror the container path so both tables carry the mark clock.
+				staled_at = CASE WHEN EXCLUDED.stale THEN now() ELSE NULL END,
 				namespace_id = EXCLUDED.namespace_id,
 				monitoring_start_time = EXCLUDED.monitoring_start_time,
 				monitoring_end_time = EXCLUDED.monitoring_end_time,
