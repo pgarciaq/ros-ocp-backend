@@ -33,15 +33,17 @@ type NodeHourlyDigestResult struct {
 }
 
 // BuildHourlyNodeDigests extracts hourly-level data from the already-aggregated
-// NodeDayAccumulator map. Each accumulator stores per-hour totals via hourIndex(),
-// so this function simply reads those per-hour buckets and produces one row per
-// (node, date, hour) that had at least one sample.
+// NodeDayAccumulator map. Each accumulator groups its rows by
+// (hour, interval_start), so the value written here is the mean of the hour's
+// interval totals — the hour's average load — not the sum of its intervals.
+// Summing them would multiply the node's usage by the producer's resolution
+// (4x for a 15-minute CSV), which is the defect #889 fixed.
 func BuildHourlyNodeDigests(accumulators map[NodeDayKey]*NodeDayAccumulator) map[NodeHourlyDigestKey]NodeHourlyDigestResult {
 	out := make(map[NodeHourlyDigestKey]NodeHourlyDigestResult)
 
 	for key, acc := range accumulators {
 		for h := 0; h < nodeDayHours; h++ {
-			if !acc.intervalSeen[h] {
+			if !acc.intervals.Seen(h) {
 				continue
 			}
 
@@ -56,12 +58,14 @@ func BuildHourlyNodeDigests(accumulators map[NodeDayKey]*NodeDayAccumulator) map
 				podCount = int32(len(acc.intervalPodsDistinct[h])) //nolint:gosec // G115: per-interval distinct pod count, small by construction
 			}
 
+			cpuUse, memUse := acc.intervals.HourUsage(h)
+
 			out[hKey] = NodeHourlyDigestResult{
 				NodeName:       key.Node,
 				BucketDate:     key.BucketDate,
 				Hour:           h,
-				CPUUsageP95MC:  acc.intervalCPUUse[h],
-				MemUsageP95KiB: acc.intervalMemUse[h],
+				CPUUsageP95MC:  cpuUse,
+				MemUsageP95KiB: memUse,
 				SampleCount:    1,
 				MaxPodCount:    podCount,
 			}

@@ -315,6 +315,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Node usage and requests are no longer four times their true value ([#889](https://github.com/pgarciaq/ros-ocp-backend/issues/889)):**
+  The hourly node digest added every container row that fell inside the hour
+  (`intervalCPUUse[h] += r.CPUUsageMC`), but a 15-minute producer contributes
+  four rows per container per hour, so the hour held the sum of four interval
+  totals. Node usage, node requests and both memory fields were 4x too large:
+  on a 64-core node that read as 273-591% utilisation and sized node
+  recommendations up to 2,779 cores. Rows are now grouped by
+  `(hour, interval_start)` in one shared accumulator
+  (`librobne/csv.NodeIntervalSums`) used by both the ingestion and CLI paths —
+  an hour's usage is the mean of its interval totals, its requests are the peak
+  interval. Stored digest values fall by the producer's resolution (4x for the
+  operator's 15-minute CSV) and node recommendations recompute on the next
+  correlator run.
 - **Abandoned clusters are marked stale and reclaimed ([#874](https://github.com/pgarciaq/ros-ocp-backend/issues/874)):**
   `stale` was written only from inside a cluster's own processing cycle, so a
   cluster that stopped reporting was never marked: it kept appearing in default

@@ -16,12 +16,8 @@ type nodeDayKey struct {
 }
 
 type nodeDayAccumulator struct {
-	intervalCPUReqs      [nodeDayHours]int64
-	intervalMemReqs      [nodeDayHours]int64
-	intervalCPUUse       [nodeDayHours]int64
-	intervalMemUse       [nodeDayHours]int64
+	intervals            NodeIntervalSums
 	intervalPodsDistinct [nodeDayHours]map[string]struct{}
-	intervalSeen         [nodeDayHours]bool
 	MaxCPUCapacityMC     int64
 	MaxMemCapacityKiB    int64
 	MaxCPUAllocatableMC  int64
@@ -52,11 +48,13 @@ func (a *nodeDayAccumulator) addWeighted(r Row, weight float64) {
 		return
 	}
 	h := hourIndex(r.IntervalStart)
-	a.intervalSeen[h] = true
-	a.intervalCPUReqs[h] += scaleInt64(r.CPURequestMC, weight)
-	a.intervalMemReqs[h] += scaleInt64(r.MemRequestKiB, weight)
-	a.intervalCPUUse[h] += scaleInt64(r.CPUUsageMC, weight)
-	a.intervalMemUse[h] += scaleInt64(r.MemUsageKiB, weight)
+	a.intervals.Add(
+		r.IntervalStart,
+		scaleInt64(r.CPURequestMC, weight),
+		scaleInt64(r.MemRequestKiB, weight),
+		scaleInt64(r.CPUUsageMC, weight),
+		scaleInt64(r.MemUsageKiB, weight),
+	)
 	if r.Pod != "" {
 		if a.intervalPodsDistinct[h] == nil {
 			a.intervalPodsDistinct[h] = make(map[string]struct{})
@@ -116,16 +114,18 @@ func (a *nodeDayAccumulator) finalize() (cpuP50, cpuP95, cpuMax, memP50, memP95,
 	cpuUsageSamples := make([]int64, 0, nodeDayHours)
 	memUsageSamples := make([]int64, 0, nodeDayHours)
 	for h := 0; h < nodeDayHours; h++ {
-		if !a.intervalSeen[h] {
+		if !a.intervals.Seen(h) {
 			continue
 		}
-		cpuUsageSamples = append(cpuUsageSamples, a.intervalCPUUse[h])
-		memUsageSamples = append(memUsageSamples, a.intervalMemUse[h])
-		if a.intervalCPUReqs[h] > maxCPUReq {
-			maxCPUReq = a.intervalCPUReqs[h]
+		cpuUse, memUse := a.intervals.HourUsage(h)
+		cpuUsageSamples = append(cpuUsageSamples, cpuUse)
+		memUsageSamples = append(memUsageSamples, memUse)
+		cpuReq, memReq := a.intervals.HourRequests(h)
+		if cpuReq > maxCPUReq {
+			maxCPUReq = cpuReq
 		}
-		if a.intervalMemReqs[h] > maxMemReq {
-			maxMemReq = a.intervalMemReqs[h]
+		if memReq > maxMemReq {
+			maxMemReq = memReq
 		}
 		if n := int64(len(a.intervalPodsDistinct[h])); n > maxPods {
 			maxPods = n

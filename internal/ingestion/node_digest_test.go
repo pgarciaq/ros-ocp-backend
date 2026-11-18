@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -287,4 +288,71 @@ func TestAddRowWeighted_DropsZeroAndScalesUsageNotCapacity(t *testing.T) {
 	assert.Equal(t, int64(400), maxMemReq)
 	assert.Equal(t, int64(7000), half.MaxCPUAllocatableMC)
 	assert.Equal(t, int64(8000), half.MaxCPUCapacityMC)
+}
+
+// fourIntervalHourRows builds two containers across the four 15-minute
+// intervals of one hour. Interval i carries a node total of i*1000 mC of usage
+// and i*1000 mC of requests, split evenly across the two containers.
+//
+// The three candidate reductions are all distinct by construction:
+//
+//	mean of interval totals = 2500   (correct: the hour's average load)
+//	sum of every row        = 10000  (the #889 defect, 4x)
+//	row count division      = 1250   (wrong: averages containers away)
+func fourIntervalHourRows() []MetricRow {
+	var rows []MetricRow
+	for i := 1; i <= 4; i++ {
+		start := time.Date(2026, 5, 1, 10, (i-1)*15, 1, 0, time.UTC)
+		for c := 0; c < 2; c++ {
+			rows = append(rows, MetricRow{
+				IntervalStart: start,
+				Node:          "node-a",
+				Pod:           fmt.Sprintf("pod-%d", c),
+				ContainerName: fmt.Sprintf("container-%d", c),
+				CPUUsageMC:    int64(i * 500),
+				MemUsageKiB:   int64(i * 5000),
+				CPURequestMC:  int64(i * 500),
+				MemRequestKiB: int64(i * 10000),
+			})
+		}
+	}
+	return rows
+}
+
+func TestAggregateNodeDigests_HourIsMeanOfIntervalTotals(t *testing.T) {
+	result := AggregateNodeDigests(fourIntervalHourRows())
+	require.Len(t, result, 1)
+
+	for _, acc := range result {
+		cpuP50, cpuP95, cpuMax, memP50, memP95, memMax, maxCPUReq, maxMemReq, maxPods, sampleCount := acc.Finalize()
+
+		// One hour of samples, so the daily percentiles collapse onto that hour.
+		assert.Equal(t, int64(2500), cpuP50, "hour must be the mean of the interval totals")
+		assert.Equal(t, int64(2500), cpuP95)
+		assert.Equal(t, int64(2500), cpuMax)
+		assert.Equal(t, int64(25000), memP50)
+		assert.Equal(t, int64(25000), memP95)
+		assert.Equal(t, int64(25000), memMax)
+
+		// Requests are the peak interval, not the sum: 4 intervals of 500 per
+		// container peak at 4000 for the node.
+		assert.Equal(t, int64(4000), maxCPUReq)
+		assert.Equal(t, int64(80000), maxMemReq)
+
+		assert.Equal(t, int64(2), maxPods, "two distinct pods across the hour")
+		assert.Equal(t, int64(1), sampleCount, "one hour of samples")
+	}
+}
+
+func TestBuildHourlyNodeDigests_HourIsMeanOfIntervalTotals(t *testing.T) {
+	digests := BuildHourlyNodeDigests(AggregateNodeDigests(fourIntervalHourRows()))
+	require.Len(t, digests, 1)
+
+	for key, d := range digests {
+		assert.Equal(t, "node-a", key.NodeName)
+		assert.Equal(t, 10, key.Hour)
+		assert.Equal(t, int64(2500), d.CPUUsageP95MC, "hourly row must not sum its four intervals")
+		assert.Equal(t, int64(25000), d.MemUsageP95KiB)
+		assert.Equal(t, int32(2), d.MaxPodCount)
+	}
 }
