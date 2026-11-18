@@ -300,10 +300,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `filter[tag:key]=*` on the container list and the namespace list answered
   `503 {"message":"unable to fetch records from database"}` for every tenant
   when `ROS_TAGS_SOURCE=api` (the chart default; the binary default is `db`).
-  Both gorm predicates
-  were spelled `"<col>.resolved_tags ? ?"`; gorm consumes every `?` in a
-  predicate string as a bind placeholder, so it bound the jsonb key-existence
-  operator's left operand and left the second `?` literal
+  Both gorm predicates were spelled `"<col>.resolved_tags ? ?"`; gorm consumes
+  every `?` in a predicate string as a bind placeholder, so it bound the jsonb
+  key-existence operator's left operand and left the second `?` literal
   (`WHERE ... ock.resolved_tags $2 ?`), and Postgres rejected the statement
   with `syntax error at or near "$<n>"`. The predicate is now built by a
   `tagKeyExistsGorm(column)` helper emitting the function form

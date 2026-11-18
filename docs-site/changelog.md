@@ -296,6 +296,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **api-mode wildcard tag filtering works again ([#872](https://github.com/pgarciaq/ros-ocp-backend/issues/872)):**
+  `filter[tag:key]=*` on the container list and the namespace list answered
+  `503 {"message":"unable to fetch records from database"}` for every tenant
+  when `ROS_TAGS_SOURCE=api` (the chart default; the binary default is `db`).
+  Both gorm predicates were spelled `"<col>.resolved_tags ? ?"`; gorm consumes
+  every `?` in a predicate string as a bind placeholder, so it bound the jsonb
+  key-existence operator's left operand and left the second `?` literal
+  (`WHERE ... ock.resolved_tags $2 ?`), and Postgres rejected the statement
+  with `syntax error at or near "$<n>"`. The predicate is now built by a
+  `tagKeyExistsGorm(column)` helper emitting the function form
+  `jsonb_exists(col, ?)` — same meaning, one bind, no character gorm can
+  mistake for a placeholder. The three pgx paths (node recommendations,
+  savings-summary `group_by[tag:key]=*`) were already correct and are
+  untouched; `db` mode was unaffected (it joins Koku's label summaries).
+  Two regression pins: a `DryRun` SQL-shape test on the postgres dialector
+  (a sqlite dialector renders `?` placeholders and would hide the collision),
+  and HTTP-level wildcard tests asserting 200 plus exact row counts for
+  key-on-every-row, key-on-one-row and key-on-no-row over both scalar
+  (pre-#814) and array (post-#814) tag storage. `docs/audits/tag-sync-honesty-exercise.md`
+  carried a stale ✅ for this row — the audit had one db-mode test and no
+  api-mode coverage — and now carries a dated post-audit correction.
+
 - **The PDF books no longer truncate silently — and a guard makes the class loud ([#801](https://github.com/pgarciaq/ros-ocp-backend/issues/801)):**
   the Operations PDF book ended inside section 10.20 (98–99 pages),
   silently dropping sections 10.21–12 — including Known Limitations
