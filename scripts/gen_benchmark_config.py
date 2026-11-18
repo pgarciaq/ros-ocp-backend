@@ -333,11 +333,20 @@ class YAMLBuilder:
             mem_usage = round(random.uniform(4.0, float(mem_req) * 0.9), 2)
             label_extra = f"|label_accelerator:gpu|label_workload:{'training' if random.random() < 0.5 else 'inference'}"
         else:
-            cpu_req = random.randint(50, 500)
-            cpu_lim = random.randint(max(cpu_req, 500), 2000)
+            # nise reads cpu_request / cpu_limit / cpu_usage in CORES. Draw the
+            # benchmark mix in millicores and convert, so the pods stay in the
+            # intended 50-500 mC band. Writing 50-500 straight into a cores
+            # field asked for 50-500 cores per pod, and nise clamps both request
+            # and limit to the node's core count (64), so every pod ended up
+            # requesting exactly the whole node and every node reported 100%
+            # requested/used.
+            cpu_req_mc = random.randint(50, 500)
+            cpu_lim_mc = random.randint(max(cpu_req_mc, 500), 2000)
+            cpu_req = round(cpu_req_mc / 1000, 3)
+            cpu_lim = round(cpu_lim_mc / 1000, 3)
             mem_req = round(random.uniform(0.1, 2.0), 1)
             mem_lim = round(random.uniform(max(mem_req, 2.0), 8.0), 1)
-            cpu_usage = round(random.uniform(0.1, float(cpu_req) * 0.8), 2)
+            cpu_usage = round(random.uniform(0.1, cpu_req_mc * 0.8) / 1000, 4)
             mem_usage = round(random.uniform(0.05, float(mem_req) * 0.9), 2)
             label_extra = ""
 
