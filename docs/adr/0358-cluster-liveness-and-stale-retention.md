@@ -135,6 +135,14 @@ marking, independent of the liveness value: mark at day 14, delete at day 44.
 - A cluster registered but never reported (`last_reported_at IS NULL`) is never
   marked: it is unknown, not abandoned, and marking it would make a fresh
   registration invisible.
+- Every list surface honors the flag, the native lists **and** the legacy
+  queries they can fall back to: the namespace fallback, the Kruize-mode
+  container list, the `/container` compatibility list, and the HCP list with its
+  grouped views. Those four build their WHERE map in two shared mappers
+  (`mapContainerQueryParameters`, `MapNamespaceQueryParameters`), so the
+  predicate lives there rather than in each handler. A fallback that ignored it
+  would answer with the very rows the native leg had just emptied out, and
+  `filter[stale]=only` would return the same rows as the default view.
 - The mark and the purge both refresh the org's list key catalogs
   (`org_container_keys`, `org_namespace_keys`) and invalidate the fleet caches.
   Without the mark refresh, `meta.count` outruns the rows the list can return;
@@ -168,6 +176,7 @@ failure message names the mechanism, not an incidental count.
 | A silent cluster leaves the fleet summary in one sweep | `TestRunRetentionSweep_MarksAndHidesAbandonedCluster` (`internal/api`) | unfiltering any fleet counter |
 | The mark reaches the key catalogs, so `meta.count` equals the rows returned and `filter[stale]=only` sees the marked rows | `TestRunRetentionSweep_KeepsListCountAndRowsAgreeing` (`internal/api`), both lists | dropping `refreshOrgListCatalogs` from the mark: count 3 vs rows 1, `stale=only` 0 |
 | The purge prunes catalog entries of deleted rows | `TestPurge_PrunesOrgListCatalogs` (`internal/engine`) | dropping the purge refresh: `org_container_keys` keeps the orphan |
+| Stale rows stay hidden on every list surface, including the legacy queries the native lists fall back to | `TestStaleFilter_HidesRowsThroughEveryLegacyList` (`internal/api`), four surfaces; `TestLegacyMappersApplyStaleTriState` (`internal/api`), both mappers | dropping either `applyRecommendationStaleFilter` call: the default list returns the stale row (`Should be zero, but was 1`) |
 | Marking never moves `updated_at` (report time) | `TestMarkAbandonedClustersStale_MarksBothTables` | adding `updated_at = now()` to the mark: "marking must not move updated_at" |
 | A mistaken mark survives the purge, on both tables | `TestPurge_KeepsMistakenlyMarkedCluster` | removing the `NOT EXISTS` guard |
 | A destroyed cluster (no `clusters` row) is still reclaimed | `TestPurge_ReclaimsRowsOfDestroyedCluster` | turning the guard into a join |

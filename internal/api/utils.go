@@ -195,6 +195,16 @@ func mapContainerQueryParameters(c echo.Context, dateColumn string, nativeDateWi
 	}
 	queryParams[dateColumn+" < ?"] = endTimestamp
 
+	// #874: the legacy list layer is reachable from four surfaces (namespace
+	// fallback, Kruize-mode container list, /container compatibility list, HCP
+	// list and its grouped views), and every one of them funnels its WHERE map
+	// through this function or MapNamespaceQueryParameters. Without this
+	// predicate an org whose rows are all stale — the state right after the
+	// sweep marks an abandoned cluster and prunes its catalog entries — gets
+	// them back from the fallback, and filter[stale]=only becomes
+	// indistinguishable from the default view.
+	applyRecommendationStaleFilter(c, queryParams, "recommendation_sets")
+
 	var errs []error
 	if err := applyParamFilter(c, queryParams, "cluster", "recommendation_sets.cluster_uuid", model.ClusterMaxLen, true, SkipSanitizationForContainer); err != nil {
 		errs = append(errs, err)
@@ -565,6 +575,12 @@ func MapNamespaceQueryParameters(c echo.Context) (map[string]any, error) {
 		endTimestamp = endTimestamp.Add(24 * time.Hour)
 	}
 	queryParams["namespace_recommendation_sets.monitoring_end_time < ?"] = endTimestamp
+
+	// #874: this mapper is the whole query surface of the legacy namespace list,
+	// which the native list falls back to whenever its key catalog has nothing
+	// left to page (an org whose namespaces are all stale). See
+	// mapContainerQueryParameters for the full rationale.
+	applyRecommendationStaleFilter(c, queryParams, "namespace_recommendation_sets")
 
 	var errs []error
 	if err := applyParamFilter(c, queryParams, "cluster", "", model.ClusterMaxLen, true, SkipSanitizationForNamespace); err != nil {

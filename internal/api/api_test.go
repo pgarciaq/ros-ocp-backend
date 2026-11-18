@@ -40,6 +40,7 @@ func TestMapQueryParameters(t *testing.T) {
 			qoutputs: map[string]interface{}{
 				"recommendation_sets.monitoring_end_time < ?":  now,
 				"recommendation_sets.monitoring_end_time >= ?": firstOfMonth,
+				"recommendation_sets.stale = ?":                false,
 			},
 			errmsg: `The startTime should be 1st of current month. The endTime should the current time.`,
 		},
@@ -49,6 +50,7 @@ func TestMapQueryParameters(t *testing.T) {
 			qoutputs: map[string]interface{}{
 				"recommendation_sets.monitoring_end_time < ?":  inclusiveEndTime,
 				"recommendation_sets.monitoring_end_time >= ?": startTime,
+				"recommendation_sets.stale = ?":                false,
 			},
 			errmsg: `The recommendation_sets.monitoring_end_time should be less than or equal to end date!
 				The recommendation_sets.monitoring_end_time should be greater than or equal to start date!`,
@@ -78,6 +80,47 @@ func TestMapQueryParameters(t *testing.T) {
 			result, _ := MapQueryParameters(c)
 			if reflect.DeepEqual(result, tt.qoutputs) != true {
 				t.Errorf("%s", tt.errmsg)
+			}
+		})
+	}
+}
+
+// #874: the legacy mappers behind the Kruize namespace fallback, the Kruize-mode
+// container list, the /container compatibility list and the HCP list must carry
+// the same filter[stale] tri-state the native mappers do — otherwise a request
+// that falls back is answered by rows the native leg just hid.
+func TestLegacyMappersApplyStaleTriState(t *testing.T) {
+	mappers := map[string]struct {
+		mapFn func(echo.Context) (map[string]interface{}, error)
+		key   string
+	}{
+		"container": {MapQueryParameters, "recommendation_sets.stale = ?"},
+		"namespace": {MapNamespaceQueryParameters, "namespace_recommendation_sets.stale = ?"},
+	}
+	for name, m := range mappers {
+		m := m
+		t.Run(name, func(t *testing.T) {
+			cases := []struct {
+				query   string
+				present bool
+				want    interface{}
+			}{
+				{"", true, false},
+				{"?filter%5Bstale%5D=false", true, false},
+				{"?filter%5Bstale%5D=only", true, true},
+				{"?filter%5Bstale%5D=true", false, nil},
+			}
+			for _, tc := range cases {
+				e := echo.New()
+				req := httptest.NewRequest(http.MethodGet, "/"+tc.query, nil)
+				c := e.NewContext(req, httptest.NewRecorder())
+				got, err := m.mapFn(c)
+				require.NoErrorf(t, err, "query %q", tc.query)
+				value, present := got[m.key]
+				require.Equalf(t, tc.present, present, "query %q: stale predicate presence", tc.query)
+				if tc.present {
+					assert.Equalf(t, tc.want, value, "query %q: stale predicate value", tc.query)
+				}
 			}
 		})
 	}

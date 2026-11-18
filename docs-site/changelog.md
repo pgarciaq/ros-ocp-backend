@@ -327,9 +327,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `staled_at` column ("when was this marked") and re-verifies liveness at
   delete time, so marking is reversible: the next report clears it, and a
   hidden cluster stays visible to `filter[stale]=only` for
-  `ROS_STALE_CLEANUP_DAYS` (30) before deletion. Marking no longer touches
-  `updated_at`, so a container that merely missed a cycle stops claiming
-  `last_reported: today`. The fleet summary card excludes stale rows from every
+  `ROS_STALE_CLEANUP_DAYS` (30) before deletion. Every list surface honors the
+  flag, including the legacy queries the native lists fall back to (the
+  namespace fallback, the Kruize-mode container list, the `/container`
+  compatibility list, and the HCP list and grouped views): those mappers omitted
+  the predicate, so an org whose rows were all stale got them back on the
+  default list and `filter[stale]=only` returned exactly the default view.
+  Marking no longer touches `updated_at`, so a container that merely missed a
+  cycle stops claiming `last_reported: today`. The fleet summary card excludes stale rows from every
   counter, `total_containers` and `cluster_count` included: the card divides
   idle and abandoned counts by `total_containers`, so a filtered numerator over
   an unfiltered denominator would understate idleness by exactly the dead
