@@ -62,13 +62,22 @@ class BenchmarkConfig:
     vm_pct: float = 0.025         # 2.5% VMs (separate generator)
     vm_gpu_pct: float = 0.3       # 30% of VMs get GPUs
 
-    nodes_per_1000: int = 1       # 1 node per 1000 containers
+    nodes_per_1000: int = 8       # 1 node per 125 containers
     ns_per_1000: int = 15         # 15 namespaces per 1000 containers
     pvc_ns_pct: float = 0.10      # 10% of namespaces get PVCs
     quota_ns_pct: float = 0.15    # 15% of namespaces get namespace quotas
 
     @property
     def num_nodes(self) -> int:
+        # One node per 125 containers. Three measured constraints set this
+        # (#891): each fixture node advertises 64 cores and node_capacity_pods
+        # 250 (nise's default), and pods are assigned a namespace at a time, so
+        # a node's load is a whole number of namespaces. At one node per 1000
+        # containers a 1,200-container run put 402 pods on every node (1.6x the
+        # pod limit) and, with a 50-500 mC request band, ~1.6x the CPU. Here the
+        # 18 namespaces split evenly over 9 nodes: 126-150 pods (0.60x of the
+        # pod capacity) requesting 0.51-0.71x of 64 cores, which is what leaves
+        # a node recommendation room to be smaller than the node.
         return max(3, self.total_containers * self.nodes_per_1000 // 1000)
 
     @property
@@ -317,19 +326,27 @@ class YAMLBuilder:
         pod_type = pod["type"]
 
         if pod_type == "idle":
-            cpu_req = random.randint(4, 16)
-            cpu_lim = cpu_req * 2
+            # Keep the high-request / near-zero-usage shape on purpose: that is
+            # what makes the row an idle recommendation. Only the unit was wrong,
+            # and it was wrong by 1000x: 36 idle pods at 4-16 CORES each asked
+            # for more CPU than the entire cluster has (#891).
+            cpu_req_mc = random.randint(100, 400)
+            cpu_lim_mc = cpu_req_mc * 2
+            cpu_req = round(cpu_req_mc / 1000, 3)
+            cpu_lim = round(cpu_lim_mc / 1000, 3)
             mem_req = round(random.uniform(2.0, 8.0), 1)
             mem_lim = mem_req * 2
             cpu_usage = round(random.uniform(0.001, 0.01), 4)
             mem_usage = round(random.uniform(0.01, 0.05), 3)
             label_extra = "|label_idle:true"
         elif pod_type in ("gpu_ts", "gpu_mig"):
-            cpu_req = random.randint(4, 8)
-            cpu_lim = cpu_req * 2
+            cpu_req_mc = random.randint(250, 1000)
+            cpu_lim_mc = cpu_req_mc * 2
+            cpu_req = round(cpu_req_mc / 1000, 3)
+            cpu_lim = round(cpu_lim_mc / 1000, 3)
             mem_req = round(random.uniform(8.0, 32.0), 1)
             mem_lim = round(mem_req * 1.5, 1)
-            cpu_usage = round(random.uniform(1.0, float(cpu_req) * 0.8), 2)
+            cpu_usage = round(random.uniform(0.05, float(cpu_req) * 0.8), 3)
             mem_usage = round(random.uniform(4.0, float(mem_req) * 0.9), 2)
             label_extra = f"|label_accelerator:gpu|label_workload:{'training' if random.random() < 0.5 else 'inference'}"
         else:
