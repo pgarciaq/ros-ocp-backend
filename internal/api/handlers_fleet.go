@@ -48,6 +48,17 @@ func fleetSummaryNeedsClusterFilter(userPerms map[string][]string) bool {
 
 // GetFleetSummary returns aggregate recommendation statistics across all clusters
 // for the authenticated organization.
+//
+// Every counter describes the live fleet: a row is counted only while stale is
+// false. The card divides idle_containers and abandoned_containers by
+// total_containers, so all three must come from one population — an unfiltered
+// denominator against filtered numerators understates the idle share by exactly
+// the stale cluster's weight, and abandoned_containers could exceed the total it
+// is divided by. total_containers also drives the UI's hasData check, so a fleet
+// with no live cluster renders no card instead of a phantom one. Consequence: a
+// cluster that stops reporting leaves these counts at the liveness cutoff
+// (ROS_CLUSTER_LIVENESS_HOURS) and returns if it reports again — the counts are
+// as reversible as the stale flag itself. See ADR-0358.
 func GetFleetSummary(c echo.Context) error {
 	xrhid, err := requireXRHID(c)
 	if err != nil {
@@ -94,12 +105,12 @@ func GetFleetSummary(c echo.Context) error {
 		}
 		err = pool.QueryRow(ctx, `
 			SELECT
-				COUNT(*) AS total_containers,
+				COUNT(*) FILTER (WHERE stale = false) AS total_containers,
 				COUNT(*) FILTER (WHERE stale = false AND NOT (notification_codes @> ARRAY[5::smallint])) AS active_containers,
 				COUNT(*) FILTER (WHERE stale = false AND notification_codes @> ARRAY[5::smallint]) AS idle_containers,
-				COUNT(*) FILTER (WHERE idle_state = 'zombie') AS abandoned_containers,
+				COUNT(*) FILTER (WHERE stale = false AND idle_state = 'zombie') AS abandoned_containers,
 				COALESCE(SUM(estimated_savings_cents) FILTER (WHERE stale = false), 0)::float / 100.0 AS total_monthly_savings_usd,
-				COUNT(DISTINCT cluster_uuid) AS cluster_count
+				COUNT(DISTINCT cluster_uuid) FILTER (WHERE stale = false) AS cluster_count
 			FROM recommendation_sets
 			WHERE org_id = $1 AND term = 'medium' AND engine = 'cost'
 			  AND cluster_uuid::text = ANY($2::text[])`,
@@ -116,12 +127,12 @@ func GetFleetSummary(c echo.Context) error {
 		orgClusters, _ = getClustersForOrg(ctx, orgID)
 		err = pool.QueryRow(ctx, `
 			SELECT
-				COUNT(*) AS total_containers,
+				COUNT(*) FILTER (WHERE stale = false) AS total_containers,
 				COUNT(*) FILTER (WHERE stale = false AND NOT (notification_codes @> ARRAY[5::smallint])) AS active_containers,
 				COUNT(*) FILTER (WHERE stale = false AND notification_codes @> ARRAY[5::smallint]) AS idle_containers,
-				COUNT(*) FILTER (WHERE idle_state = 'zombie') AS abandoned_containers,
+				COUNT(*) FILTER (WHERE stale = false AND idle_state = 'zombie') AS abandoned_containers,
 				COALESCE(SUM(estimated_savings_cents) FILTER (WHERE stale = false), 0)::float / 100.0 AS total_monthly_savings_usd,
-				COUNT(DISTINCT cluster_uuid) AS cluster_count
+				COUNT(DISTINCT cluster_uuid) FILTER (WHERE stale = false) AS cluster_count
 			FROM recommendation_sets
 			WHERE org_id = $1 AND term = 'medium' AND engine = 'cost'`,
 			orgID,
