@@ -481,7 +481,7 @@ func buildClauseForParam(param string, includeVals, exactVals, excludeVals []str
 	if param == "cluster" {
 		maxLen, allowDot = model.ClusterMaxLen, true
 	}
-	return buildSQLClauseWithFilterType(param, includeVals, exactVals, excludeVals, column, maxLen, allowDot, false)
+	return buildSQLClauseWithFilterType(param, includeVals, exactVals, excludeVals, column, maxLen, allowDot, false, "org-clause-test")
 }
 
 func TestBuildSQLClauseWithFilterType(t *testing.T) {
@@ -593,25 +593,39 @@ func TestBuildSQLClauseWithFilterType(t *testing.T) {
 func TestParseClusterParams_OuterColumn(t *testing.T) {
 	outer := "recommendation_sets.cluster_uuid"
 
-	clauses, vals, err := parseClusterParams("11111111-1111-1111-1111-111111111111", FilterModeInclude, outer)
+	// #797: the subquery is org-scoped, the org bound FIRST — an unscoped
+	// resolution crosses tenant boundaries on colliding UUIDs, and a
+	// swapped binding resolves aliases against the wrong predicate.
+	const org = "org-clause-test"
+
+	clauses, vals, err := parseClusterParams("11111111-1111-1111-1111-111111111111", FilterModeInclude, outer, org)
 	require.NoError(t, err)
 	assert.Equal(t, []string{outer + " = ?"}, clauses)
 	assert.Equal(t, []string{"11111111-1111-1111-1111-111111111111"}, vals)
 
-	clauses, vals, err = parseClusterParams("some-alias", FilterModeInclude, outer)
+	clauses, vals, err = parseClusterParams("some-alias", FilterModeInclude, outer, org)
 	require.NoError(t, err)
-	assert.Equal(t, []string{outer + " IN (SELECT cluster_uuid FROM clusters WHERE cluster_alias ILIKE ? ESCAPE '\\')"}, clauses)
-	assert.Equal(t, []string{"%some-alias%"}, vals)
+	assert.Equal(t, []string{outer + " IN (SELECT cluster_uuid FROM clusters WHERE org_id = ? AND cluster_alias ILIKE ? ESCAPE '\\')"}, clauses)
+	assert.Equal(t, []string{org, "%some-alias%"}, vals)
 
-	clauses, _, err = parseClusterParams("some-alias", FilterModeExact, outer)
+	clauses, vals, err = parseClusterParams("some-alias", FilterModeExact, outer, org)
 	require.NoError(t, err)
-	assert.Equal(t, []string{outer + " IN (SELECT cluster_uuid FROM clusters WHERE cluster_alias = ?)"}, clauses)
+	assert.Equal(t, []string{outer + " IN (SELECT cluster_uuid FROM clusters WHERE org_id = ? AND cluster_alias = ?)"}, clauses)
+	assert.Equal(t, []string{org, "some-alias"}, vals)
 
-	clauses, _, err = parseClusterParams("some-alias", FilterModeExclude, outer)
+	clauses, vals, err = parseClusterParams("some-alias", FilterModeExclude, outer, org)
 	require.NoError(t, err)
-	assert.Equal(t, []string{outer + " NOT IN (SELECT cluster_uuid FROM clusters WHERE cluster_alias = ?)"}, clauses)
+	assert.Equal(t, []string{outer + " NOT IN (SELECT cluster_uuid FROM clusters WHERE org_id = ? AND cluster_alias = ?)"}, clauses)
+	assert.Equal(t, []string{org, "some-alias"}, vals)
 
-	clauses, _, err = parseClusterParams("some-alias", FilterModeInclude, "")
+	// The empty org (identity-less unit-test contexts) fails closed: the
+	// predicate still binds, matching no rows.
+	clauses, vals, err = parseClusterParams("some-alias", FilterModeInclude, outer, "")
+	require.NoError(t, err)
+	assert.Equal(t, []string{outer + " IN (SELECT cluster_uuid FROM clusters WHERE org_id = ? AND cluster_alias ILIKE ? ESCAPE '\\')"}, clauses)
+	assert.Equal(t, []string{"", "%some-alias%"}, vals)
+
+	clauses, _, err = parseClusterParams("some-alias", FilterModeInclude, "", org)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"clusters.cluster_alias ILIKE ? ESCAPE '\\'"}, clauses)
 }

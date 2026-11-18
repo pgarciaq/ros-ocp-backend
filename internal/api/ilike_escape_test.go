@@ -23,7 +23,7 @@ func TestEscapeILIKE(t *testing.T) {
 }
 
 func TestBuildModeClause_EscapesILIKEWildcards(t *testing.T) {
-	clause, err := buildModeClause("project", "namespace", FilterModeInclude, []string{"foo_bar"}, 64, false, false)
+	clause, err := buildModeClause("project", "namespace", FilterModeInclude, []string{"foo_bar"}, 64, false, false, "org-ilike-test")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

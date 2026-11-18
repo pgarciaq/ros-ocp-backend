@@ -305,7 +305,7 @@ func sanitizeParamValue(paramName, s string, paramMaxLen int, allowDot bool, ski
 	return s, nil
 }
 
-func parseClusterParams(value string, mode string, uuidColumn string) ([]string, []string, error) {
+func parseClusterParams(value string, mode string, uuidColumn string, orgID string) ([]string, []string, error) {
 	if value == "" {
 		return nil, nil, nil
 	}
@@ -340,13 +340,21 @@ func parseClusterParams(value string, mode string, uuidColumn string) ([]string,
 	// Exclude negates the whole membership (NOT IN with the positive
 	// condition): pushing != inside would keep uuids carrying any other
 	// alias, voiding the exclusion on multi-alias clusters.
+	// #797: the subquery is org-scoped — an unscoped alias resolution
+	// crosses tenant boundaries when the same cluster_uuid is registered
+	// under two tenants (the #552 colliding-UUID shape), revealing the
+	// other tenant's alias existence. The org predicate is a no-op for
+	// this org's own aliases; an empty orgID (identity-less unit-test
+	// contexts) fails closed — no rows.
 	if mode == FilterModeExclude {
-		return []string{uuidCol + " NOT IN (SELECT cluster_uuid FROM clusters WHERE cluster_alias = ?)"}, []string{value}, nil
+		return []string{uuidCol + " NOT IN (SELECT cluster_uuid FROM clusters WHERE org_id = ? AND cluster_alias = ?)"},
+			[]string{orgID, value}, nil
 	}
-	return []string{uuidCol + " IN (SELECT cluster_uuid FROM clusters WHERE cluster_alias" + modeClause.Suffix + ")"}, []string{s}, nil
+	return []string{uuidCol + " IN (SELECT cluster_uuid FROM clusters WHERE org_id = ? AND cluster_alias" + modeClause.Suffix + ")"},
+		[]string{orgID, s}, nil
 }
 
-func buildModeClause(param, column, mode string, vals []string, maxLen int, allowDot bool, skipSanitize bool) (map[string]any, error) {
+func buildModeClause(param, column, mode string, vals []string, maxLen int, allowDot bool, skipSanitize bool, orgID string) (map[string]any, error) {
 	if len(vals) == 0 {
 		return nil, nil
 	}
@@ -363,7 +371,7 @@ func buildModeClause(param, column, mode string, vals []string, maxLen int, allo
 		}
 		switch param {
 		case "cluster":
-			sqlClauses, paramVals, err := parseClusterParams(val, mode, column)
+			sqlClauses, paramVals, err := parseClusterParams(val, mode, column, orgID)
 			if err != nil {
 				return nil, err
 			}
@@ -408,6 +416,7 @@ func buildSQLClauseWithFilterType(
 	maxLen int,
 	allowDot bool,
 	skipSanitize bool,
+	orgID string,
 ) (map[string]any, error) {
 	hasExclude, hasExact, hasInclude := len(excludeVals) > 0, len(exactVals) > 0, len(includeVals) > 0
 
@@ -416,7 +425,7 @@ func buildSQLClauseWithFilterType(
 			return nil, nil
 		}
 		// early exit as default is includes i.e. param=value
-		return buildModeClause(param, column, FilterModeInclude, includeVals, maxLen, allowDot, skipSanitize)
+		return buildModeClause(param, column, FilterModeInclude, includeVals, maxLen, allowDot, skipSanitize, orgID)
 	}
 
 	if hasExclude {
@@ -432,7 +441,7 @@ func buildSQLClauseWithFilterType(
 
 	clauseMap := make(map[string]any)
 	if len(excludeVals) > 0 {
-		clause, err := buildModeClause(param, column, FilterModeExclude, excludeVals, maxLen, allowDot, skipSanitize)
+		clause, err := buildModeClause(param, column, FilterModeExclude, excludeVals, maxLen, allowDot, skipSanitize, orgID)
 		if err != nil {
 			return nil, err
 		}
@@ -441,7 +450,7 @@ func buildSQLClauseWithFilterType(
 		}
 	}
 	if len(exactVals) > 0 {
-		clause, err := buildModeClause(param, column, FilterModeExact, exactVals, maxLen, allowDot, skipSanitize)
+		clause, err := buildModeClause(param, column, FilterModeExact, exactVals, maxLen, allowDot, skipSanitize, orgID)
 		if err != nil {
 			return nil, err
 		}
@@ -465,7 +474,7 @@ func buildSQLClauseWithFilterType(
 		includeValsFiltered = includeVals
 	}
 	if len(includeValsFiltered) > 0 {
-		clause, err := buildModeClause(param, column, FilterModeInclude, includeValsFiltered, maxLen, allowDot, skipSanitize)
+		clause, err := buildModeClause(param, column, FilterModeInclude, includeValsFiltered, maxLen, allowDot, skipSanitize, orgID)
 		if err != nil {
 			return nil, err
 		}
@@ -512,7 +521,7 @@ func applyParamFilter(
 	if len(includeVals) == 0 && len(excludeVals) == 0 && len(exactVals) == 0 {
 		return nil
 	}
-	clauseMap, err := buildSQLClauseWithFilterType(param, includeVals, exactVals, excludeVals, column, maxLen, allowDot, skipSanitize)
+	clauseMap, err := buildSQLClauseWithFilterType(param, includeVals, exactVals, excludeVals, column, maxLen, allowDot, skipSanitize, orgIDFromContext(c))
 	if err != nil {
 		return err
 	}

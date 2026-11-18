@@ -225,6 +225,14 @@ func TestClusterAliasFilter_CrossTenantCollision(t *testing.T) {
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, org_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES (99, $2, $1, $3, 'src-collide', now()) ON CONFLICT DO NOTHING`, aliasFilterClusterB, orgOther, otherAlias)
 	require.NoError(t, err)
+	// Pin that the collision row really inserted — a future fixture edit
+	// reusing tenant_id/source_id would make the ON CONFLICT a silent
+	// no-op and the assertions below would pass vacuously (#797 review).
+	var collisionRows int
+	err = pool.QueryRow(ctx, `SELECT count(*) FROM clusters WHERE org_id = $1 AND cluster_alias = $2`,
+		orgOther, otherAlias).Scan(&collisionRows)
+	require.NoError(t, err)
+	require.Equal(t, 1, collisionRows, "the foreign-tenant collision row must exist (else the oracle is vacuous)")
 
 	for _, path := range []string{
 		"/api/cost-management/v1/recommendations/openshift/nodes",
@@ -301,4 +309,131 @@ func TestClusterAliasFilter_UnfilteredBaseline(t *testing.T) {
 		assert.Contains(t, body, testutil.TestClusterUUID,
 			"unfiltered baseline includes cluster A rows (path %s)", path)
 	}
+}
+
+// aliasFilterCompatApp registers the parseClusterParams paths: the compat
+// container list (the subquery shape with recommendation_sets.cluster_uuid)
+// and the namespace compat list (the direct-branch shape with column "").
+// NOTE on wiring: production binds GetNativeCompatRecommendationSetList on
+// /container (server.go) and GetRecommendationSetList on
+// /recommendations/openshift in plugin mode; this app registers
+// GetRecommendationSetList on /container directly. Both handlers share
+// mapContainerQueryParameters, so the parseClusterParams pin is identical —
+// but the handler here is not the production wiring of this path.
+func aliasFilterCompatApp() *echo.Echo {
+	return permsApp(nil, func(v1 *echo.Group) {
+		v1.GET("/recommendations/openshift/container", api.GetRecommendationSetList)
+		v1.GET("/recommendations/openshift/namespace", api.GetNamespaceRecommendationSetList)
+	})
+}
+
+// seedAliasFilterCompatRows seeds the rows the compat lists return:
+// recommendation_sets (container) and namespace_recommendation_sets, one
+// per cluster. Three fixture invariants (all found the hard way — the
+// own-alias controls failed until each was fixed):
+//   - term='short' + engine='cost': the #607 collapse pins the compat
+//     lists to those rows (term IN ('short','short_term') AND engine =
+//     'cost'); a medium-term seed serves NOTHING.
+//   - container_id is non-NULL: the collapse counts COUNT(DISTINCT
+//     container_id), which ignores NULLs — a NULL container_id seed
+//     shows count/row divergence.
+//   - monitoring_end_time is now() - 1 minute: MapQueryParameters'
+//     default end bound is now.Truncate(time.Second), so a seed-time
+//     now() can land in the SAME second as the request and fall outside
+//     the window (>= firstOfMonth still holds mid-month).
+func seedAliasFilterCompatRows(t *testing.T, ctx context.Context) {
+	t.Helper()
+	pool := database.GetPool()
+	for _, cu := range []string{testutil.TestClusterUUID, aliasFilterClusterB} {
+		_, err := pool.Exec(ctx, `INSERT INTO recommendation_sets
+			(org_id, cluster_uuid, container_id, namespace, workload, workload_type, container_name, term, engine, stale,
+			 notification_codes, estimated_savings_cents, monitoring_end_time, updated_at)
+			VALUES ($1, $2, $3, 'ns-af', 'wl-af', 'Deployment', 'ctr-af', 'short', 'cost', false, '{}', 100, now() - interval '1 minute', now())`,
+			testutil.TestOrgID, cu, cu+"-ctr")
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `INSERT INTO namespace_recommendation_sets
+			(org_id, cluster_uuid, namespace_name, term, engine, stale,
+			 rec_cpu_request_millicores, rec_cpu_limit_millicores, rec_memory_request_kib, rec_memory_limit_kib,
+			 current_cpu_request_millicores, current_cpu_limit_millicores, current_memory_request_kib, current_memory_limit_kib,
+			 confidence_level, notification_codes, monitoring_start_time, monitoring_end_time, updated_at)
+			VALUES ($1, $2, 'ns-af', 'short', 'cost', false,
+			 4000, 8000, 8388608, 16777216, 5000, 10000, 10485760, 20971520,
+			 0.9, '{}', now() - 7 * interval '1 day', now() - interval '1 minute', now())`,
+			testutil.TestOrgID, cu)
+		require.NoError(t, err)
+	}
+}
+
+// TestClusterAliasFilter_CrossTenantCollision_CompatPaths is #797's RED:
+// parseClusterParams resolves alias-form cluster filters through an
+// org-unscoped subquery, so the OTHER tenant's alias resolves the shared
+// UUID and returns this org's row — cross-tenant alias-existence
+// inference. The container compat list is the vulnerable path (the
+// subquery shape); the namespace list is the direct-branch control
+// (its outer join was org-scoped by #525 — it must already be safe).
+func TestClusterAliasFilter_CrossTenantCollision_CompatPaths(t *testing.T) {
+	setupAliasFilterTest(t)
+	ctx := context.Background()
+	seedAliasFilterOrg(t, ctx)
+	seedAliasFilterCompatRows(t, ctx)
+	pool := database.GetPool()
+	const orgOther = "org-alias-collision-other"
+	const otherAlias = "foreign-tenant-alias-compat"
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (98, $1) ON CONFLICT DO NOTHING`, orgOther)
+	require.NoError(t, err)
+	// The SAME cluster UUID as our cluster B, registered under the other
+	// tenant with a distinct alias (the #552 colliding-UUID shape).
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, org_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (98, $2, $1, $3, 'src-collide-compat', now()) ON CONFLICT DO NOTHING`, aliasFilterClusterB, orgOther, otherAlias)
+	require.NoError(t, err)
+	// #797 review (P2): pin that the collision row really inserted — the
+	// clusters unique key is (tenant_id, source_id, cluster_uuid,
+	// cluster_alias), so a future fixture edit reusing tenant_id or
+	// source_id would make the ON CONFLICT a silent no-op and the
+	// foreign-alias assertions would pass vacuously (no foreign row).
+	var collisionRows int
+	err = pool.QueryRow(ctx, `SELECT count(*) FROM clusters WHERE org_id = $1 AND cluster_alias = $2`,
+		orgOther, otherAlias).Scan(&collisionRows)
+	require.NoError(t, err)
+	require.Equal(t, 1, collisionRows, "the foreign-tenant collision row must exist (else the oracle is vacuous)")
+
+	app := aliasFilterCompatApp()
+	get := func(t *testing.T, path string) (int, string) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		return rec.Code, rec.Body.String()
+	}
+
+	t.Run("container-compat-list-foreign-alias-empty", func(t *testing.T) {
+		status, body := get(t, "/api/cost-management/v1/recommendations/openshift/container?filter%5Bcluster%5D="+otherAlias)
+		require.Equal(t, http.StatusOK, status, "body: %s", body)
+		assert.Empty(t, dataRows(t, body),
+			"the other tenant's alias must not resolve this org's colliding-UUID row (the org-unscoped subquery is #797's leak)")
+	})
+
+	t.Run("namespace-list-foreign-alias-empty", func(t *testing.T) {
+		status, body := get(t, "/api/cost-management/v1/recommendations/openshift/namespace?filter%5Bcluster%5D="+otherAlias)
+		require.Equal(t, http.StatusOK, status, "body: %s", body)
+		assert.Empty(t, dataRows(t, body),
+			"the namespace list's direct-branch outer join must already be org-scoped (#525)")
+	})
+
+	// Controls: own-org alias resolution must keep working (and keep the
+	// empties above non-vacuous — the routes do return rows for our alias).
+	t.Run("container-compat-list-own-alias-resolves", func(t *testing.T) {
+		status, body := get(t, "/api/cost-management/v1/recommendations/openshift/container?filter%5Bcluster%5D="+aliasFilterAliasB)
+		require.Equal(t, http.StatusOK, status, "body: %s", body)
+		assert.NotEmpty(t, dataRows(t, body),
+			"this org's own alias must still resolve its rows")
+	})
+
+	t.Run("namespace-list-own-alias-resolves", func(t *testing.T) {
+		status, body := get(t, "/api/cost-management/v1/recommendations/openshift/namespace?filter%5Bcluster%5D="+aliasFilterAliasB)
+		require.Equal(t, http.StatusOK, status, "body: %s", body)
+		assert.NotEmpty(t, dataRows(t, body),
+			"this org's own alias must still resolve its rows")
+	})
 }
