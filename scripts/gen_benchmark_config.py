@@ -46,6 +46,13 @@ import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
+# Per-node capacity the fixture advertises. nise's own default for
+# node_capacity_pods is 250, and ROS scores node utilisation and node sizing
+# against allocatable CPU and memory, so all three limits bind (#891).
+NODE_CPU_CORES = 64
+NODE_MEMORY_GIG = 512  # a real 64-vCPU shape: r5/r6i.16xlarge
+NODE_POD_CAPACITY = 250
+
 
 @dataclass
 class BenchmarkConfig:
@@ -148,6 +155,8 @@ class YAMLBuilder:
 
     def __init__(self, cfg: BenchmarkConfig):
         self.cfg = cfg
+        self._current_node = ""
+        self._node_budget: dict[str, dict] = {}
         random.seed(cfg.seed)
 
     def build(self) -> str:
@@ -197,6 +206,7 @@ class YAMLBuilder:
             node_namespaces = node_ns_map.get(node_name, [])
             if not node_namespaces:
                 continue
+            self._current_node = node_name
 
             lines.append(f"  - OCPGenerator:")
             lines.append(f"      start_date: {self.cfg.start_date}")
@@ -215,7 +225,7 @@ class YAMLBuilder:
             lines.append(f"      nodes:")
             lines.append(f"        - node:")
             lines.append(f"          node_name: {node_name}")
-            lines.append(f"          cpu_cores: 64")
+            lines.append(f"          cpu_cores: {NODE_CPU_CORES}")
             # 64 vCPU / 512 GiB is a real instance shape (r5/r6i.16xlarge).
             # The memory axis has to fit too: recommendedNodeCapacity takes the
             # max of usage and requests on both axes, and mem_util_p95 is scored
@@ -223,7 +233,7 @@ class YAMLBuilder:
             # healthy node into an "overcommitted" one just as CPU did (#891).
             # Measured: the 18 namespaces put 134-416 GiB of requests on a node;
             # at 256 GiB nodes 007 and 008 read 140% and 162%.
-            lines.append(f"          memory_gig: 512")
+            lines.append(f"          memory_gig: {NODE_MEMORY_GIG}")
             lines.append(f"          resource_id: {node_name}")
 
             # GPU nodes get the GPU-present label
@@ -263,7 +273,52 @@ class YAMLBuilder:
         if vm_lines:
             lines.extend(vm_lines)
 
+        self._validate_node_budget()
         return "\n".join(lines) + "\n"
+
+    def _validate_node_budget(self) -> None:
+        """Fail when a node cannot hold the pods this config puts on it.
+
+        This class of bug has shipped twice (#891): a unit slip made pods ask for
+        hundreds of cores, and nothing in the generator compared what it emitted
+        against the node the pods landed on. nise clamps requests to the node's
+        cores and ROS then reports every node at 100% requested, so the fixture
+        looks plausible in the CSVs while being physically impossible.
+
+        VMs are not counted: they run in their own generator block and nise
+        tracks their usage separately from pod requests.
+        """
+        over = []
+        for node, b in sorted(self._node_budget.items()):
+            problems = []
+            if b["pods"] > NODE_POD_CAPACITY:
+                problems.append(
+                    f"{b['pods']} pods (node_capacity_pods {NODE_POD_CAPACITY})"
+                )
+            if b["cpu"] > NODE_CPU_CORES:
+                problems.append(
+                    f"{b['cpu']:.1f} cores requested ({NODE_CPU_CORES} present)"
+                )
+            if b["mem"] > NODE_MEMORY_GIG:
+                problems.append(
+                    f"{b['mem']:.0f} GiB requested ({NODE_MEMORY_GIG} present)"
+                )
+            if problems:
+                over.append(f"  {node}: " + ", ".join(problems))
+
+        if not over:
+            return
+
+        print(
+            "ERROR: the generated config oversubscribes these nodes. ROS sizes a "
+            "node from max(usage_p95, requests) / target_util, so an over-committed "
+            "node makes every node recommendation a scale-up (#891).\n"
+            + "\n".join(over)
+            + f"\n\nFix: raise BenchmarkConfig.nodes_per_1000 (currently "
+            f"{self.cfg.nodes_per_1000}) or lower the per-pod request bands.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     def _build_nodes(self) -> list[str]:
         return [f"bench-node-{i:03d}" for i in range(self.cfg.num_nodes)]
@@ -386,6 +441,25 @@ class YAMLBuilder:
         lines.append(f"                    full_period: {mem_usage}")
         lines.append(f"                  labels: label_app:{name.rsplit('-', 1)[0]}{label_extra}")
         lines.append(f"                  workload: deployment")
+
+        # Record what this pod actually asks for, so the node budget can be
+        # checked against the same numbers nise reads (#891). Drawn here, not in
+        # _assign_pods_to_namespaces, so a future unit slip is caught by
+        # measurement instead of by review.
+        budget = self._node_budget.setdefault(
+            self._current_node, {"pods": 0, "cpu": 0.0, "mem": 0.0}
+        )
+        budget["pods"] += 1
+        budget["cpu"] += float(cpu_req)
+        budget["mem"] += float(mem_req)
+        if float(cpu_req) > NODE_CPU_CORES:
+            print(
+                f"ERROR: pod {name} on {self._current_node} requests {cpu_req} cores; "
+                f"the node has {NODE_CPU_CORES}. A per-pod request above a whole node "
+                f"means the unit is wrong (cores vs millicores) — see #891.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
         # GPU blocks
         if pod_type == "gpu_ts":
