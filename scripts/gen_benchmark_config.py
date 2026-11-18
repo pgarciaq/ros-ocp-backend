@@ -216,7 +216,14 @@ class YAMLBuilder:
             lines.append(f"        - node:")
             lines.append(f"          node_name: {node_name}")
             lines.append(f"          cpu_cores: 64")
-            lines.append(f"          memory_gig: 256")
+            # 64 vCPU / 512 GiB is a real instance shape (r5/r6i.16xlarge).
+            # The memory axis has to fit too: recommendedNodeCapacity takes the
+            # max of usage and requests on both axes, and mem_util_p95 is scored
+            # against allocatable, so an over-committed memory request turns a
+            # healthy node into an "overcommitted" one just as CPU did (#891).
+            # Measured: the 18 namespaces put 134-416 GiB of requests on a node;
+            # at 256 GiB nodes 007 and 008 read 140% and 162%.
+            lines.append(f"          memory_gig: 512")
             lines.append(f"          resource_id: {node_name}")
 
             # GPU nodes get the GPU-present label
