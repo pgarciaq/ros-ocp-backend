@@ -112,7 +112,7 @@ func TestComputeAndPersistNodeGPUTimeSlicingRecs_Upsert(t *testing.T) {
 
 	costData := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"gpu_cost_per_month": {Infrastructure: 250.0, Supplementary: 50.0},
+			"gpu_cost_per_month": {Infrastructure: 25_000_000_000, Supplementary: 5_000_000_000},
 		},
 	}
 	terms := []core.TermConfig{{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168}}

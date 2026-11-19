@@ -73,19 +73,21 @@ func TestRecalculateSavingsForOrg_NodeUpdatesSavingsNotClassification(t *testing
 	clusterUUID := "11111111-1111-1111-1111-111111111111"
 	seedClustersForRecalcTest(t, pool, orgID, clusterUUID)
 
-	const highNodeRate = 5000.0
+	// #461: money on the wire is integer micro-cents.
+	const highNodeRateMicroCents = int64(500_000_000_000) // $5000/month
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = fmt.Fprintf(w, `{
 			"cluster_id": %q,
+			"money_scale": "microcents",
 			"currency": "USD",
 			"configured_rates": {
-				"cpu_core_usage_per_hour": {"infrastructure": 0, "supplementary": 0.01},
-				"memory_gb_usage_per_hour": {"infrastructure": 0, "supplementary": 0.02},
-				"node_cost_per_month": {"infrastructure": %g, "supplementary": 0}
+				"cpu_core_usage_per_hour": {"infrastructure": 0, "supplementary": 1000000},
+				"memory_gb_usage_per_hour": {"infrastructure": 0, "supplementary": 2000000},
+				"node_cost_per_month": {"infrastructure": %d, "supplementary": 0}
 			},
 			"namespace_aggregates": {}
-		}`, clusterUUID, highNodeRate)
+		}`, clusterUUID, highNodeRateMicroCents)
 	}))
 	t.Cleanup(srv.Close)
 	t.Setenv("KOKU_MASU_URL", srv.URL)
@@ -247,12 +249,12 @@ func TestApplyNodeSavings_RateChangeRecomputesValue(t *testing.T) {
 	}}
 	lowRates := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"node_cost_per_month": {Infrastructure: 100, Supplementary: 0},
+			"node_cost_per_month": {Infrastructure: 10_000_000_000, Supplementary: 0},
 		},
 	}
 	highRates := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"node_cost_per_month": {Infrastructure: 5000, Supplementary: 0},
+			"node_cost_per_month": {Infrastructure: 500_000_000_000, Supplementary: 0},
 		},
 	}
 	ApplyNodeSavings(recs, lowRates, 730)
@@ -274,19 +276,21 @@ func TestRecalculateSavingsForOrg_QuotaUpdatesSavingsNotClassification(t *testin
 	namespace := "quota-recalc-ns"
 	seedClustersForRecalcTest(t, pool, orgID, clusterUUID)
 
-	const highCPURate = 1.0
+	// #461: money on the wire is integer micro-cents.
+	const highCPURateMicroCents = int64(100_000_000) // $1/core-hour
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = fmt.Fprintf(w, `{
 			"cluster_id": %q,
+			"money_scale": "microcents",
 			"currency": "USD",
 			"configured_rates": {
-				"cpu_core_usage_per_hour": {"infrastructure": 0, "supplementary": %g},
-				"memory_gb_usage_per_hour": {"infrastructure": 0, "supplementary": 0.02},
-				"storage_gb_usage_per_month": {"infrastructure": 0, "supplementary": 0.01}
+				"cpu_core_usage_per_hour": {"infrastructure": 0, "supplementary": %d},
+				"memory_gb_usage_per_hour": {"infrastructure": 0, "supplementary": 2000000},
+				"storage_gb_usage_per_month": {"infrastructure": 0, "supplementary": 1000000}
 			},
 			"namespace_aggregates": {}
-		}`, clusterUUID, highCPURate)
+		}`, clusterUUID, highCPURateMicroCents)
 	}))
 	t.Cleanup(srv.Close)
 	t.Setenv("KOKU_MASU_URL", srv.URL)
@@ -355,7 +359,7 @@ func TestRecalculateQuotaSavings_Unit(t *testing.T) {
 	}}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"cpu_core_usage_per_hour": {Infrastructure: 0, Supplementary: 0.5},
+			"cpu_core_usage_per_hour": {Infrastructure: 0, Supplementary: 50_000_000},
 		},
 	}
 	ApplyQuotaSavings(recs, cd, 730)
@@ -373,7 +377,7 @@ func TestRecalculateClusterQuotaSavings_Unit(t *testing.T) {
 	}}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"cpu_core_usage_per_hour": {Infrastructure: 0, Supplementary: 1.0},
+			"cpu_core_usage_per_hour": {Infrastructure: 0, Supplementary: 100_000_000},
 		},
 	}
 	ApplyClusterQuotaSavings(recs, cd, 730)

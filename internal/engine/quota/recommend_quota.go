@@ -52,9 +52,11 @@ func ApplyQuotaSavings(recs []QuotaRec, costData *costdata.ClusterCostData, hour
 	if costData == nil {
 		return
 	}
-	cpuRate := core.RateMicroCentsPerMCHour(costdata.CPUCoreHourlyRate(costData))
-	memRate := core.RateMicroCentsPerGiBHour(costdata.MemoryGBHourlyRate(costData))
-	storageRate := core.RateMicroCentsPerGiBMonth(costdata.StorageRequestPerMonth(costData))
+	// Koku money is micro-cents per core-hour / GiB-hour / GiB-month (#461); only
+	// the CPU rate needs the per-core -> per-millicore division.
+	cpuRate := core.RateMicroCentsPerMCHourFromCoreHour(costdata.CPUCoreHourlyRate(costData))
+	memRate := costdata.MemoryGBHourlyRate(costData)
+	storageRate := costdata.StorageRequestPerMonth(costData)
 
 	for i := range recs {
 		if recs[i].RecommendationType != QuotaRecTypeTighten {

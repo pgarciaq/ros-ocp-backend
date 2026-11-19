@@ -17,9 +17,11 @@ func ApplyNodeSavings(recs []Rec, costData *costdata.ClusterCostData, hoursPerMo
 		return
 	}
 
-	cpuRate := core.RateMicroCentsPerMCHour(costdata.CPUCoreHourlyRate(costData))
-	memRate := core.RateMicroCentsPerGiBHour(costdata.MemoryGBHourlyRate(costData))
-	nodeRate := core.RateMicroCentsPerDollarMonth(costdata.NodeCostPerMonth(costData))
+	// Koku money is micro-cents per core-hour / GiB-hour / month (#461); only the
+	// CPU rate needs the per-core -> per-millicore division.
+	cpuRate := core.RateMicroCentsPerMCHourFromCoreHour(costdata.CPUCoreHourlyRate(costData))
+	memRate := costdata.MemoryGBHourlyRate(costData)
+	nodeRate := costdata.NodeCostPerMonth(costData)
 
 	for i := range recs {
 		savingsMicroCents := computeNodeSavingsMicroCents(&recs[i], cpuRate, memRate, nodeRate, hoursPerMonth)

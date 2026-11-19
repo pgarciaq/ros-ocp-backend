@@ -10,7 +10,6 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
-	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
 )
 
@@ -83,7 +82,7 @@ func PersistGPUMIGRecommendationSets(
 
 			wasteCents := int64(0)
 			if rec.GPUIdleState != core.IdleStateActive && gpuMonthlyRate > 0 {
-				wasteCents = money.USDToCents(gpuMonthlyRate)
+				wasteCents = core.MicroCentsToCents(gpuMonthlyRate)
 			}
 
 			notifCodes := rec.NotificationCodes

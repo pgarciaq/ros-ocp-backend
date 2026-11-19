@@ -27,7 +27,7 @@ func TestBoundedCostCache_TTLExpiry(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&fetchCount, 1)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"cluster_id":"c1","currency":"USD","configured_rates":{},"namespace_aggregates":{}}`))
+		_, _ = w.Write([]byte(`{"cluster_id":"c1","money_scale":"microcents","currency":"USD","configured_rates":{},"namespace_aggregates":{}}`))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -65,6 +65,7 @@ func TestBoundedCostCache_LRUEviction(t *testing.T) {
 		cluster := r.URL.Query().Get("cluster_id")
 		resp := map[string]any{
 			"cluster_id":           cluster,
+			"money_scale":          "microcents",
 			"currency":             "USD",
 			"configured_rates":     map[string]any{},
 			"namespace_aggregates": map[string]any{},
@@ -103,7 +104,7 @@ func TestBoundedCostCache_InvalidateByOrg(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&fetchCount, 1)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"cluster_id":"c1","currency":"USD","configured_rates":{},"namespace_aggregates":{}}`))
+		_, _ = w.Write([]byte(`{"cluster_id":"c1","money_scale":"microcents","currency":"USD","configured_rates":{},"namespace_aggregates":{}}`))
 	}))
 	t.Cleanup(srv.Close)
 

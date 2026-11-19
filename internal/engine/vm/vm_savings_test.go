@@ -22,16 +22,17 @@ func vmRecForSavings() *Recommendation {
 	}
 }
 
-func vmCostData(cpuRate, memRate, gpuRate float64) *costdata.ClusterCostData {
+// Rates are micro-cents per the metric's unit (#461), as Koku now emits them.
+func vmCostData(cpuRate, memRate, gpuRate int64) *costdata.ClusterCostData {
 	return vmCostDataWithVMRate(cpuRate, memRate, gpuRate, 0)
 }
 
-func vmCostDataWithVMRate(cpuRate, memRate, gpuRate, vmMonthlyRate float64) *costdata.ClusterCostData {
+func vmCostDataWithVMRate(cpuRate, memRate, gpuRate, vmMonthlyRate int64) *costdata.ClusterCostData {
 	rates := map[string]costdata.RatePair{
-		"cpu_core_request_per_hour":  {Supplementary: cpuRate * 0.4},
-		"cpu_core_usage_per_hour":    {Supplementary: cpuRate * 0.6},
-		"memory_gb_request_per_hour": {Supplementary: memRate * 0.3},
-		"memory_gb_usage_per_hour":   {Supplementary: memRate * 0.7},
+		"cpu_core_request_per_hour":  {Supplementary: cpuRate * 4 / 10},
+		"cpu_core_usage_per_hour":    {Supplementary: cpuRate * 6 / 10},
+		"memory_gb_request_per_hour": {Supplementary: memRate * 3 / 10},
+		"memory_gb_usage_per_hour":   {Supplementary: memRate * 7 / 10},
 		"gpu_cost_per_month":         {Infrastructure: gpuRate},
 	}
 	if vmMonthlyRate > 0 {
@@ -45,14 +46,14 @@ func vmCostDataWithVMRate(cpuRate, memRate, gpuRate, vmMonthlyRate float64) *cos
 
 func TestEffectiveCPUCoreHourlyRate_UsesMaxOfRequestAndUsage(t *testing.T) {
 	cd := vmCostData(0, 0, 0)
-	cd.ConfiguredRates["cpu_core_request_per_hour"] = costdata.RatePair{Supplementary: 0.2}
-	cd.ConfiguredRates["cpu_core_usage_per_hour"] = costdata.RatePair{Supplementary: 0.5}
-	assert.InDelta(t, 0.5, engine.EffectiveCPUCoreHourlyRate(cd), 1e-9)
+	cd.ConfiguredRates["cpu_core_request_per_hour"] = costdata.RatePair{Supplementary: 20_000_000}
+	cd.ConfiguredRates["cpu_core_usage_per_hour"] = costdata.RatePair{Supplementary: 50_000_000}
+	assert.Equal(t, int64(50_000_000), engine.EffectiveCPUCoreHourlyRate(cd))
 }
 
 func TestComputeVMSavings_Downsize(t *testing.T) {
 	rec := vmRecForSavings()
-	cd := vmCostData(1.0, 2.0, 0)
+	cd := vmCostData(100_000_000, 200_000_000, 0)
 
 	got := ComputeVMSavings(rec, cd, 730)
 	require.NotNil(t, got)
@@ -65,7 +66,7 @@ func TestComputeVMSavings_Idle(t *testing.T) {
 	rec.Category = VMCategoryIdle
 	rec.RecommendedVCPU = 1
 	rec.RecommendedMemoryGiB = 4
-	cd := vmCostData(1.0, 2.0, 600)
+	cd := vmCostData(100_000_000, 200_000_000, 60_000_000_000)
 
 	got := ComputeVMSavings(rec, cd, 730)
 	require.NotNil(t, got)
@@ -76,7 +77,7 @@ func TestComputeVMSavings_Idle(t *testing.T) {
 func TestComputeVMSavings_IdleIncludesVMCostPerMonth(t *testing.T) {
 	rec := vmRecForSavings()
 	rec.Category = VMCategoryIdle
-	cd := vmCostDataWithVMRate(0, 0, 0, 250)
+	cd := vmCostDataWithVMRate(0, 0, 0, 25_000_000_000)
 
 	got := ComputeVMSavings(rec, cd, 730)
 	require.NotNil(t, got)
@@ -87,7 +88,7 @@ func TestComputeVMSavings_AbandonedWithGPU(t *testing.T) {
 	rec := vmRecForSavings()
 	rec.Category = VMCategoryAbandoned
 	rec.GPUCount = 2
-	cd := vmCostData(1.0, 2.0, 600)
+	cd := vmCostData(100_000_000, 200_000_000, 60_000_000_000)
 
 	got := ComputeVMSavings(rec, cd, 730)
 	require.NotNil(t, got)
@@ -100,7 +101,7 @@ func TestComputeVMSavings_PowerOffCandidate(t *testing.T) {
 	rec.Category = VMCategoryPowerOffCandidate
 	bp := int32(7000)
 	rec.PowerOffIdleRatio = &bp
-	cd := vmCostData(1.0, 2.0, 0)
+	cd := vmCostData(100_000_000, 200_000_000, 0)
 
 	got := ComputeVMSavings(rec, cd, 730)
 	require.NotNil(t, got)
@@ -116,7 +117,7 @@ func TestComputeVMSavings_GPURemove(t *testing.T) {
 	rec.GPUCount = 1
 	rec.GPUModel = "NVIDIA-A100-SXM4-80GB"
 	rec.RecommendedGPUAction = vmGPUActionRemoveGPU
-	cd := vmCostData(1.0, 2.0, 600)
+	cd := vmCostData(100_000_000, 200_000_000, 60_000_000_000)
 
 	got := ComputeVMSavings(rec, cd, 730)
 	require.NotNil(t, got)
@@ -137,7 +138,7 @@ func TestComputeVMSavings_NoRates(t *testing.T) {
 func TestApplyVMSavings_Disabled(t *testing.T) {
 	rec := vmRecForSavings()
 	recs := []Recommendation{*rec}
-	cd := vmCostData(1.0, 2.0, 0)
+	cd := vmCostData(100_000_000, 200_000_000, 0)
 
 	ApplyVMSavings(recs, cd, false, 730)
 	assert.Nil(t, recs[0].EstimatedSavingsCents)
@@ -155,7 +156,7 @@ func TestApplyVMSavings_NilProviderData(t *testing.T) {
 func TestApplyVMSavings_CurrencyFromCostData(t *testing.T) {
 	rec := vmRecForSavings()
 	recs := []Recommendation{*rec}
-	cd := vmCostData(1.0, 2.0, 0)
+	cd := vmCostData(100_000_000, 200_000_000, 0)
 
 	ApplyVMSavings(recs, cd, true, 730)
 	require.NotNil(t, recs[0].EstimatedSavingsCents)

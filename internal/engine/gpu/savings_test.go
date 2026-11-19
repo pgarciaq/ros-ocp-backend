@@ -25,7 +25,7 @@ func TestApplyGPUSavings_NoGPURate(t *testing.T) {
 	rec := &GPURec{Classification: GPUClassIdle, GPUModelName: "A100"}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"cpu_core_usage_per_hour": {Infrastructure: 0, Supplementary: 0.007},
+			"cpu_core_usage_per_hour": {Infrastructure: 0, Supplementary: 700_000},
 		},
 	}
 	ApplyGPUSavings(rec, cd)
@@ -36,7 +36,7 @@ func TestApplyGPUSavings_IdleGPU(t *testing.T) {
 	rec := &GPURec{Classification: GPUClassIdle, GPUModelName: "A100"}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"gpu_cost_per_month": {Infrastructure: 500, Supplementary: 100},
+			"gpu_cost_per_month": {Infrastructure: 50_000_000_000, Supplementary: 10_000_000_000},
 		},
 	}
 	ApplyGPUSavings(rec, cd)
@@ -51,7 +51,7 @@ func TestApplyGPUSavings_MIGRightSizing_A100_80GB(t *testing.T) {
 	}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"gpu_cost_per_month": {Infrastructure: 0, Supplementary: 700},
+			"gpu_cost_per_month": {Infrastructure: 0, Supplementary: 70_000_000_000},
 		},
 	}
 	ApplyGPUSavings(rec, cd)
@@ -69,7 +69,7 @@ func TestApplyGPUSavings_MIGRightSizing_FullGPU(t *testing.T) {
 	}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"gpu_cost_per_month": {Infrastructure: 700, Supplementary: 0},
+			"gpu_cost_per_month": {Infrastructure: 70_000_000_000, Supplementary: 0},
 		},
 	}
 	ApplyGPUSavings(rec, cd)
@@ -84,7 +84,7 @@ func TestApplyGPUSavings_WellUtilized(t *testing.T) {
 	}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"gpu_cost_per_month": {Infrastructure: 500, Supplementary: 0},
+			"gpu_cost_per_month": {Infrastructure: 50_000_000_000, Supplementary: 0},
 		},
 	}
 	ApplyGPUSavings(rec, cd)
@@ -100,7 +100,7 @@ func TestApplyGPUSavings_NonMIGGPU_Underutilized(t *testing.T) {
 	}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"gpu_cost_per_month": {Infrastructure: 300, Supplementary: 0},
+			"gpu_cost_per_month": {Infrastructure: 30_000_000_000, Supplementary: 0},
 		},
 	}
 	ApplyGPUSavings(rec, cd)
@@ -111,23 +111,24 @@ func TestApplyGPUSavings_NonMIGGPU_Underutilized(t *testing.T) {
 func TestApplyGPUSavings_NilRec(t *testing.T) {
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"gpu_cost_per_month": {Infrastructure: 500, Supplementary: 0},
+			"gpu_cost_per_month": {Infrastructure: 50_000_000_000, Supplementary: 0},
 		},
 	}
 	ApplyGPUSavings(nil, cd) // should not panic
 }
 
 func TestGpuMonthlyRate(t *testing.T) {
-	assert.Equal(t, 0.0, GPUMonthlyRate(nil))
-	assert.Equal(t, 0.0, GPUMonthlyRate(&costdata.ClusterCostData{}))
-	assert.Equal(t, 0.0, GPUMonthlyRate(&costdata.ClusterCostData{
+	// #461: the accessor returns the Koku wire scale, micro-cents per month.
+	assert.Equal(t, int64(0), GPUMonthlyRate(nil))
+	assert.Equal(t, int64(0), GPUMonthlyRate(&costdata.ClusterCostData{}))
+	assert.Equal(t, int64(0), GPUMonthlyRate(&costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{},
 	}))
-	assert.InDelta(t, 700.0, GPUMonthlyRate(&costdata.ClusterCostData{
+	assert.Equal(t, int64(70_000_000_000), GPUMonthlyRate(&costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"gpu_cost_per_month": {Infrastructure: 500, Supplementary: 200},
+			"gpu_cost_per_month": {Infrastructure: 50_000_000_000, Supplementary: 20_000_000_000},
 		},
-	}), 0.01)
+	}), "$500 + $200 must sum to $700 as micro-cents")
 }
 
 func TestMigTotalSlices(t *testing.T) {

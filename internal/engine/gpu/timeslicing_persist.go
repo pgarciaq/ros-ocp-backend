@@ -43,7 +43,8 @@ func ComputeAndPersistNodeGPUTimeSlicingRecs(
 	var gpuRate *float32
 	if costData != nil {
 		if rate := GPUMonthlyRate(costData); rate > 0 {
-			r := float32(rate)
+			// This path projects dollars as float32; the wire rate is micro-cents.
+			r := float32(float64(rate) / float64(core.MicroCentsPerDollar))
 			gpuRate = &r
 		}
 	}

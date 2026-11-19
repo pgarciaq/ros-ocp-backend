@@ -65,7 +65,7 @@ func ApplyGPUSavings(rec *GPURec, costData *costdata.ClusterCostData) {
 		return
 	}
 
-	gpuRateMicroCents := core.RateMicroCentsPerDollarMonth(GPUMonthlyRate(costData))
+	gpuRateMicroCents := GPUMonthlyRate(costData)
 	if gpuRateMicroCents == 0 {
 		return
 	}
@@ -102,8 +102,9 @@ func ComputeGPUSavingsCents(rec *GPURec, costData *costdata.ClusterCostData) *in
 }
 
 // GPUMonthlyRate extracts the GPU monthly cost rate (infrastructure +
-// supplementary) from Koku cost data. Returns 0 if unavailable.
-func GPUMonthlyRate(costData *costdata.ClusterCostData) float64 {
+// supplementary) from Koku cost data, in micro-cents per month (#461).
+// Returns 0 if unavailable.
+func GPUMonthlyRate(costData *costdata.ClusterCostData) int64 {
 	if costData == nil || costData.ConfiguredRates == nil {
 		return 0
 	}

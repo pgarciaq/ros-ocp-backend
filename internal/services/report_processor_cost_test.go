@@ -66,7 +66,7 @@ func TestNativeEngineCostFetch_SavingsEstimatesEnabled_CallsMasu(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		masuCalls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"cluster_id":"cluster-1","configured_rates":{},"namespace_aggregates":{}}`))
+		_, _ = w.Write([]byte(`{"cluster_id":"cluster-1","money_scale":"microcents","configured_rates":{},"namespace_aggregates":{}}`))
 	}))
 	t.Cleanup(srv.Close)
 

@@ -67,11 +67,11 @@ func TestApplySavingsEstimates_CostModelOnly(t *testing.T) {
 		DistributionType: "cpu",
 		Namespaces: map[string]costdata.NamespaceCosts{
 			"ns1": {
-				CostModelCPUCost: 730.0, // $1/core-hour effective
+				CostModelCPUCost: 73_000_000_000, // $1/core-hour effective
 				CostModelMemCost: 0,
 				InfraCost:        0,
-				CPURequestHours:  730.0,
-				MemRequestHours:  730.0,
+				CPURequestHours:  730_000,
+				MemRequestHours:  730_000,
 			},
 		},
 	}
@@ -99,9 +99,9 @@ func TestApplySavingsEstimates_WithInfraCosts_CPUDistribution(t *testing.T) {
 			"ns1": {
 				CostModelCPUCost: 0,
 				CostModelMemCost: 0,
-				InfraCost:        730.0, // $1/core-hour of infra
-				CPURequestHours:  730.0,
-				MemRequestHours:  730.0,
+				InfraCost:        73_000_000_000, // $1/core-hour of infra
+				CPURequestHours:  730_000,
+				MemRequestHours:  730_000,
 			},
 		},
 	}
@@ -129,9 +129,9 @@ func TestApplySavingsEstimates_WithInfraCosts_MemoryDistribution(t *testing.T) {
 			"ns1": {
 				CostModelCPUCost: 0,
 				CostModelMemCost: 0,
-				InfraCost:        730.0,
-				CPURequestHours:  730.0,
-				MemRequestHours:  730.0,
+				InfraCost:        73_000_000_000,
+				CPURequestHours:  730_000,
+				MemRequestHours:  730_000,
 			},
 		},
 	}
@@ -157,9 +157,9 @@ func TestApplySavingsEstimates_ZeroPodCount_DefaultsToOne(t *testing.T) {
 		DistributionType: "cpu",
 		Namespaces: map[string]costdata.NamespaceCosts{
 			"ns1": {
-				CostModelCPUCost: 730.0,
-				CPURequestHours:  730.0,
-				MemRequestHours:  730.0,
+				CostModelCPUCost: 73_000_000_000,
+				CPURequestHours:  730_000,
+				MemRequestHours:  730_000,
 			},
 		},
 	}
@@ -183,9 +183,9 @@ func TestApplySavingsEstimates_NegativeSavings_Underprovisioned(t *testing.T) {
 		DistributionType: "cpu",
 		Namespaces: map[string]costdata.NamespaceCosts{
 			"ns1": {
-				CostModelCPUCost: 730.0,
-				CPURequestHours:  730.0,
-				MemRequestHours:  730.0,
+				CostModelCPUCost: 73_000_000_000,
+				CPURequestHours:  730_000,
+				MemRequestHours:  730_000,
 			},
 		},
 	}
@@ -210,12 +210,12 @@ func TestApplySavingsEstimates_CombinedCostModelAndInfraAndDistributed(t *testin
 		DistributionType: "cpu",
 		Namespaces: map[string]costdata.NamespaceCosts{
 			"ns1": {
-				CostModelCPUCost: 730.0, // $1/core-hour cost model
-				CostModelMemCost: 365.0, // $0.5/GiB-hour cost model
-				InfraCost:        365.0, // $0.5/core-hour infra (cpu distribution)
-				DistributedCost:  365.0, // $0.5/core-hour distributed platform overhead
-				CPURequestHours:  730.0,
-				MemRequestHours:  730.0,
+				CostModelCPUCost: 73_000_000_000, // $1/core-hour cost model
+				CostModelMemCost: 36_500_000_000, // $0.5/GiB-hour cost model
+				InfraCost:        36_500_000_000, // $0.5/core-hour infra (cpu distribution)
+				DistributedCost:  36_500_000_000, // $0.5/core-hour distributed platform overhead
+				CPURequestHours:  730_000,
+				MemRequestHours:  730_000,
 			},
 		},
 	}
@@ -250,9 +250,9 @@ func TestApplySavingsEstimates_DistributedCostOnly(t *testing.T) {
 				CostModelCPUCost: 0,
 				CostModelMemCost: 0,
 				InfraCost:        0,
-				DistributedCost:  730.0, // $1/core-hour from node/cluster monthly costs
-				CPURequestHours:  730.0,
-				MemRequestHours:  730.0,
+				DistributedCost:  73_000_000_000, // $1/core-hour from node/cluster monthly costs
+				CPURequestHours:  730_000,
+				MemRequestHours:  730_000,
 			},
 		},
 	}
@@ -279,9 +279,9 @@ func TestApplySavingsEstimates_DistributedCost_MemoryDistribution(t *testing.T) 
 				CostModelCPUCost: 0,
 				CostModelMemCost: 0,
 				InfraCost:        0,
-				DistributedCost:  730.0,
-				CPURequestHours:  730.0,
-				MemRequestHours:  730.0,
+				DistributedCost:  73_000_000_000,
+				CPURequestHours:  730_000,
+				MemRequestHours:  730_000,
 			},
 		},
 	}
@@ -307,9 +307,9 @@ func TestApplySavingsEstimates_UsesDesiredReplicas(t *testing.T) {
 		DistributionType: "cpu",
 		Namespaces: map[string]costdata.NamespaceCosts{
 			"ns1": {
-				CostModelCPUCost: 730.0, // $1/core-hour
-				CPURequestHours:  730.0,
-				MemRequestHours:  730.0,
+				CostModelCPUCost: 73_000_000_000, // $1/core-hour
+				CPURequestHours:  730_000,
+				MemRequestHours:  730_000,
 			},
 		},
 	}
@@ -334,12 +334,12 @@ func TestApplySavingsEstimates_NegativeCostDataClamped(t *testing.T) {
 		DistributionType: "cpu",
 		Namespaces: map[string]costdata.NamespaceCosts{
 			"ns1": {
-				CostModelCPUCost: -500.0, // corrupted negative
-				CostModelMemCost: -200.0,
-				InfraCost:        -100.0,
-				DistributedCost:  -50.0,
-				CPURequestHours:  730.0,
-				MemRequestHours:  730.0,
+				CostModelCPUCost: -50_000_000_000, // corrupted negative
+				CostModelMemCost: -20_000_000_000,
+				InfraCost:        -10_000_000_000,
+				DistributedCost:  -5_000_000_000,
+				CPURequestHours:  730_000,
+				MemRequestHours:  730_000,
 			},
 		},
 	}
@@ -372,8 +372,8 @@ func TestApplySavingsEstimates_ZeroConfiguredRates(t *testing.T) {
 				CostModelMemCost: 0,
 				InfraCost:        0,
 				DistributedCost:  0,
-				CPURequestHours:  730.0,
-				MemRequestHours:  730.0,
+				CPURequestHours:  730_000,
+				MemRequestHours:  730_000,
 			},
 		},
 	}
@@ -400,7 +400,7 @@ func TestApplySavingsEstimates_ZeroUsageHours(t *testing.T) {
 		DistributionType: "cpu",
 		Namespaces: map[string]costdata.NamespaceCosts{
 			"ns1": {
-				CostModelCPUCost: 100.0,
+				CostModelCPUCost: 10_000_000_000,
 				CPURequestHours:  0, // Zero usage hours
 				MemRequestHours:  0,
 			},

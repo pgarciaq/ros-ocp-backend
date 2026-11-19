@@ -49,9 +49,9 @@ func TestApplyNodeSavings_Downsizing(t *testing.T) {
 	}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"cpu_core_usage_per_hour":  {Infrastructure: 0, Supplementary: 0.01},
-			"memory_gb_usage_per_hour": {Infrastructure: 0, Supplementary: 0.02},
-			"node_cost_per_month":      {Infrastructure: 1000, Supplementary: 0},
+			"cpu_core_usage_per_hour":  {Infrastructure: 0, Supplementary: 1_000_000},
+			"memory_gb_usage_per_hour": {Infrastructure: 0, Supplementary: 2_000_000},
+			"node_cost_per_month":      {Infrastructure: 100_000_000_000, Supplementary: 0},
 		},
 	}
 	ApplyNodeSavings(recs, cd, 730)
@@ -71,9 +71,9 @@ func TestApplyNodeSavings_EffectiveMetricFallback(t *testing.T) {
 	}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"cpu_core_effective_usage_per_hour":  {Infrastructure: 0, Supplementary: 0.01},
-			"memory_gb_effective_usage_per_hour": {Infrastructure: 0, Supplementary: 0.02},
-			"node_core_cost_per_month":           {Infrastructure: 1000, Supplementary: 0},
+			"cpu_core_effective_usage_per_hour":  {Infrastructure: 0, Supplementary: 1_000_000},
+			"memory_gb_effective_usage_per_hour": {Infrastructure: 0, Supplementary: 2_000_000},
+			"node_core_cost_per_month":           {Infrastructure: 100_000_000_000, Supplementary: 0},
 		},
 	}
 	ApplyNodeSavings(recs, cd, 730)
@@ -92,8 +92,8 @@ func TestApplyNodeSavings_UpsizingNegativeSavings(t *testing.T) {
 	}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"cpu_core_usage_per_hour":  {Infrastructure: 0, Supplementary: 0.01},
-			"memory_gb_usage_per_hour": {Infrastructure: 0, Supplementary: 0.02},
+			"cpu_core_usage_per_hour":  {Infrastructure: 0, Supplementary: 1_000_000},
+			"memory_gb_usage_per_hour": {Infrastructure: 0, Supplementary: 2_000_000},
 		},
 	}
 	ApplyNodeSavings(recs, cd, 730)
@@ -147,9 +147,9 @@ func TestRecommendNodes_EngineSavingsDiffer(t *testing.T) {
 	perfRec := byEngine["node-savings/performance"]
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"cpu_core_usage_per_hour":  {Infrastructure: 0, Supplementary: 0.01},
-			"memory_gb_usage_per_hour": {Infrastructure: 0, Supplementary: 0.02},
-			"node_cost_per_month":      {Infrastructure: 1000, Supplementary: 0},
+			"cpu_core_usage_per_hour":  {Infrastructure: 0, Supplementary: 1_000_000},
+			"memory_gb_usage_per_hour": {Infrastructure: 0, Supplementary: 2_000_000},
+			"node_cost_per_month":      {Infrastructure: 100_000_000_000, Supplementary: 0},
 		},
 	}
 	recs := []Rec{costRec, perfRec}

@@ -266,26 +266,26 @@ func TestEnrichWithGPU_NilPool(t *testing.T) {
 func TestGPUMonthlyRate_WithValidData(t *testing.T) {
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"gpu_cost_per_month": {Infrastructure: 200.0, Supplementary: 50.0},
+			"gpu_cost_per_month": {Infrastructure: 20_000_000_000, Supplementary: 5_000_000_000},
 		},
 	}
 	rate := engine.GPUMonthlyRate(cd)
-	assert.InDelta(t, 250.0, rate, 0.01)
+	assert.Equal(t, int64(25_000_000_000), rate, "$250/month in micro-cents (#461)")
 }
 
 func TestGPUMonthlyRate_NilCostData(t *testing.T) {
 	rate := engine.GPUMonthlyRate(nil)
-	assert.Equal(t, 0.0, rate)
+	assert.Equal(t, int64(0), rate)
 }
 
 func TestGPUMonthlyRate_MissingKey(t *testing.T) {
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"cpu_cost_per_hour": {Infrastructure: 1.0, Supplementary: 0.5},
+			"cpu_cost_per_hour": {Infrastructure: 100_000_000, Supplementary: 50_000_000},
 		},
 	}
 	rate := engine.GPUMonthlyRate(cd)
-	assert.Equal(t, 0.0, rate)
+	assert.Equal(t, int64(0), rate)
 }
 
 func TestGetGPUCostProvider_SavingsEstimatesDisabled(t *testing.T) {

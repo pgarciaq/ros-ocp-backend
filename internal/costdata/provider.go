@@ -25,34 +25,49 @@ const (
 	defaultCostCacheMaxEntries = 1000
 )
 
+// MoneyScaleMicroCents is the wire scale this build requires: every money field
+// of the effective-rates payload is an integer number of micro-cents
+// (1 USD = 100_000_000), hours are integer milli-hours, and markup is integer
+// basis points (#461). Koku echoes the scale it used so a Masu build that
+// predates the contract is a named error here rather than a silent 1e8
+// mispricing.
+const MoneyScaleMicroCents = "microcents"
+
 // ClusterCostData holds the cost model rates and namespace-level cost/usage
 // aggregates returned by the Koku effective-rates endpoint.
+//
+// All money is integer micro-cents, all hours are integer milli-hours and
+// MarkupPct is integer basis points — the `money_scale=microcents` contract.
 type ClusterCostData struct {
 	ClusterID        string                    `json:"cluster_id"`
 	ProviderUUID     string                    `json:"provider_uuid"`
 	DistributionType string                    `json:"distribution_type"`
-	MarkupPct        float64                   `json:"markup_pct"`
+	MoneyScale       string                    `json:"money_scale"`
+	MarkupPct        int64                     `json:"markup_pct"`
 	Currency         string                    `json:"currency"`
 	ConfiguredRates  map[string]RatePair       `json:"configured_rates"`
 	Namespaces       map[string]NamespaceCosts `json:"namespace_aggregates"`
 }
 
 // RatePair holds the infrastructure and supplementary rate for a metric.
+// Values are micro-cents per the metric's own unit (core-hour, GiB-hour,
+// GiB-month, month).
 type RatePair struct {
-	Infrastructure float64 `json:"infrastructure"`
-	Supplementary  float64 `json:"supplementary"`
+	Infrastructure int64 `json:"infrastructure"`
+	Supplementary  int64 `json:"supplementary"`
 }
 
 // NamespaceCosts holds the cost/usage aggregates for a single namespace.
+// Money fields are micro-cents; hour fields are milli-hours.
 type NamespaceCosts struct {
-	CostModelCPUCost float64 `json:"cost_model_cpu_cost"`
-	CostModelMemCost float64 `json:"cost_model_memory_cost"`
-	InfraCost        float64 `json:"infrastructure_cost"`
-	DistributedCost  float64 `json:"distributed_cost"`
-	CPUUsageHours    float64 `json:"cpu_usage_hours"`
-	CPURequestHours  float64 `json:"cpu_request_hours"`
-	MemUsageHours    float64 `json:"mem_usage_hours"`
-	MemRequestHours  float64 `json:"mem_request_hours"`
+	CostModelCPUCost int64 `json:"cost_model_cpu_cost"`
+	CostModelMemCost int64 `json:"cost_model_memory_cost"`
+	InfraCost        int64 `json:"infrastructure_cost"`
+	DistributedCost  int64 `json:"distributed_cost"`
+	CPUUsageHours    int64 `json:"cpu_usage_hours"`
+	CPURequestHours  int64 `json:"cpu_request_hours"`
+	MemUsageHours    int64 `json:"mem_usage_hours"`
+	MemRequestHours  int64 `json:"mem_request_hours"`
 }
 
 // CostDataProvider is the interface for fetching cost data from Koku.
@@ -173,6 +188,10 @@ func (p *HTTPCostDataProvider) fetchEffectiveRates(
 	params.Set("cluster_id", clusterID)
 	params.Set("start_date", start.UTC().Format("2006-01-02"))
 	params.Set("end_date", end.UTC().Format("2006-01-02"))
+	// #461: the payload's only reader wants integers. A Masu that predates the
+	// parameter answers with float dollars and echoes "dollars"; the check
+	// below turns that into an error instead of a silent 1e8 mispricing.
+	params.Set("money_scale", MoneyScaleMicroCents)
 
 	reqURL := fmt.Sprintf("%s/api/cost-management/v1/effective_rates/?%s", p.BaseURL, params.Encode())
 
@@ -194,7 +213,25 @@ func (p *HTTPCostDataProvider) fetchEffectiveRates(
 
 	var data ClusterCostData
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
+		// #461: a float in a money or hours field is the signature of a Masu
+		// build that predates the integer contract. Name that here, otherwise
+		// the operator only sees a generic unmarshal failure.
+		return nil, fmt.Errorf(
+			"decode response: %w (a float money/hours field means the Koku/Masu build "+
+				"predates #461; this build only reads money_scale=%q)", err, MoneyScaleMicroCents)
+	}
+
+	// #461: refuse a payload on any other scale. A Masu build that predates the
+	// contract omits the field (or echoes "dollars") and its money fields are
+	// floats that this build would read as micro-cents, inflating every applied
+	// saving by 100_000_000x with no error anywhere. The caller turns this into
+	// NotifNoCostData, so the failure is visible in the recommendation.
+	if data.MoneyScale != MoneyScaleMicroCents {
+		return nil, fmt.Errorf(
+			"koku effective-rates answered money_scale=%q; this build requires %q "+
+				"(the Koku/Masu build predates #461 or ignored the parameter)",
+			data.MoneyScale, MoneyScaleMicroCents,
+		)
 	}
 
 	return &data, nil

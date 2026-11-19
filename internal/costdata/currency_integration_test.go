@@ -50,24 +50,25 @@ func effectiveRatesResponse(currency, clusterID string) string {
 		"cluster_id": %q,
 		"provider_uuid": "12345678-1234-1234-1234-123456789abc",
 		"distribution_type": "cpu",
-		"markup_pct": 10.0,
+		"money_scale": "microcents",
+		"markup_pct": 1000,
 		"currency": %q,
 		"configured_rates": {
-			"cpu_core_usage_per_hour": {"infrastructure": 0.0, "supplementary": 0.007},
-			"memory_gb_usage_per_hour": {"infrastructure": 0.0, "supplementary": 0.009},
-			"node_cost_per_month": {"infrastructure": 1000.0, "supplementary": 0.0},
-			"storage_gb_request_per_month": {"infrastructure": 0.0, "supplementary": 0.10}
+			"cpu_core_usage_per_hour": {"infrastructure": 0, "supplementary": 700000},
+			"memory_gb_usage_per_hour": {"infrastructure": 0, "supplementary": 900000},
+			"node_cost_per_month": {"infrastructure": 100000000000, "supplementary": 0},
+			"storage_gb_request_per_month": {"infrastructure": 0, "supplementary": 10000000}
 		},
 		"namespace_aggregates": {
 			"koku": {
-				"cost_model_cpu_cost": 100.0,
-				"cost_model_memory_cost": 50.0,
-				"infrastructure_cost": 500.0,
-				"distributed_cost": 200.0,
-				"cpu_usage_hours": 730.0,
-				"cpu_request_hours": 1460.0,
-				"mem_usage_hours": 365.0,
-				"mem_request_hours": 730.0
+				"cost_model_cpu_cost": 10000000000,
+				"cost_model_memory_cost": 5000000000,
+				"infrastructure_cost": 50000000000,
+				"distributed_cost": 20000000000,
+				"cpu_usage_hours": 730000,
+				"cpu_request_hours": 1460000,
+				"mem_usage_hours": 365000,
+				"mem_request_hours": 730000
 			}
 		}
 	}`, clusterID, currency)
@@ -229,9 +230,9 @@ func TestSavings_CurrencyFromCostData_PassedToNodeSavings(t *testing.T) {
 	cd := &costdata.ClusterCostData{
 		Currency: "GBP",
 		ConfiguredRates: map[string]costdata.RatePair{
-			"cpu_core_usage_per_hour":  {Infrastructure: 0, Supplementary: 0.01},
-			"memory_gb_usage_per_hour": {Infrastructure: 0, Supplementary: 0.02},
-			"node_cost_per_month":      {Infrastructure: 500, Supplementary: 0},
+			"cpu_core_usage_per_hour":  {Infrastructure: 0, Supplementary: 1_000_000},
+			"memory_gb_usage_per_hour": {Infrastructure: 0, Supplementary: 2_000_000},
+			"node_cost_per_month":      {Infrastructure: 50_000_000_000, Supplementary: 0},
 		},
 	}
 
@@ -265,7 +266,7 @@ func TestSavings_CurrencyFromCostData_PassedToPVCSavings(t *testing.T) {
 	cd := &costdata.ClusterCostData{
 		Currency: "GBP",
 		ConfiguredRates: map[string]costdata.RatePair{
-			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 0.10},
+			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 10_000_000},
 		},
 	}
 

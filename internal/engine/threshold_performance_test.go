@@ -132,11 +132,11 @@ func benchContainerCostData() *costdata.ClusterCostData {
 		DistributionType: "cpu",
 		Namespaces: map[string]costdata.NamespaceCosts{
 			"ns-shared": {
-				CostModelCPUCost: 730.0,
-				CostModelMemCost: 365.0,
-				InfraCost:        365.0,
-				CPURequestHours:  730.0,
-				MemRequestHours:  730.0,
+				CostModelCPUCost: 73_000_000_000,
+				CostModelMemCost: 36_500_000_000,
+				InfraCost:        36_500_000_000,
+				CPURequestHours:  730_000,
+				MemRequestHours:  730_000,
 			},
 		},
 	}
@@ -203,9 +203,9 @@ func benchNodeRecs(count int) []NodeRec {
 func benchNodeCostData() *costdata.ClusterCostData {
 	return &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"cpu_core_usage_per_hour":  {Infrastructure: 0, Supplementary: 0.01},
-			"memory_gb_usage_per_hour": {Infrastructure: 0, Supplementary: 0.02},
-			"node_cost_per_month":      {Infrastructure: 1000, Supplementary: 0},
+			"cpu_core_usage_per_hour":  {Infrastructure: 0, Supplementary: 1_000_000},
+			"memory_gb_usage_per_hour": {Infrastructure: 0, Supplementary: 2_000_000},
+			"node_cost_per_month":      {Infrastructure: 100_000_000_000, Supplementary: 0},
 		},
 	}
 }

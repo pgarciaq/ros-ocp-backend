@@ -347,7 +347,7 @@ func expandNodeGPURecsFromTriples(
 		if costProvider != nil && orgIDStr != "" {
 			if cd := GetCachedCostRates(ctx, orgIDStr, t.ClusterUUID, start, now); cd != nil {
 				if rate := engine.GPUMonthlyRate(cd); rate > 0 {
-					r := float32(rate)
+					r := float32(float64(rate) / float64(engine.MicroCentsPerDollar))
 					gpuRate = &r
 				}
 			}
@@ -482,7 +482,7 @@ func collectNodeGPURecsForCluster(
 	if costProvider != nil && orgIDStr != "" {
 		if cd := GetCachedCostRates(ctx, orgIDStr, clusterUUID, start, now); cd != nil {
 			if rate := engine.GPUMonthlyRate(cd); rate > 0 {
-				r := float32(rate)
+				r := float32(float64(rate) / float64(engine.MicroCentsPerDollar))
 				gpuRate = &r
 			}
 		}

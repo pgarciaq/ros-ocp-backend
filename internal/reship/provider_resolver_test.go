@@ -48,6 +48,7 @@ func testMasuServer(reshipHandler http.HandlerFunc) *httptest.Server {
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"cluster_id":           clusterID,
 				"provider_uuid":        testutil.TestProviderUUID,
+				"money_scale":          "microcents",
 				"configured_rates":     map[string]interface{}{},
 				"namespace_aggregates": map[string]interface{}{},
 			})
@@ -68,6 +69,7 @@ func TestHTTPEffectiveRatesResolver_ResolveProviderUUID(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"cluster_id":    clusterID,
 			"provider_uuid": testutil.TestProviderUUID,
+			"money_scale":   costdata.MoneyScaleMicroCents,
 		})
 	}))
 	defer masu.Close()
@@ -164,6 +166,7 @@ func TestHTTPEffectiveRatesResolver_EmptyProviderUUID(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"cluster_id":    testutil.TestClusterUUID,
 			"provider_uuid": "",
+			"money_scale":   costdata.MoneyScaleMicroCents,
 		})
 	}))
 	defer masu.Close()

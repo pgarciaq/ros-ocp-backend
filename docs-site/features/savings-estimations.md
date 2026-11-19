@@ -1,6 +1,6 @@
 # Savings estimations
 
-> **Last verified:** 2026-10-15
+> **Last verified:** 2026-11-18
 
 !!! info "Quick Facts"
     **Fleet savings API:** `GET /api/cost-management/v1/recommendations/openshift/savings-summary`  
@@ -184,6 +184,12 @@ no user identity header). Response includes:
 - `namespace_aggregates` — per-namespace cost breakdown (includes OCP-on-cloud
   infrastructure correlation when configured)
 - `currency` — org's cost model currency
+
+ROS requests `money_scale=microcents`, so those values arrive as integer
+micro-cents (`1 USD = 100_000_000`), not floats. A Masu build older than that
+contract answers on the dollar scale and ROS refuses the payload, leaving
+savings at `$0` with notification **25** rather than mispricing them — see
+[Money scale](../architecture/cost-integration.md#money-scale-461).
 
 Rates come from Koku only — there is no standalone ROS cost-rate API. Update the
 OCP cost model in Koku; rates refresh on the next ingestion cycle or via

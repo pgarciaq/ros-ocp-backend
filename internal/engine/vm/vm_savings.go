@@ -42,10 +42,12 @@ func vmSavingsMicroCents(rec *Recommendation, costData *costdata.ClusterCostData
 	if rec == nil || costData == nil {
 		return nil
 	}
-	cpuRate := engine.RateMicroCentsPerMCHour(engine.EffectiveCPUCoreHourlyRate(costData))
-	memRate := engine.RateMicroCentsPerGiBHour(engine.EffectiveMemoryGBHourlyRate(costData))
-	gpuRate := engine.RateMicroCentsPerDollarMonth(engine.GPUMonthlyRate(costData))
-	vmMonthlyRate := engine.RateMicroCentsPerDollarMonth(engine.VMCostPerMonth(costData))
+	// Koku money is micro-cents per core-hour / GiB-hour / month (#461); only the
+	// CPU rate needs the per-core -> per-millicore division.
+	cpuRate := engine.RateMicroCentsPerMCHourFromCoreHour(engine.EffectiveCPUCoreHourlyRate(costData))
+	memRate := engine.EffectiveMemoryGBHourlyRate(costData)
+	gpuRate := engine.GPUMonthlyRate(costData)
+	vmMonthlyRate := engine.VMCostPerMonth(costData)
 	if cpuRate == 0 && memRate == 0 && gpuRate == 0 && vmMonthlyRate == 0 {
 		return nil
 	}

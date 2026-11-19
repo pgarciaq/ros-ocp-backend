@@ -201,7 +201,9 @@ func ResolveCostPerGiBMonth(
 }
 
 // StorageGBUsageRateFromCostData returns the sum of infrastructure and supplementary
-// rates for storage_gb_usage_per_month from Koku effective-rates configured_rates.
+// rates for storage_gb_usage_per_month from Koku effective-rates configured_rates,
+// in USD per GiB-month. Koku emits micro-cents (#461); settings and API responses
+// are dollars, so the conversion happens here at the boundary.
 func StorageGBUsageRateFromCostData(costData *costdata.ClusterCostData) (float64, bool) {
 	if costData == nil || costData.ConfiguredRates == nil {
 		return 0, false
@@ -214,7 +216,7 @@ func StorageGBUsageRateFromCostData(costData *costdata.ClusterCostData) (float64
 	if sum <= 0 {
 		return 0, false
 	}
-	return sum, true
+	return float64(sum) / float64(engine.MicroCentsPerDollar), true
 }
 
 // GetSnapshotSettingsForAPI resolves settings and adds locked_fields for the GET response.

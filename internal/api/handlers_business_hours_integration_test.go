@@ -37,6 +37,7 @@ func TestSettingsAPI_PUT_RecordsMasuRequest(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"cluster_id":           clusterID,
 				"provider_uuid":        testutil.TestProviderUUID,
+				"money_scale":          "microcents",
 				"configured_rates":     map[string]interface{}{},
 				"namespace_aggregates": map[string]interface{}{},
 			})

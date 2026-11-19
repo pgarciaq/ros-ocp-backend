@@ -68,15 +68,17 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		// Rates: $1/core-hour CPU cost model, $0.5/GiB-hour memory cost model,
 		//        $0.5/core-hour infra, $0.3/core-hour distributed (cpu distribution).
 		mockData := &costdata.ClusterCostData{
+			// #461: the mock declares the scale it emits, exactly as Koku does.
+			MoneyScale:       costdata.MoneyScaleMicroCents,
 			DistributionType: "cpu",
 			Namespaces: map[string]costdata.NamespaceCosts{
 				testutil.TestNamespace: {
-					CostModelCPUCost: 730.0,
-					CostModelMemCost: 365.0,
-					InfraCost:        365.0,
-					DistributedCost:  219.0,
-					CPURequestHours:  730.0,
-					MemRequestHours:  730.0,
+					CostModelCPUCost: 73_000_000_000,
+					CostModelMemCost: 36_500_000_000,
+					InfraCost:        36_500_000_000,
+					DistributedCost:  21_900_000_000,
+					CPURequestHours:  730_000,
+					MemRequestHours:  730_000,
 				},
 			},
 		}
@@ -153,12 +155,12 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 			DistributionType: "memory",
 			Namespaces: map[string]costdata.NamespaceCosts{
 				testutil.TestNamespace: {
-					CostModelCPUCost: 730.0,
-					CostModelMemCost: 365.0,
-					InfraCost:        365.0,
-					DistributedCost:  219.0,
-					CPURequestHours:  730.0,
-					MemRequestHours:  730.0,
+					CostModelCPUCost: 73_000_000_000,
+					CostModelMemCost: 36_500_000_000,
+					InfraCost:        36_500_000_000,
+					DistributedCost:  21_900_000_000,
+					CPURequestHours:  730_000,
+					MemRequestHours:  730_000,
 				},
 			},
 		}
@@ -186,9 +188,9 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 			DistributionType: "cpu",
 			Namespaces: map[string]costdata.NamespaceCosts{
 				"unrelated-namespace": {
-					CostModelCPUCost: 100.0,
-					CPURequestHours:  100.0,
-					MemRequestHours:  100.0,
+					CostModelCPUCost: 10_000_000_000,
+					CPURequestHours:  100_000,
+					MemRequestHours:  100_000,
 				},
 			},
 		}
@@ -216,8 +218,8 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 					CostModelMemCost: 0,
 					InfraCost:        0,
 					DistributedCost:  0,
-					CPURequestHours:  730.0,
-					MemRequestHours:  730.0,
+					CPURequestHours:  730_000,
+					MemRequestHours:  730_000,
 				},
 			},
 		}

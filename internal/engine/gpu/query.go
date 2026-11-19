@@ -15,7 +15,6 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
-	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 // GPUQueryFilters narrows gpu_container_digests rows (optional).
@@ -364,7 +363,7 @@ func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 			}
 			wasteCents := int64(0)
 			if rec.GPUIdleState != core.IdleStateActive && gpuMonthlyRate > 0 {
-				wasteCents = money.USDToCents(gpuMonthlyRate)
+				wasteCents = core.MicroCentsToCents(gpuMonthlyRate)
 			}
 			writes = append(writes, gpuClassificationWrite{
 				orgID:            orgID,

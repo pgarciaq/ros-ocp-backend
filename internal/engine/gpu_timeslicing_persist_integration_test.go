@@ -81,7 +81,7 @@ func TestGPUTimeslicingPersistPipeline_Integration(t *testing.T) {
 
 	costData := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"gpu_cost_per_month": {Infrastructure: 300.0, Supplementary: 0},
+			"gpu_cost_per_month": {Infrastructure: 30_000_000_000, Supplementary: 0},
 		},
 	}
 	require.NoError(t, engine.ComputeAndPersistNodeGPUTimeSlicingRecs(

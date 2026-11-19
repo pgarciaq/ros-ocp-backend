@@ -15,45 +15,47 @@ import (
 )
 
 // kokuEffectiveRatesResponse is the canonical JSON shape returned by
-// Koku's /api/cost-management/v1/effective_rates/ endpoint.
-// This fixture is taken from a real Koku response and validates that
-// our Go struct can deserialize it without data loss.
+// Koku's /api/cost-management/v1/effective_rates/ endpoint when the caller
+// passes `money_scale=microcents` (#461): money is integer micro-cents, hours
+// are integer milli-hours and markup is integer basis points. This fixture
+// validates that our Go struct can deserialize it without data loss.
 const kokuEffectiveRatesResponse = `{
   "cluster_id": "my-ocp-cluster-1",
   "provider_uuid": "12345678-1234-1234-1234-123456789abc",
   "distribution_type": "cpu",
-  "markup_pct": 10.0,
+  "money_scale": "microcents",
+  "markup_pct": 1000,
   "currency": "USD",
   "configured_rates": {
-    "cpu_core_usage_per_hour": {"infrastructure": 0.0, "supplementary": 0.007},
-    "cpu_core_request_per_hour": {"infrastructure": 0.0, "supplementary": 0.2},
-    "memory_gb_usage_per_hour": {"infrastructure": 0.0, "supplementary": 0.009},
-    "memory_gb_request_per_hour": {"infrastructure": 0.0, "supplementary": 0.05},
-    "storage_gb_usage_per_month": {"infrastructure": 0.0, "supplementary": 0.01},
-    "storage_gb_request_per_month": {"infrastructure": 0.0, "supplementary": 0.01},
-    "node_cost_per_month": {"infrastructure": 1000.0, "supplementary": 0.0},
-    "cluster_cost_per_month": {"infrastructure": 10000.0, "supplementary": 0.0}
+    "cpu_core_usage_per_hour": {"infrastructure": 0, "supplementary": 700000},
+    "cpu_core_request_per_hour": {"infrastructure": 0, "supplementary": 20000000},
+    "memory_gb_usage_per_hour": {"infrastructure": 0, "supplementary": 900000},
+    "memory_gb_request_per_hour": {"infrastructure": 0, "supplementary": 5000000},
+    "storage_gb_usage_per_month": {"infrastructure": 0, "supplementary": 1000000},
+    "storage_gb_request_per_month": {"infrastructure": 0, "supplementary": 1000000},
+    "node_cost_per_month": {"infrastructure": 100000000000, "supplementary": 0},
+    "cluster_cost_per_month": {"infrastructure": 1000000000000, "supplementary": 0}
   },
   "namespace_aggregates": {
     "koku": {
-      "cost_model_cpu_cost": 156.24,
-      "cost_model_memory_cost": 89.10,
-      "infrastructure_cost": 2450.00,
-      "distributed_cost": 1337.42,
-      "cpu_usage_hours": 730.5,
-      "cpu_request_hours": 1461.0,
-      "mem_usage_hours": 365.25,
-      "mem_request_hours": 730.5
+      "cost_model_cpu_cost": 15624000000,
+      "cost_model_memory_cost": 8910000000,
+      "infrastructure_cost": 245000000000,
+      "distributed_cost": 133742000000,
+      "cpu_usage_hours": 730500,
+      "cpu_request_hours": 1461000,
+      "mem_usage_hours": 365250,
+      "mem_request_hours": 730500
     },
     "openshift-monitoring": {
-      "cost_model_cpu_cost": 0.0,
-      "cost_model_memory_cost": 0.0,
-      "infrastructure_cost": 500.0,
-      "distributed_cost": 200.0,
-      "cpu_usage_hours": 100.0,
-      "cpu_request_hours": 200.0,
-      "mem_usage_hours": 50.0,
-      "mem_request_hours": 100.0
+      "cost_model_cpu_cost": 0,
+      "cost_model_memory_cost": 0,
+      "infrastructure_cost": 50000000000,
+      "distributed_cost": 20000000000,
+      "cpu_usage_hours": 100000,
+      "cpu_request_hours": 200000,
+      "mem_usage_hours": 50000,
+      "mem_request_hours": 100000
     }
   }
 }`
@@ -70,6 +72,8 @@ func TestKokuEffectiveRatesContract(t *testing.T) {
 		assert.Equal(t, "my-ocp-cluster-1", q.Get("cluster_id"), "cluster_id param")
 		assert.NotEmpty(t, q.Get("start_date"), "start_date param")
 		assert.NotEmpty(t, q.Get("end_date"), "end_date param")
+		// #461: the reader requires integers and says so on every request.
+		assert.Equal(t, "microcents", q.Get("money_scale"), "money_scale param")
 
 		// Validate date format is YYYY-MM-DD
 		for _, key := range []string{"start_date", "end_date"} {
@@ -98,7 +102,8 @@ func TestKokuEffectiveRatesContract(t *testing.T) {
 	assert.Equal(t, "my-ocp-cluster-1", data.ClusterID)
 	assert.Equal(t, "12345678-1234-1234-1234-123456789abc", data.ProviderUUID)
 	assert.Equal(t, "cpu", data.DistributionType)
-	assert.InDelta(t, 10.0, data.MarkupPct, 0.001)
+	assert.Equal(t, costdata.MoneyScaleMicroCents, data.MoneyScale)
+	assert.Equal(t, int64(1000), data.MarkupPct, "10% is 1000 basis points")
 	assert.Equal(t, "USD", data.Currency)
 
 	// Verify configured rates structure
@@ -106,32 +111,32 @@ func TestKokuEffectiveRatesContract(t *testing.T) {
 
 	cpuUsage, ok := data.ConfiguredRates["cpu_core_usage_per_hour"]
 	require.True(t, ok, "cpu_core_usage_per_hour should be present")
-	assert.InDelta(t, 0.0, cpuUsage.Infrastructure, 0.0001)
-	assert.InDelta(t, 0.007, cpuUsage.Supplementary, 0.0001)
+	assert.Equal(t, int64(0), cpuUsage.Infrastructure)
+	assert.Equal(t, int64(700000), cpuUsage.Supplementary, "$0.007/core-hour must arrive exactly")
 
 	nodeCost, ok := data.ConfiguredRates["node_cost_per_month"]
 	require.True(t, ok, "node_cost_per_month should be present")
-	assert.InDelta(t, 1000.0, nodeCost.Infrastructure, 0.01)
-	assert.InDelta(t, 0.0, nodeCost.Supplementary, 0.0001)
+	assert.Equal(t, int64(100000000000), nodeCost.Infrastructure, "$1000/month must arrive exactly")
+	assert.Equal(t, int64(0), nodeCost.Supplementary)
 
 	// Verify namespace aggregates
 	require.Len(t, data.Namespaces, 2, "should have 2 namespaces")
 
 	kokuNS, ok := data.Namespaces["koku"]
 	require.True(t, ok, "koku namespace should be present")
-	assert.InDelta(t, 156.24, kokuNS.CostModelCPUCost, 0.01)
-	assert.InDelta(t, 89.10, kokuNS.CostModelMemCost, 0.01)
-	assert.InDelta(t, 2450.0, kokuNS.InfraCost, 0.01)
-	assert.InDelta(t, 1337.42, kokuNS.DistributedCost, 0.01)
-	assert.InDelta(t, 730.5, kokuNS.CPUUsageHours, 0.01)
-	assert.InDelta(t, 1461.0, kokuNS.CPURequestHours, 0.01)
-	assert.InDelta(t, 365.25, kokuNS.MemUsageHours, 0.01)
-	assert.InDelta(t, 730.5, kokuNS.MemRequestHours, 0.01)
+	assert.Equal(t, int64(15624000000), kokuNS.CostModelCPUCost, "$156.24 in micro-cents")
+	assert.Equal(t, int64(8910000000), kokuNS.CostModelMemCost)
+	assert.Equal(t, int64(245000000000), kokuNS.InfraCost)
+	assert.Equal(t, int64(133742000000), kokuNS.DistributedCost)
+	assert.Equal(t, int64(730500), kokuNS.CPUUsageHours, "730.5 h in milli-hours")
+	assert.Equal(t, int64(1461000), kokuNS.CPURequestHours)
+	assert.Equal(t, int64(365250), kokuNS.MemUsageHours)
+	assert.Equal(t, int64(730500), kokuNS.MemRequestHours)
 
 	monNS, ok := data.Namespaces["openshift-monitoring"]
 	require.True(t, ok, "openshift-monitoring namespace should be present")
-	assert.InDelta(t, 0.0, monNS.CostModelCPUCost, 0.0001)
-	assert.InDelta(t, 500.0, monNS.InfraCost, 0.01)
+	assert.Equal(t, int64(0), monNS.CostModelCPUCost)
+	assert.Equal(t, int64(50000000000), monNS.InfraCost)
 }
 
 // TestKokuEffectiveRatesContract_EmptyResponse validates that the provider
@@ -142,6 +147,7 @@ func TestKokuEffectiveRatesContract_EmptyResponse(t *testing.T) {
 		"cluster_id": "empty-cluster",
 		"provider_uuid": "00000000-0000-0000-0000-000000000000",
 		"distribution_type": "cpu",
+		"money_scale": "microcents",
 		"markup_pct": 0,
 		"currency": "USD",
 		"configured_rates": {},
@@ -288,4 +294,84 @@ func TestKokuEffectiveRatesContract_RoundTrip(t *testing.T) {
 				"namespace %q field %q should survive round-trip", nsName, field)
 		}
 	}
+}
+
+// TestKokuEffectiveRatesContract_RejectsLegacyMoneyScale is the #461 guard that
+// makes a stale Masu loud instead of 100_000_000x wrong.
+//
+// A Masu build that predates the contract ignores `money_scale` and answers with
+// float dollars: `0.007` for a CPU rate. Read as micro-cents that is $0.007e-8,
+// but read the other way — a float payload decoded into an integer field — every
+// applied saving is off by eight orders of magnitude with no error unless one of
+// these two checks fires. Both are exercised here: the echoed scale and, for a
+// payload of whole-dollar floats that happen to survive decoding, the scale echo
+// alone.
+func TestKokuEffectiveRatesContract_RejectsLegacyMoneyScale(t *testing.T) {
+	t.Parallel()
+
+	legacyResponses := map[string]string{
+		"missing money_scale": `{
+			"cluster_id": "legacy-cluster",
+			"currency": "USD",
+			"markup_pct": 10.0,
+			"configured_rates": {"cpu_core_usage_per_hour": {"infrastructure": 0.0, "supplementary": 0.007}},
+			"namespace_aggregates": {}
+		}`,
+		"explicit dollars": `{
+			"cluster_id": "legacy-cluster",
+			"money_scale": "dollars",
+			"currency": "USD",
+			"markup_pct": 0,
+			"configured_rates": {},
+			"namespace_aggregates": {}
+		}`,
+	}
+
+	for name, body := range legacyResponses {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(body))
+			}))
+			t.Cleanup(srv.Close)
+
+			provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
+			data, err := provider.GetEffectiveRates(
+				context.Background(), "1234567", "legacy-cluster",
+				time.Now().AddDate(0, 0, -30), time.Now(),
+			)
+			require.Error(t, err, "a non-microcents payload must never be accepted")
+			assert.Nil(t, data, "no partial payload may reach the savings math")
+			// Either guard may fire first — the float fields fail to decode, the
+			// missing echo fails the scale check — but both must name #461 so the
+			// operator does not have to guess why an old Masu broke savings.
+			assert.Contains(t, err.Error(), "#461",
+				"the error must say why the payload was refused")
+		})
+	}
+}
+
+// TestKokuEffectiveRatesContract_RejectsFloatMoneyEvenWhenScaleEchoed proves the
+// integer field types are a second, independent guard: a producer that echoes
+// `microcents` but still emits floats is rejected at decode time.
+func TestKokuEffectiveRatesContract_RejectsFloatMoneyEvenWhenScaleEchoed(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"cluster_id": "float-cluster",
+			"money_scale": "microcents",
+			"configured_rates": {"cpu_core_usage_per_hour": {"infrastructure": 0.0, "supplementary": 0.007}}
+		}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
+	_, err := provider.GetEffectiveRates(
+		context.Background(), "1234567", "float-cluster",
+		time.Now().AddDate(0, 0, -30), time.Now(),
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "decode response")
 }

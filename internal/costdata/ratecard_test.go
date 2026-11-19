@@ -23,12 +23,12 @@ func TestClusterCostDataToRateCard_CopiesCurrencyAsIs(t *testing.T) {
 
 func TestClusterCostDataToRateCard_DoesNotCopyMarkupOrConfiguredRates(t *testing.T) {
 	card := ClusterCostDataToRateCard(&ClusterCostData{
-		MarkupPct: 10,
+		MarkupPct: 1_000,
 		ConfiguredRates: map[string]RatePair{
-			"cpu_core_request_per_hour": {Supplementary: 0.2},
+			"cpu_core_request_per_hour": {Supplementary: 20_000_000},
 		},
 		Namespaces: map[string]NamespaceCosts{
-			"ns1": {CostModelCPUCost: 730, CPURequestHours: 730},
+			"ns1": {CostModelCPUCost: 73_000_000_000, CPURequestHours: 730_000},
 		},
 	})
 	require.NotNil(t, card)
@@ -43,10 +43,10 @@ func TestClusterCostDataToRateCard_ClampsNegativesAndRoundsHours(t *testing.T) {
 	card := ClusterCostDataToRateCard(&ClusterCostData{
 		Namespaces: map[string]NamespaceCosts{
 			"ns1": {
-				CostModelCPUCost: -5,
-				CostModelMemCost: 1.5,
-				InfraCost:        -1,
-				CPURequestHours:  729.6,
+				CostModelCPUCost: -500_000_000,
+				CostModelMemCost: 150_000_000,
+				InfraCost:        -100_000_000,
+				CPURequestHours:  729_600,
 				MemRequestHours:  0,
 			},
 		},

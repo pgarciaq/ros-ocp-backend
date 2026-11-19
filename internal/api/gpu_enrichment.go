@@ -118,7 +118,7 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 			for _, rec := range recs {
 				if rec.GPUIdleState != engine.IdleStateActive && costData != nil {
 					if rate := engine.GPUMonthlyRate(costData); rate > 0 {
-						rec.GPUEstimatedWasteCents = money.USDToCents(rate)
+						rec.GPUEstimatedWasteCents = engine.MicroCentsToCents(rate)
 					}
 				}
 				gpuRec := toGPURecommendation(rec, blockCurrency)

@@ -17,7 +17,7 @@ func TestApplyClusterQuotaSavings_Storage(t *testing.T) {
 	}}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 10},
+			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 1_000_000_000},
 		},
 	}
 	ApplyClusterQuotaSavings(recs, cd, 730)
@@ -31,7 +31,7 @@ func TestApplyClusterQuotaSavings_PodsNoMonetarySavings(t *testing.T) {
 	}}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"cpu_core_usage_per_hour": {Infrastructure: 1, Supplementary: 0},
+			"cpu_core_usage_per_hour": {Infrastructure: 100_000_000, Supplementary: 0},
 		},
 	}
 	ApplyClusterQuotaSavings(recs, cd, 730)

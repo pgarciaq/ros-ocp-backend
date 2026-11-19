@@ -114,26 +114,27 @@ var (
 	HoursInMonth = core.HoursInMonth
 
 	// Savings functions.
-	RateMicroCentsPerMCHour           = core.RateMicroCentsPerMCHour
-	RateMicroCentsPerGiBHour          = core.RateMicroCentsPerGiBHour
-	RateMicroCentsPerGiBMonth         = core.RateMicroCentsPerGiBMonth
-	RateMicroCentsPerDollarMonth      = core.RateMicroCentsPerDollarMonth
-	EffectiveRateMicroCentsPerMCHour  = core.EffectiveRateMicroCentsPerMCHour
-	EffectiveRateMicroCentsPerGiBHour = core.EffectiveRateMicroCentsPerGiBHour
-	EffectiveRateFromCPUTotals        = core.EffectiveRateFromCPUTotals
-	EffectiveRateFromMemTotals        = core.EffectiveRateFromMemTotals
-	CPUSavingsMicroCents              = core.CPUSavingsMicroCents
-	MemSavingsMicroCentsFromKiB       = core.MemSavingsMicroCentsFromKiB
-	GiBSavingsMicroCents              = core.GiBSavingsMicroCents
-	VCPUSavingsMicroCents             = core.VCPUSavingsMicroCents
-	MemorySavingsMicroCentsFromBytes  = core.MemorySavingsMicroCentsFromBytes
-	StorageSavingsMicroCentsFromBytes = core.StorageSavingsMicroCentsFromBytes
-	MonthlyFlatSavingsMicroCents      = core.MonthlyFlatSavingsMicroCents
-	MIGFractionSavingsMicroCents      = core.MIGFractionSavingsMicroCents
-	ScaleMicroCentsByBasisPoints      = core.ScaleMicroCentsByBasisPoints
-	MicroCentsToCents                 = core.MicroCentsToCents
-	MicroCentsToDollars               = core.MicroCentsToDollars
-	QuotaTightenSavingsMicroCents     = core.QuotaTightenSavingsMicroCents
+	RateMicroCentsPerMCHour             = core.RateMicroCentsPerMCHour
+	RateMicroCentsPerMCHourFromCoreHour = core.RateMicroCentsPerMCHourFromCoreHour
+	RateMicroCentsPerGiBHour            = core.RateMicroCentsPerGiBHour
+	RateMicroCentsPerGiBMonth           = core.RateMicroCentsPerGiBMonth
+	RateMicroCentsPerDollarMonth        = core.RateMicroCentsPerDollarMonth
+	EffectiveRateMicroCentsPerMCHour    = core.EffectiveRateMicroCentsPerMCHour
+	EffectiveRateMicroCentsPerGiBHour   = core.EffectiveRateMicroCentsPerGiBHour
+	EffectiveRateFromCPUTotals          = core.EffectiveRateFromCPUTotals
+	EffectiveRateFromMemTotals          = core.EffectiveRateFromMemTotals
+	CPUSavingsMicroCents                = core.CPUSavingsMicroCents
+	MemSavingsMicroCentsFromKiB         = core.MemSavingsMicroCentsFromKiB
+	GiBSavingsMicroCents                = core.GiBSavingsMicroCents
+	VCPUSavingsMicroCents               = core.VCPUSavingsMicroCents
+	MemorySavingsMicroCentsFromBytes    = core.MemorySavingsMicroCentsFromBytes
+	StorageSavingsMicroCentsFromBytes   = core.StorageSavingsMicroCentsFromBytes
+	MonthlyFlatSavingsMicroCents        = core.MonthlyFlatSavingsMicroCents
+	MIGFractionSavingsMicroCents        = core.MIGFractionSavingsMicroCents
+	ScaleMicroCentsByBasisPoints        = core.ScaleMicroCentsByBasisPoints
+	MicroCentsToCents                   = core.MicroCentsToCents
+	MicroCentsToDollars                 = core.MicroCentsToDollars
+	QuotaTightenSavingsMicroCents       = core.QuotaTightenSavingsMicroCents
 
 	// Cost rate functions.
 	CPUCoreHourlyRate           = costdata.CPUCoreHourlyRate
@@ -174,7 +175,6 @@ var (
 	computeIdleDuration             = core.ComputeIdleDuration
 	allZeroUsage                    = core.AllZeroUsage
 	idleClassificationAuthoritative = core.IdleClassificationAuthoritative
-	clampNonNegativeUSD             = core.ClampNonNegativeUSD
 
 	// Explanation persist unexported.
 	containerExplValuePlaceholders = core.ContainerExplValuePlaceholders

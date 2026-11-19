@@ -33,6 +33,15 @@ func RateMicroCentsPerMCHour(dollarsPerCoreHour float64) int64 {
 	return int64(math.Round(dollarsPerCoreHour * float64(MicroCentsPerDollar) / float64(MillicoresPerCore)))
 }
 
+// RateMicroCentsPerMCHourFromCoreHour converts a micro-cents-per-core-hour rate
+// (the effective-rates wire scale, #461) to micro-cents per millicore-hour.
+func RateMicroCentsPerMCHourFromCoreHour(mcPerCoreHour int64) int64 {
+	if mcPerCoreHour <= 0 {
+		return 0
+	}
+	return (mcPerCoreHour + MillicoresPerCore/2) / MillicoresPerCore
+}
+
 // RateMicroCentsPerGiBHour converts a dollar-per-GiB-hour rate to micro-cents per GiB-hour.
 func RateMicroCentsPerGiBHour(dollarsPerGiBHour float64) int64 {
 	if dollarsPerGiBHour <= 0 {

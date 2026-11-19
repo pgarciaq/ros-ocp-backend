@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Cost data arrives in integer micro-cents, on a scale negotiated per request ([#461](https://github.com/pgarciaq/ros-ocp-backend/issues/461)):**
+  `effective_rates` now answers on the money scale the caller asks for, and ROS
+  sends `money_scale=microcents` on every request. `configured_rates` and the
+  money columns of `namespace_aggregates` (`cost_model_*`,
+  `infrastructure_cost`, `distributed_cost`) arrive as integer micro-cents
+  (`1 USD = 100_000_000`); `markup_pct` arrives as integer basis points (`10%`
+  → `1000`); the aggregate hour columns keep their `*_hours` names but carry
+  integer **milli-hours**. Nothing is quantized on arrival any more — the wire
+  integers are what the savings math multiplies, so the float→micro-cent
+  conversion that used to sit at the boundary is gone. `rates[]` is unchanged:
+  integer micro-cents on either scale, since #467. The Masu half is koku
+  `#461`: the producer gained the parameter there, its default remains
+  `dollars` for readers that predate the change, and every response now echoes
+  the scale it used. ROS requires the echo and refuses anything else by name —
+  a missing or `dollars` answer, or a float in a money/hours field, is a
+  contract error, so a Masu build older than
+  the contract yields `NotifNoCostData` (**25**) with `$0` savings rather than
+  a plausible number that is 100,000,000× wrong. **Deploy Masu before ROS**;
+  the cost of ignoring that order is visible savings unavailability, not
+  mispriced data.
+  [ADR-0360](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase17/docs/adr/0360-effective-rates-money-scale-negotiated.md)
+  records the decision and supersedes ADR-0291's "convert once from `float64`
+  dollars" clause; ADR-0291's integer micro-cents unit stands.
+
 - **Alias-form cluster filters resolve org-scoped ([#797](https://github.com/pgarciaq/ros-ocp-backend/issues/797)):**
   `parseClusterParams` resolved alias-form `filter[cluster]` values
   through an org-unscoped `clusters` subquery — a residual of the #525

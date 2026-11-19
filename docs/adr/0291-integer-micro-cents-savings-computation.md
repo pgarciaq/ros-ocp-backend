@@ -2,7 +2,12 @@
 
 ## Status
 
-Accepted
+Accepted — **rate-conversion clause superseded by
+[ADR-0360](0360-effective-rates-money-scale-negotiated.md)** (#461): Koku no
+longer sends `float64` dollars. `effective_rates` is asked for
+`money_scale=microcents` and answers integer micro-cents, milli-hours and basis
+points, so the boundary is a copy rather than a conversion. The integer
+micro-cents unit and the rest of this decision stand.
 
 ## Phase
 
@@ -36,9 +41,14 @@ as the internal fixed-point unit:
 
 - **Scale:** `MicroCentsPerDollar = 100_000_000` (8 decimal places below dollars;
   1 cent = 1_000_000 micro-cents)
-- **Rate conversion at boundary:** Koku rates arrive as `float64` dollars.
-  Convert once to `int64` micro-cent rates when loading (`RateMicroCentsPerMCHour`,
-  `RateMicroCentsPerGiBHour`, `RateMicroCentsPerGiBMonth`, `RateMicroCentsPerDollarMonth`)
+- **Rate boundary (amended by [ADR-0360](0360-effective-rates-money-scale-negotiated.md)):**
+  Koku rates arrive as `int64` micro-cents, because ROS asks `effective_rates`
+  for `money_scale=microcents`; the mapper copies them unchanged.
+  `RateMicroCentsPerMCHourFromCoreHour` divides a per-core-hour rate down to
+  per-millicore-hour in integers. The former float converters
+  (`RateMicroCentsPerMCHour`, `RateMicroCentsPerGiBHour`,
+  `RateMicroCentsPerGiBMonth`, `RateMicroCentsPerDollarMonth`) remain library
+  API but are off the production path.
 - **Hot path:** all deltas (millicores, KiB, bytes, vCPU, GiB) and savings
   products use signed `int64` arithmetic
 - **Output conversion once:** `MicroCentsToCents` rounds to integer cents for DB

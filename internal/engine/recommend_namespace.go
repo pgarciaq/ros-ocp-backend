@@ -220,18 +220,23 @@ func ApplyNamespaceSavingsEstimates(recs []NamespaceRec, costData *costdata.Clus
 		cpuDeltaMC := recs[i].CurrentCPURequestMC - recs[i].RecCPURequestMC
 		memDeltaKiB := recs[i].CurrentMemRequestKiB - recs[i].RecMemRequestKiB
 
-		modelCPURate := EffectiveRateMicroCentsPerMCHour(ns.CostModelCPUCost, ns.CPURequestHours)
-		modelMemRate := EffectiveRateMicroCentsPerGiBHour(ns.CostModelMemCost, ns.MemRequestHours)
+		// #461: the aggregates are already micro-cents and milli-hours, so the
+		// per-millicore-hour / per-GiB-hour derivation stays in integers.
+		modelCPURate := EffectiveRateFromCPUTotals(ns.CostModelCPUCost, ns.CPURequestHours)
+		modelMemRate := EffectiveRateFromMemTotals(ns.CostModelMemCost, ns.MemRequestHours)
 
 		cpuMicro := CPUSavingsMicroCents(cpuDeltaMC, modelCPURate, hoursPerMonth, 1)
 		memMicro := MemSavingsMicroCentsFromKiB(memDeltaKiB, modelMemRate, hoursPerMonth, 1)
 
-		totalInfraUSD := clampNonNegativeUSD(ns.InfraCost + ns.DistributedCost)
+		totalInfra := ns.InfraCost + ns.DistributedCost
+		if totalInfra < 0 {
+			totalInfra = 0
+		}
 		if distType == "memory" {
-			infraRate := EffectiveRateMicroCentsPerGiBHour(totalInfraUSD, ns.MemRequestHours)
+			infraRate := EffectiveRateFromMemTotals(totalInfra, ns.MemRequestHours)
 			memMicro += MemSavingsMicroCentsFromKiB(memDeltaKiB, infraRate, hoursPerMonth, 1)
 		} else {
-			infraRate := EffectiveRateMicroCentsPerMCHour(totalInfraUSD, ns.CPURequestHours)
+			infraRate := EffectiveRateFromCPUTotals(totalInfra, ns.CPURequestHours)
 			cpuMicro += CPUSavingsMicroCents(cpuDeltaMC, infraRate, hoursPerMonth, 1)
 		}
 

@@ -58,7 +58,7 @@ func TestRecalculateSavingsForOrg_ClusterUUIDFlowsVerbatim(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&fetchCount, 1)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"cluster_id":"c","currency":"USD","configured_rates":{},"namespace_aggregates":{}}`))
+		_, _ = w.Write([]byte(`{"cluster_id":"c","money_scale":"microcents","currency":"USD","configured_rates":{},"namespace_aggregates":{}}`))
 	}))
 	defer srv.Close()
 	clearCache := costdata.ResetCostDataCacheForTest(128)

@@ -16,7 +16,8 @@ func ApplyPVCSavings(recs []PVCRec, costData *costdata.ClusterCostData) {
 		return
 	}
 
-	storageRate := core.RateMicroCentsPerGiBMonth(costdata.StorageRequestPerMonth(costData))
+	// Koku money is micro-cents per GiB-month (#461); no conversion needed.
+	storageRate := costdata.StorageRequestPerMonth(costData)
 
 	for i := range recs {
 		savingsMicroCents := computePVCSavingsMicroCents(&recs[i], storageRate)

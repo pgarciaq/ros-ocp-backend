@@ -292,10 +292,16 @@ RateCard
 | **Tier A + B** | Same math as today: effective rate = spend / request-hours; infra+distributed by `distribution`. Prefer B when `Namespaces != nil`; missing namespace → no cost data (**no A fallback**). Markup **not** applied. |
 
 ros-ocp-backend’s `internal/costdata` HTTP client becomes **one mapper**
-(`ClusterCostData` → `RateCard`). It does not belong in librobne. After #461
-the mapper copies `int64` micro-cents and milli-hours. Until Masu ships, a
-compat decoder may quantize legacy JSON floats **once** at the mapper — never
-on `RateCard`, never in `Apply*`.
+(`ClusterCostData` → `RateCard`). It does not belong in librobne. #461 shipped
+that mapper as a **copy**: `int64` micro-cents and milli-hours in, same out, no
+conversion step.
+
+**No legacy float decoder, by decision.** The alternative — a decoder that
+quantizes old float-dollars JSON once at the mapper — was rejected: its failure
+mode is silent 1e8 inflation, and it forces ROS to deploy before Masu. Instead
+the request carries `money_scale=microcents`, Koku echoes the scale, and ROS
+refuses any other one by name (`NotifNoCostData`, savings `$0`). The float scale
+stays available on Koku for other readers until no consumer predates #461.
 
 ### 4.1 Third-party FinOps (Kubecost, Finout, Cloudability, …)
 

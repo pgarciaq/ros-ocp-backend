@@ -1,6 +1,6 @@
 # Koku Integration Contract
 
-> **Last verified:** 2026-11-06
+> **Last verified:** 2026-11-18
 
 This document describes integration between ROS-OCP-Backend and Koku: **data ingestion**,
 **tag filtering**, **cost/savings estimation** (`effective_rates`), **savings recalculation**,
@@ -93,8 +93,12 @@ GET {KOKU_MASU_URL}/api/cost-management/v1/effective_rates/
 | `cluster_id` | string | Cluster UUID |
 | `start_date` | string | Start date (YYYY-MM-DD, UTC) |
 | `end_date` | string | End date (YYYY-MM-DD, UTC) |
+| `money_scale` | string | `microcents` (what ROS sends) or `dollars` (Koku's default when omitted). The response echoes the scale it used. See [Money scale](#money-scale-461) |
 
 ### Response Schema
+
+Every request ROS makes carries `money_scale=microcents`, so this is the payload ROS
+actually reads:
 
 ```json
 {
@@ -102,55 +106,84 @@ GET {KOKU_MASU_URL}/api/cost-management/v1/effective_rates/
   "provider_uuid": "def456-...",
   "currency": "USD",
   "distribution_type": "cpu",
-  "markup_pct": 10.0,
+  "money_scale": "microcents",
+  "markup_pct": 1000,
   "configured_rates": {
     "cpu_core_usage_per_hour": {
-      "infrastructure": 0.0,
-      "supplementary": 0.007
+      "infrastructure": 0,
+      "supplementary": 700000
     },
     "cpu_core_request_per_hour": {
-      "infrastructure": 0.0,
-      "supplementary": 0.2
+      "infrastructure": 0,
+      "supplementary": 20000000
     },
     "memory_gb_usage_per_hour": {
-      "infrastructure": 0.0,
-      "supplementary": 0.009
+      "infrastructure": 0,
+      "supplementary": 900000
     },
     "memory_gb_request_per_hour": {
-      "infrastructure": 0.0,
-      "supplementary": 0.05
+      "infrastructure": 0,
+      "supplementary": 5000000
     },
     "node_cost_per_month": {
-      "infrastructure": 1000.0,
-      "supplementary": 0.0
+      "infrastructure": 100000000000,
+      "supplementary": 0
     },
     "gpu_cost_per_month": {
-      "infrastructure": 1800.0,
-      "supplementary": 0.0
+      "infrastructure": 180000000000,
+      "supplementary": 0
     },
     "storage_gb_request_per_month": {
-      "infrastructure": 0.0,
-      "supplementary": 0.01
+      "infrastructure": 0,
+      "supplementary": 1000000
     },
     "storage_gb_usage_per_month": {
-      "infrastructure": 0.0,
-      "supplementary": 0.01
+      "infrastructure": 0,
+      "supplementary": 1000000
     }
   },
   "namespace_aggregates": {
     "my-namespace": {
-      "cost_model_cpu_cost": 150.25,
-      "cost_model_memory_cost": 80.50,
-      "infrastructure_cost": 500.00,
-      "distributed_cost": 200.00,
-      "cpu_usage_hours": 720.0,
-      "cpu_request_hours": 1440.0,
-      "mem_usage_hours": 360.0,
-      "mem_request_hours": 720.0
+      "cost_model_cpu_cost": 15025000000,
+      "cost_model_memory_cost": 8050000000,
+      "infrastructure_cost": 50000000000,
+      "distributed_cost": 20000000000,
+      "cpu_usage_hours": 720000,
+      "cpu_request_hours": 1440000,
+      "mem_usage_hours": 360000,
+      "mem_request_hours": 720000
     }
   }
 }
 ```
+
+`rates[]` (the cost model's rows verbatim — see the Koku-side guide) is integer
+micro-cents under **both** scales and is not affected by the parameter.
+
+### Money scale (#461)
+
+The producer and the ROS consumer deploy separately, so the scale is negotiated per
+request instead of assumed:
+
+| `money_scale` | `configured_rates`, `namespace_aggregates` money, `markup_pct` | `rates[]` |
+|---|---|---|
+| `microcents` — **ROS sends this** | integer micro-cents (`1 USD = 100_000_000`); hour fields are integer **milli-hours** under their unchanged names; `markup_pct` is integer **basis points** (`10%` → `1000`) | integer micro-cents |
+| `dollars` — Koku's default | float dollars and float hours; `markup_pct` float percent | integer micro-cents |
+
+ROS requires `microcents` and treats anything else as a contract error. A Masu build
+that predates #461 ignores the parameter, answers `"money_scale": "dollars"` (or omits
+the field), and ROS fails the fetch by name:
+
+```
+koku effective-rates answered money_scale="dollars"; this build requires "microcents"
+(the Koku/Masu build predates #461 or ignored the parameter)
+```
+
+That failure sets `costData = nil`, appends `NotifNoCostData` (**25**), and leaves
+savings at `$0` — visibly unavailable rather than off by 10⁸. Two independent guards
+produce it: the echoed scale, and the integer field types (a float money or hours
+value fails to decode). **Deploy Masu before ROS** when upgrading, or accept the
+`NotifNoCostData` window.
 
 ## How ROS Uses Cost Data
 

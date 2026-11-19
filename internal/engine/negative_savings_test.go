@@ -15,8 +15,8 @@ import (
 func nodeCostDataForNegativeTests() *costdata.ClusterCostData {
 	return &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"cpu_core_usage_per_hour":  {Infrastructure: 0, Supplementary: 0.01},
-			"memory_gb_usage_per_hour": {Infrastructure: 0, Supplementary: 0.02},
+			"cpu_core_usage_per_hour":  {Infrastructure: 0, Supplementary: 1_000_000},
+			"memory_gb_usage_per_hour": {Infrastructure: 0, Supplementary: 2_000_000},
 		},
 	}
 }
@@ -56,7 +56,7 @@ func TestPVCSavings_Negative_WhenGrowthProjected(t *testing.T) {
 	}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 0.10},
+			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 10_000_000},
 		},
 	}
 	ApplyPVCSavings(recs, cd)
@@ -83,10 +83,10 @@ func TestContainerSavings_Negative_WhenUnderprovisioned(t *testing.T) {
 		DistributionType: "cpu",
 		Namespaces: map[string]costdata.NamespaceCosts{
 			"app-ns": {
-				CostModelCPUCost: 730.0,
-				CostModelMemCost: 365.0,
-				CPURequestHours:  730.0,
-				MemRequestHours:  730.0,
+				CostModelCPUCost: 73_000_000_000,
+				CostModelMemCost: 36_500_000_000,
+				CPURequestHours:  730_000,
+				MemRequestHours:  730_000,
 			},
 		},
 	}

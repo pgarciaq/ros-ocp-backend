@@ -16,7 +16,7 @@ import (
 func TestStorageGBUsageRateFromCostData(t *testing.T) {
 	costData := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
+			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 2_000_000, Supplementary: 1_000_000},
 		},
 	}
 	rate, ok := snapshot.StorageGBUsageRateFromCostData(costData)
@@ -45,7 +45,7 @@ func TestResolveCostPerGiBMonth_EffectiveRates(t *testing.T) {
 
 	costData := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
+			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 2_000_000, Supplementary: 1_000_000},
 		},
 	}
 
@@ -60,7 +60,7 @@ func TestResolveCostPerGiBMonth_EnvOverridesEffectiveRates(t *testing.T) {
 
 	costData := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
+			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 2_000_000, Supplementary: 1_000_000},
 		},
 	}
 
@@ -74,7 +74,7 @@ func TestResolveCostPerGiBMonth_DBOverridesEffectiveRates(t *testing.T) {
 
 	costData := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
+			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 2_000_000, Supplementary: 1_000_000},
 		},
 	}
 
@@ -108,7 +108,7 @@ func TestResolveSnapshotSettings_EffectiveRatesIntegration(t *testing.T) {
 
 	costData := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
+			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 2_000_000, Supplementary: 1_000_000},
 		},
 	}
 
@@ -133,7 +133,7 @@ func TestResolveSnapshotSettings_DBOverrideIntegration(t *testing.T) {
 
 	costData := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
+			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 2_000_000, Supplementary: 1_000_000},
 		},
 	}
 

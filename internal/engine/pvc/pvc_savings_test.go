@@ -41,7 +41,7 @@ func TestApplyPVCSavings_Downsizing(t *testing.T) {
 	}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 0.10},
+			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 10_000_000},
 		},
 	}
 	ApplyPVCSavings(recs, cd)
@@ -58,7 +58,7 @@ func TestApplyPVCSavings_FallbackToUsageRate(t *testing.T) {
 	}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"storage_gb_usage_per_month": {Infrastructure: 0, Supplementary: 0.05},
+			"storage_gb_usage_per_month": {Infrastructure: 0, Supplementary: 5_000_000},
 		},
 	}
 	ApplyPVCSavings(recs, cd)
@@ -75,7 +75,7 @@ func TestApplyPVCSavings_UpsizingNegativeSavings(t *testing.T) {
 	}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 0.10},
+			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 10_000_000},
 		},
 	}
 	ApplyPVCSavings(recs, cd)
@@ -91,7 +91,7 @@ func TestApplyPVCSavings_Orphaned(t *testing.T) {
 	}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 0.10},
+			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 10_000_000},
 		},
 	}
 	ApplyPVCSavings(recs, cd)
@@ -106,7 +106,7 @@ func TestApplyPVCSavings_NoRecommendation(t *testing.T) {
 	}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 0.10},
+			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 10_000_000},
 		},
 	}
 	ApplyPVCSavings(recs, cd)
@@ -116,12 +116,13 @@ func TestApplyPVCSavings_NoRecommendation(t *testing.T) {
 func TestStorageRequestPerMonth(t *testing.T) {
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"storage_gb_request_per_month": {Infrastructure: 0.01, Supplementary: 0.02},
-			"storage_gb_usage_per_month":   {Infrastructure: 0.50, Supplementary: 0},
+			"storage_gb_request_per_month": {Infrastructure: 1_000_000, Supplementary: 2_000_000},
+			"storage_gb_usage_per_month":   {Infrastructure: 50_000_000, Supplementary: 0},
 		},
 	}
-	assert.InDelta(t, 0.03, costdata.StorageRequestPerMonth(cd), 0.0001)
+	// #461: the accessor returns the Koku wire scale, micro-cents per GiB-month.
+	assert.Equal(t, int64(3_000_000), costdata.StorageRequestPerMonth(cd), "$0.03/GiB-month")
 
 	cd.ConfiguredRates["storage_gb_request_per_month"] = costdata.RatePair{}
-	assert.InDelta(t, 0.50, costdata.StorageRequestPerMonth(cd), 0.0001)
+	assert.Equal(t, int64(50_000_000), costdata.StorageRequestPerMonth(cd), "$0.50/GiB-month usage fallback")
 }

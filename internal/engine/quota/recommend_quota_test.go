@@ -50,8 +50,8 @@ func TestApplyQuotaSavings_TightenOnly(t *testing.T) {
 	}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"cpu_core_usage_per_hour":  {Supplementary: 1.0},
-			"memory_gb_usage_per_hour": {Supplementary: 2.0},
+			"cpu_core_usage_per_hour":  {Supplementary: 100_000_000},
+			"memory_gb_usage_per_hour": {Supplementary: 200_000_000},
 		},
 	}
 	ApplyQuotaSavings(recs, cd, 730)
@@ -69,7 +69,7 @@ func TestApplyQuotaSavings_StorageFreed(t *testing.T) {
 	}}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"storage_gb_request_per_month": {Supplementary: 0.10},
+			"storage_gb_request_per_month": {Supplementary: 10_000_000},
 		},
 	}
 	ApplyQuotaSavings(recs, cd, 730)
@@ -84,7 +84,7 @@ func TestApplyQuotaSavings_MemoryFreed(t *testing.T) {
 	}}
 	cd := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			"memory_gb_usage_per_hour": {Supplementary: 1.0},
+			"memory_gb_usage_per_hour": {Supplementary: 100_000_000},
 		},
 	}
 	ApplyQuotaSavings(recs, cd, 730)
