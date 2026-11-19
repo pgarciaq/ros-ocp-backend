@@ -1,6 +1,6 @@
 # robne CLI — Standalone Offline/Batch Recommendations
 
-> **Last verified:** 2026-11-18
+> **Last verified:** 2026-11-19
 
 !!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, 2b stdout, 2c other-entity rec upsert, other-entity digest INSERT, other-entity Path A SELECT, snapshot stdout, business hours, Phase 3 `diff` / container `explain`, other-entity `explain`, `robne version`, and HCP fleet-capacity ([#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)) shipped"
     Parent issue: [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99).
@@ -47,17 +47,20 @@ the spec.
 ## Installing
 
 **From source:** `make robne` → `bin/robne` (CGO-free, any platform Go
-supports; the CI release builds `GOOS=linux` for `amd64` and `arm64`).
+supports; the CI release builds `GOOS=linux` for `amd64` and `arm64`,
+`GOOS=darwin` for `arm64`, and `GOOS=windows` for `amd64`).
 
 **From a GitHub Release
 ([releases](https://github.com/pgarciaq/ros-ocp-backend/releases)):** download
-`robne-<version>-linux-<arch>.tar.gz` and `SHA256SUMS` for your architecture,
-verify, and unpack — the archive carries the `robne` binary plus the two
-sample config files:
+the archive for your platform — `robne-<version>-linux-amd64.tar.gz`,
+`robne-<version>-linux-arm64.tar.gz`, `robne-<version>-darwin-arm64.tar.gz`,
+or `robne-<version>-windows-amd64.zip` — plus `SHA256SUMS`, verify, and
+unpack — the archive carries the `robne` binary (Windows: `robne.exe`) plus
+the two sample config files:
 
 ```bash
 sha256sum --check SHA256SUMS --ignore-missing
-tar xzf robne-<version>-linux-<arch>.tar.gz
+tar xzf robne-<version>-linux-<arch>.tar.gz   # windows: expand the zip
 ./robne version
 ```
 

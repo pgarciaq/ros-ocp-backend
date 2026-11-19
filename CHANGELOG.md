@@ -119,6 +119,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI release binaries for macOS and Windows ([#906](https://github.com/pgarciaq/ros-ocp-backend/issues/906)):**
+  the tag-driven release pipeline (#877) now also publishes
+  `darwin/arm64` (`.tar.gz`) and `windows/amd64` (`.zip`) archives alongside
+  the linux ones, in the same release with one `SHA256SUMS`. Every platform
+  leg builds on its own runner and smoke-tests its binary natively — the
+  linux/arm64 leg executes under QEMU binfmt as before, the darwin and
+  windows legs run the same bash smoke (self-identification plus a recommend
+  over the HCP capacity fixture) under their runners' shells; the Windows
+  build invokes `go build` directly because the runners' `make` resolves a
+  broken shell (actions/runner-images#7253). A new `.gitattributes` pins
+  `*.csv` and `*.sample` to LF so Windows checkouts keep the smoke fixtures
+  and packaged samples byte-identical to what is committed.
 - **robne CLI GitHub Releases ([#877](https://github.com/pgarciaq/ros-ocp-backend/issues/877)):**
   pushing a `robne-0.<phase>.YYYYMMDD-HHMM-<sha7>` tag (`make robne-release`
   computes and pushes it) builds the CGO-free `linux/amd64` and `linux/arm64`

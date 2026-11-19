@@ -1,10 +1,18 @@
 name: Release robne CLI binaries
 
-# Tag-driven robne CLI releases (#877): push a tag
+# Tag-driven robne CLI releases (#877, #906): push a tag
 # robne-0.<phase>.YYYYMMDD-HHMM-<sha7> (make robne-release computes and pushes
 # it; the OpenChamber nightly task drives the same target) and this workflow
-# builds the CGO-free linux/amd64 + linux/arm64 binaries and publishes them —
-# with the two sample config files and SHA256SUMS — as a GitHub Release.
+# builds the CGO-free binaries for linux/amd64, linux/arm64, darwin/arm64 and
+# windows/amd64, then publishes them — with the two sample config files and
+# SHA256SUMS — as a GitHub Release.
+#
+# Structure (#906): a guard job (tag contract + vendored-engine gate), a build
+# matrix where EVERY leg smoke-tests its binary natively (linux/arm64 executes
+# under QEMU binfmt; darwin and windows build on their own runners — macOS
+# binaries cannot run on Linux at all, and Git Bash on windows-latest runs the
+# same bash smoke steps), and a release job that gathers the artifacts and
+# creates the release once.
 #
 # Tag events carry no branch name: the phase component is parsed from the tag,
 # and the stamp + sha7 are re-asserted against the commit. Accepted residual:
@@ -31,8 +39,10 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  guard:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout tag
         uses: actions/checkout@v4
@@ -63,57 +73,135 @@ jobs:
         # default with a vendor dir), while the product image compiles
         # ./librobne — never release a binary built from a drifted engine.
         run: make vendor-librobne-check
+
+  build:
+    needs: guard
+    strategy:
+      # Let every leg report its own failure; the release job needs them all.
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, goos: linux, goarch: amd64, archive: tar.gz }
+          - { os: ubuntu-latest, goos: linux, goarch: arm64, archive: tar.gz }
+          - { os: macos-latest, goos: darwin, goarch: arm64, archive: tar.gz }
+          - { os: windows-latest, goos: windows, goarch: amd64, archive: zip }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        # windows-latest defaults to pwsh; every bash step below (including
+        # the smoke) runs under the preinstalled Git Bash instead.
+        shell: bash
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
       - name: Set up QEMU binfmt
         # Building cross-arch needs no emulation (pure Go), but EXECUTING the
         # linux/arm64 binary for its smoke test on this amd64 runner does.
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
         uses: docker/setup-qemu-action@v3
-      - name: Build, smoke-test, and package both architectures
+      - name: Build
         run: |
           set -euo pipefail
-          version="${{ steps.version.outputs.version }}"
-          for arch in amd64 arm64; do
-            echo "::group::linux/${arch}"
-            GOOS=linux GOARCH="${arch}" make robne ROBNE_VERSION="${version}"
-            bin="robne-${version}-linux-${arch}"
-            mv bin/robne "${bin}"
+          version="${{ needs.guard.outputs.version }}"
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            # No make on this leg: the mingw make shipped on windows runners
+            # resolves a broken shell for its recipes (actions/runner-images
+            # #7253). This is the Makefile's robne recipe verbatim — keep the
+            # two in sync.
+            CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
+              -ldflags="-s -w -X main.version=${version}" -o robne.exe ./cmd/robne
+          else
+            GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} make robne ROBNE_VERSION="${version}"
+          fi
+      - name: Smoke-test the binary
+        run: |
+          set -euo pipefail
+          version="${{ needs.guard.outputs.version }}"
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            bin=./robne.exe
+          else
+            bin=./bin/robne
+          fi
+          # Smoke: the binary must self-identify as this release and compute.
+          # Take the first line in bash instead of piping into `head -1`: under
+          # `set -o pipefail` the producer dies of SIGPIPE as soon as head exits
+          # (robne writes `version` in 16 separate writes), and the pipeline then
+          # reports 141. The first #877 release attempt failed exactly there on
+          # the arm64 leg.
+          version_out="$(HOME="$(mktemp -d)" "${bin}" version)"
+          ident="${version_out%%$'\n'*}"
+          if [[ "$ident" != "robne ${version}" ]]; then
+            echo "release-robne: ${bin} identifies as '${ident}', expected 'robne ${version}'" >&2
+            exit 1
+          fi
+          smoke_json="$(mktemp)"
+          HOME="$(mktemp -d)" "${bin}" recommend \
+            --input cmd/robne/testdata/hcp-capacity \
+            --plugins hcp --format json --no-user-config \
+            --now 2026-10-26T22:30:00Z > "${smoke_json}"
+          if ! grep -q 'hcp_recommendations' "${smoke_json}"; then
+            echo "release-robne: ${bin} smoke recommend produced no hcp_recommendations:" >&2
+            cat "${smoke_json}" >&2
+            exit 1
+          fi
+          echo "release-robne: ${bin} smoked OK"
+      - name: Package (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        run: |
+          set -euo pipefail
+          version="${{ needs.guard.outputs.version }}"
+          stage="$(mktemp -d)"
+          cp bin/robne "${stage}/robne"
+          cp cmd/robne/robne.yaml.sample cmd/robne/rate-card.json.sample "${stage}/"
+          tar -czf "robne-${version}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" \
+            -C "${stage}" robne robne.yaml.sample rate-card.json.sample
+      - name: Package (zip)
+        # Windows archives are zip per #906. Git Bash's tar is GNU tar and
+        # cannot write zip; Compress-Archive is the native path.
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $version = "${{ needs.guard.outputs.version }}"
+          Compress-Archive -Path robne.exe,cmd/robne/robne.yaml.sample,cmd/robne/rate-card.json.sample -DestinationPath "robne-$version-windows-amd64.zip"
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: robne-${{ needs.guard.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: robne-${{ needs.guard.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.archive }}
+          if-no-files-found: error
 
-            # Smoke: the binary must self-identify as this release and compute.
-            # Take the first line in bash instead of piping into `head -1`: under
-            # `set -o pipefail` the producer dies of SIGPIPE as soon as head exits
-            # (robne writes `version` in 16 separate writes), and the pipeline then
-            # reports 141. The first release attempt failed exactly there on the
-            # arm64 leg.
-            version_out="$(HOME="$(mktemp -d)" "./${bin}" version)"
-            ident="${version_out%%$'\n'*}"
-            if [[ "$ident" != "robne ${version}" ]]; then
-              echo "release-robne: ${bin} identifies as '${ident}', expected 'robne ${version}'" >&2
-              exit 1
-            fi
-            smoke_json="$(mktemp)"
-            HOME="$(mktemp -d)" "./${bin}" recommend \
-              --input cmd/robne/testdata/hcp-capacity \
-              --plugins hcp --format json --no-user-config \
-              --now 2026-10-26T22:30:00Z > "${smoke_json}"
-            if ! grep -q 'hcp_recommendations' "${smoke_json}"; then
-              echo "release-robne: ${bin} smoke recommend produced no hcp_recommendations:" >&2
-              cat "${smoke_json}" >&2
-              exit 1
-            fi
-
-            stage="$(mktemp -d)"
-            cp "${bin}" "${stage}/robne"
-            cp cmd/robne/robne.yaml.sample cmd/robne/rate-card.json.sample "${stage}/"
-            tar -czf "robne-${version}-linux-${arch}.tar.gz" \
-              -C "${stage}" robne robne.yaml.sample rate-card.json.sample
-            echo "::endgroup::"
-          done
-          sha256sum robne-"${version}"-linux-*.tar.gz > SHA256SUMS
+  release:
+    needs: [guard, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(dist/robne-*)
+          if [[ "${#archives[@]}" -ne 4 ]]; then
+            echo "release-robne: expected 4 archives, found ${#archives[@]}:" >&2
+            printf '  %s\n' "${archives[@]}" >&2
+            exit 1
+          fi
+          ( cd dist && sha256sum robne-* > ../SHA256SUMS )
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          version="${{ steps.version.outputs.version }}"
+          version="${{ needs.guard.outputs.version }}"
           subject="$(git log -1 --format=%s)"
           phase="${version#0.}"; phase="${phase%%.*}"
           # The tag was pushed by make robne-release before this run started;
@@ -121,6 +209,8 @@ jobs:
           gh release create "robne-${version}" \
             --title "robne ${version}" \
             --notes "$(printf 'Built from commit %s on the phase %s branch.\n\n%s\n' "$GITHUB_SHA" "$phase" "$subject")" \
-            "robne-${version}-linux-amd64.tar.gz" \
-            "robne-${version}-linux-arm64.tar.gz" \
+            "dist/robne-${version}-linux-amd64.tar.gz" \
+            "dist/robne-${version}-linux-arm64.tar.gz" \
+            "dist/robne-${version}-darwin-arm64.tar.gz" \
+            "dist/robne-${version}-windows-amd64.zip" \
             SHA256SUMS

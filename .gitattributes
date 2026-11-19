@@ -1,0 +1,6 @@
+# Byte-exact data files across platforms (#906): a Windows checkout with
+# core.autocrlf=true would otherwise CRLF-convert the release-smoke fixtures
+# and the packaged sample configs. text+eol=lf pins LF on checkout for every
+# platform and normalizes any stray CRLF on commit.
+*.csv text eol=lf
+*.sample text eol=lf
