@@ -1,7 +1,7 @@
 # Scale Benchmark Runbook
 
 > **Last verified:** 2026-08-05
-> **Last updated:** 2026-07-10
+> **Last updated:** 2026-11-19
 > **Target cluster:** Any OpenShift cluster running cost-onprem (tested on dell-r640-082 SNO)
 
 This runbook describes how to run a scale benchmark of the ROS-OCP native engine
@@ -236,6 +236,30 @@ oc exec -n cost-onprem nise-generator -- python3 /data/gen_benchmark_config.py \
 The generator automatically includes proportional counts of all entity types.
 Run `python3 gen_benchmark_config.py --help` for all options.
 
+!!! warning "A config whose nodes cannot hold their pods is rejected"
+    Before writing YAML, the generator checks every node it emits against the
+    node shape it advertises — 250 pods, 64 cores, 512 GiB — and exits 1 if a
+    node is over budget:
+
+    ```
+    ERROR: the generated config oversubscribes these nodes. ROS sizes a node from
+    max(usage_p95, requests) / target_util, so an over-committed node makes every
+    node recommendation a scale-up (#891).
+      bench-node-000: 402 pods (node_capacity_pods 250)
+    ```
+
+    The check exists because an over-committed fixture is not a smaller version
+    of a real cluster: nise clamps a pod's request to the node's core count, so
+    the CSVs still look plausible while every node reads 100% requested — and
+    every node recommendation comes out as a scale-up. That is how #891 reached
+    a benchmark run without anyone noticing.
+
+    The default is 125 containers per node (`BenchmarkConfig.nodes_per_1000 = 8`,
+    a dataclass field rather than a CLI flag), so 1,200 containers span 9 nodes
+    and 20,000 span 160. If your own request bands trip the guard, raise
+    `nodes_per_1000` or lower the bands; raise the node shape only when a bigger
+    node is what you mean to benchmark.
+
 For a **container-only** benchmark (simpler, no VMs/GPUs/PVCs), you can use an
 inline Python script instead:
 
@@ -246,7 +270,7 @@ random.seed(42)
 
 CONTAINERS = 10000
 NAMESPACES = 150
-NODES = 15
+NODES = 150  # one namespace per node: a node receives pods a whole namespace at a time
 PODS_PER_NS = CONTAINERS // NAMESPACES  # 66-67
 
 nodes = [f'bench-node-{i:03d}' for i in range(NODES)]
@@ -264,15 +288,18 @@ for ns_idx in range(NAMESPACES):
     lines.append(f'      nodes:')
     lines.append(f'        - node:')
     lines.append(f'          node_name: {node}')
-    lines.append(f'          cpu_cores: 32')
-    lines.append(f'          memory_gig: 128')
+    lines.append(f'          cpu_cores: 48')
+    lines.append(f'          memory_gig: 192')
     lines.append(f'          namespaces:')
     lines.append(f'            {ns}:')
     lines.append(f'              pods:')
 
     for p in range(pods):
-        cpu_req = random.randint(50, 500)
-        cpu_lim = random.randint(500, 2000)
+        # nise reads cpu_request / cpu_limit in CORES: draw millicores and convert
+        cpu_req_mc = random.randint(50, 500)
+        cpu_lim_mc = random.randint(max(cpu_req_mc, 500), 2000)
+        cpu_req = round(cpu_req_mc / 1000, 3)
+        cpu_lim = round(cpu_lim_mc / 1000, 3)
         mem_req = round(random.uniform(0.1, 2.0), 1)
         mem_lim = round(random.uniform(2.0, 8.0), 1)
         lines.append(f'                - pod:')
@@ -290,6 +317,13 @@ with open('/data/bench_config.yml', 'w') as f:
 print(f'Config written: {total} containers, {NAMESPACES} namespaces, {NODES} nodes')
 "
 ```
+
+The shape above holds at most 67 pods per node — with the script's
+`random.seed(42)` the fullest node asks for 20.7 cores and 85 GiB, and the
+band's worst case is 33.5 cores and 134 GiB, all inside 48 cores / 192 GiB and
+the 250-pod limit. One namespace per node is what bounds a node's load: nise
+assigns a namespace's pods to one node, so `NODES` must track `NAMESPACES`, not
+`CONTAINERS`.
 
 ### Run nise
 

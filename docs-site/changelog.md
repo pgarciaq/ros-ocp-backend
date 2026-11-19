@@ -315,6 +315,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Benchmark generator no longer emits a fixture its own nodes cannot hold
+  ([#891](https://github.com/pgarciaq/ros-ocp-backend/issues/891),
+  [#897](https://github.com/pgarciaq/ros-ocp-backend/issues/897)):**
+  `scripts/gen_benchmark_config.py` wrote idle and GPU pod requests in **cores**
+  where millicores were meant (4–16 and 4–8 cores per pod, on top of the
+  regular-band slip fixed in `8be9961d`) and defaulted to one node per 1,000
+  containers, so the generated fixture requested ~2.3× the CPU its nodes had —
+  402 pods on a 250-pod node. nise clamps a request to the node's cores, so the
+  CSVs looked plausible while every node read 100% requested and every node
+  recommendation came out as a scale-up. Idle pods now draw 100–400 mC and GPU
+  pods 250–1000 mC (the high-request / near-zero-usage shape that makes them
+  idle and GPU stories is unchanged), the default layout is 125 containers per
+  node (`BenchmarkConfig.nodes_per_1000` 1 → 8) on 512 GiB nodes, and the
+  generator validates each node's pod, CPU and memory budget before writing
+  YAML — an over-committed config exits 1 naming the offending node and axis.
+  On the 1,200-container demo fixture, node savings moved from −$11,994,048 to
+  +$756,408 across the stored term/engine set. A regression test
+  (`scripts/gen_benchmark_config_test.go`) drives the guard through the CLI
+  against mutated copies of the script, so a change that breaks a node budget
+  fails in CI instead of producing a benchmark run nobody can trust.
+
 - **The Kafka retry/DLQ ladder is reachable on the processor, and a dead-lettered file leaves a terminal status row ([#893](https://github.com/pgarciaq/ros-ocp-backend/issues/893)):**
   The product default was already `KAFKA_AUTO_COMMIT=false`, but both deployment
   surfaces overrode the processor to `true`. In that mode nothing sets
