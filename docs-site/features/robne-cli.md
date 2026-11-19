@@ -1,6 +1,6 @@
 # robne CLI — Standalone Offline/Batch Recommendations
 
-> **Last verified:** 2026-10-31
+> **Last verified:** 2026-11-18
 
 !!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, 2b stdout, 2c other-entity rec upsert, other-entity digest INSERT, other-entity Path A SELECT, snapshot stdout, business hours, Phase 3 `diff` / container `explain`, other-entity `explain`, `robne version`, and HCP fleet-capacity ([#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)) shipped"
     Parent issue: [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99).
@@ -43,6 +43,35 @@ below are the user manual. Do not add a second MkDocs CLI page that duplicates
 the spec.
 
 ---
+
+## Installing
+
+**From source:** `make robne` → `bin/robne` (CGO-free, any platform Go
+supports; the CI release builds `GOOS=linux` for `amd64` and `arm64`).
+
+**From a GitHub Release
+([releases](https://github.com/pgarciaq/ros-ocp-backend/releases)):** download
+`robne-<version>-linux-<arch>.tar.gz` and `SHA256SUMS` for your architecture,
+verify, and unpack — the archive carries the `robne` binary plus the two
+sample config files:
+
+```bash
+sha256sum --check SHA256SUMS --ignore-missing
+tar xzf robne-<version>-linux-<arch>.tar.gz
+./robne version
+```
+
+The version string is `0.<phase>.YYYYMMDD-HHMM-<sha7>`: the phase branch the
+commit lives on, the commit's UTC timestamp, and the first 7 characters of the
+commit SHA — the same short-SHA convention as the processor image tags, so a
+release joins 1:1 with the server image built from the same commit. It is
+deterministic per commit (rebuilding yields the same version) and deliberately
+not `v`-prefixed. One commit = one immutable release: re-releasing requires
+deleting the tag and release first.
+
+Releases are cut by pushing a `robne-<version>` tag — `make robne-release`
+computes the version from HEAD and pushes it; GitHub Actions builds,
+smoke-tests, and publishes both architectures.
 
 ## What it does
 

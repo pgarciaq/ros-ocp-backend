@@ -73,20 +73,22 @@ jobs:
         id: final_check
         run: |
             if [ -n "$(git status --porcelain go.mod go.sum 2>/dev/null)" ]; then
-                echo "has_changes=true" >> $GITHUB_OUTPUT
+                echo "has_changes=true" >> "$GITHUB_OUTPUT"
             else
-                echo "has_changes=false" >> $GITHUB_OUTPUT
+                echo "has_changes=false" >> "$GITHUB_OUTPUT"
             fi
 
       - name: Capture updated packages
         id: go_mod_diff
         if: steps.final_check.outputs.has_changes == 'true'
         run: |
-            echo "summary<<EOF" >> $GITHUB_OUTPUT
-            git diff go.mod | grep -E '^\+\s+.*github\.com|^\+\s+.*golang\.org' | grep -v '^+++' | sed 's/^+\s*/++ /' | sort >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_OUTPUT
-            git diff go.mod | grep -E '^\-\s+.*github\.com|^\-\s+.*golang\.org' | grep -v '^---' | sed 's/^-\s*/-- /' | sort >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            {
+                echo "summary<<EOF"
+                git diff go.mod | grep -E '^\+\s+.*github\.com|^\+\s+.*golang\.org' | grep -v '^+++' | sed 's/^+\s*/++ /' | sort
+                echo ""
+                git diff go.mod | grep -E '^\-\s+.*github\.com|^\-\s+.*golang\.org' | grep -v '^---' | sed 's/^-\s*/-- /' | sort
+                echo "EOF"
+            } >> "$GITHUB_OUTPUT"
 
       - name: Generate branch name
         id: branch
@@ -94,7 +96,7 @@ jobs:
         run: |
           TIMESTAMP=$(date -u +%Y%m%d-%H%M%S)
           BRANCH_NAME="chore/update-go-deps-${TIMESTAMP}"
-          echo "name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Create Pull Request
         if: steps.final_check.outputs.has_changes == 'true'

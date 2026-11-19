@@ -8,10 +8,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Checkout autotune-builder repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: RedHatInsights/autotune-builder
           path: autotune-builder
@@ -23,7 +23,7 @@ jobs:
           python3 ./scripts/get_kruize_image_tag.py ./kruize-clowdapp.yaml
           cat /tmp/.commitsha
           
-          echo "changed=$(cmp --silent /tmp/.commitsha ./autotune-builder/.commitsha && echo 'false' || echo 'true')" >> $GITHUB_OUTPUT
+          echo "changed=$(cmp --silent /tmp/.commitsha ./autotune-builder/.commitsha && echo 'false' || echo 'true')" >> "$GITHUB_OUTPUT"
           
       - name: Print changed variable
         run: |
@@ -64,7 +64,7 @@ jobs:
 
       - name: Create pull request
         if: steps.compare_files.outputs.changed == 'true'
-        uses: peter-evans/create-pull-request@v5
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ steps.generate-token.outputs.token }}
           title: '[Do not merge] - EE Dry Run with latest Kruize RM image'

@@ -16,6 +16,16 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Lint GitHub Actions workflows (actionlint)
+        run: |
+          # A workflow can never catch its own syntax error at run time —
+          # GitHub refuses to run an invalid workflow — so every workflow
+          # file is linted here, at push/PR time, the moment it lands
+          # (#877). actionlint also runs shellcheck on `run:` blocks
+          # (ubuntu runners ship it). The version is pinned so findings
+          # cannot drift with @latest.
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          "$(go env GOPATH)/bin/actionlint"
       - name: Guard processor image CGO flags
         run: |
           # Assumption: the rosocp binary requires confluent-kafka-go

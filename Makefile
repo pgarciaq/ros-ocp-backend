@@ -84,6 +84,21 @@ ROBNE_VERSION ?= $(shell git describe --always --dirty 2>/dev/null || echo devel
 robne: ## Build the standalone robne CLI (Phase 1+2a, CGO_ENABLED=0)
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS) -X main.version=$(ROBNE_VERSION)" -o bin/robne ./cmd/robne
 
+.PHONY: robne-release-version
+robne-release-version: ## Print the release version computed from HEAD (#877; no side effects)
+	@./scripts/robne-release-version.sh
+
+# Tag HEAD as a robne release and push the tag; GitHub Actions (release-robne.yml)
+# then builds and publishes the binaries. One commit = one immutable release: an
+# existing tag fails loudly here — delete tag and release first to re-release.
+ROBNE_RELEASE_REMOTE ?= pgarciaq
+.PHONY: robne-release
+robne-release: ## Tag HEAD with the robne release version and push the tag (#877)
+	@v=$$(./scripts/robne-release-version.sh) && \
+		git tag "robne-$$v" && \
+		git push $(ROBNE_RELEASE_REMOTE) "robne-$$v" && \
+		echo "robne-release: pushed robne-$$v; release-robne.yml builds and publishes it"
+
 .PHONY: man
 man: ## Generate robne manpages + markdown docs into docs/man (#703; commit the result)
 	go run ./cmd/robne man --out docs/man/man1 --markdown-out docs/man/markdown

@@ -84,7 +84,10 @@ The zombie verdict (#722) additionally needs **mgmt container CSVs** in the asso
    deployed image tag (`oc get deploy cost-onprem-ros-processor -n cost-onprem
    -o jsonpath='{.spec.template.spec.containers[0].image}'`); if the delta
    touches `librobne` or the recommend path, `make robne` (or rebuild/redeploy
-   the server) first. Match the cluster's ACCESS.md to your **current oc
+   the server) first. A released binary (`robne-0.<phase>.…-<sha7>`, see
+   `make robne-release`) joins to the image tag via its trailing short SHA —
+   the same `${GITHUB_SHA::7}` convention `publish-quay.yml` stamps. Match the
+   cluster's ACCESS.md to your **current oc
    context** — several lab ACCESS.md files name the same API host.
 1. **Pick payload + cluster.** One robne input per cluster (one-cluster rule).
    Payload dirs carry the cluster id in their CSV filenames.

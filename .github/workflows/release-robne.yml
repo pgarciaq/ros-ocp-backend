@@ -1,0 +1,120 @@
+name: Release robne CLI binaries
+
+# Tag-driven robne CLI releases (#877): push a tag
+# robne-0.<phase>.YYYYMMDD-HHMM-<sha7> (make robne-release computes and pushes
+# it; the OpenChamber nightly task drives the same target) and this workflow
+# builds the CGO-free linux/amd64 + linux/arm64 binaries and publishes them —
+# with the two sample config files and SHA256SUMS — as a GitHub Release.
+#
+# Tag events carry no branch name: the phase component is parsed from the tag,
+# and the stamp + sha7 are re-asserted against the commit. Accepted residual:
+# a hand-crafted tag could lie about the phase (cosmetic — the sha still joins
+# the release to its commit); every real release comes from make robne-release,
+# which reads the branch.
+#
+# One commit = one immutable release: a re-run fails loudly at gh release
+# create (the tag already exists). Re-releasing means explicitly deleting the
+# tag and the release first — by design, not a bug.
+#
+# workflow_dispatch is declared for the post-fork-transition default branch
+# only: today the fork's frozen main cannot dispatch anything (the same
+# constraint publish-quay.yml lives with) — the tag trigger is the working
+# path.
+on:
+  push:
+    tags: ['robne-*']
+  workflow_dispatch:
+
+permissions:
+  # The only workflow in this repo with contents: write — required to create
+  # the release. Everything it needs beyond that is the default read.
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Guard tag shape; assert stamp and sha against the commit
+        id: version
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^robne-0\.[0-9]+\.[0-9]{8}-[0-9]{4}-[0-9a-f]{7}$ ]]; then
+            echo "release-robne: tag '${tag}' does not match robne-0.<phase>.YYYYMMDD-HHMM-<sha7>" >&2
+            exit 1
+          fi
+          version="${tag#robne-}"
+          expected_stamp="$(TZ=UTC git log -1 --format=%cd --date=format:%Y%m%d-%H%M)"
+          expected_sha="$(printf '%s' "$GITHUB_SHA" | cut -c1-7)"
+          if [[ "$version" != *".${expected_stamp}-${expected_sha}" ]]; then
+            echo "release-robne: tag '${tag}' stamp/sha do not match its commit (expected *.${expected_stamp}-${expected_sha})" >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "release-robne: releasing robne ${version}"
+      - name: Vendored librobne must match ./librobne (#510)
+        # A clean-checkout make robne compiles the vendored librobne (Go's
+        # default with a vendor dir), while the product image compiles
+        # ./librobne — never release a binary built from a drifted engine.
+        run: make vendor-librobne-check
+      - name: Set up QEMU binfmt
+        # Building cross-arch needs no emulation (pure Go), but EXECUTING the
+        # linux/arm64 binary for its smoke test on this amd64 runner does.
+        uses: docker/setup-qemu-action@v3
+      - name: Build, smoke-test, and package both architectures
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          for arch in amd64 arm64; do
+            echo "::group::linux/${arch}"
+            GOOS=linux GOARCH="${arch}" make robne ROBNE_VERSION="${version}"
+            bin="robne-${version}-linux-${arch}"
+            mv bin/robne "${bin}"
+
+            # Smoke: the binary must self-identify as this release and compute.
+            ident="$(HOME="$(mktemp -d)" "./${bin}" version | head -1)"
+            if [[ "$ident" != "robne ${version}" ]]; then
+              echo "release-robne: ${bin} identifies as '${ident}', expected 'robne ${version}'" >&2
+              exit 1
+            fi
+            smoke_json="$(mktemp)"
+            HOME="$(mktemp -d)" "./${bin}" recommend \
+              --input cmd/robne/testdata/hcp-capacity \
+              --plugins hcp --format json --no-user-config \
+              --now 2026-10-26T22:30:00Z > "${smoke_json}"
+            if ! grep -q 'hcp_recommendations' "${smoke_json}"; then
+              echo "release-robne: ${bin} smoke recommend produced no hcp_recommendations:" >&2
+              cat "${smoke_json}" >&2
+              exit 1
+            fi
+
+            stage="$(mktemp -d)"
+            cp "${bin}" "${stage}/robne"
+            cp cmd/robne/robne.yaml.sample cmd/robne/rate-card.json.sample "${stage}/"
+            tar -czf "robne-${version}-linux-${arch}.tar.gz" \
+              -C "${stage}" robne robne.yaml.sample rate-card.json.sample
+            echo "::endgroup::"
+          done
+          sha256sum robne-"${version}"-linux-*.tar.gz > SHA256SUMS
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          subject="$(git log -1 --format=%s)"
+          phase="${version#0.}"; phase="${phase%%.*}"
+          # The tag was pushed by make robne-release before this run started;
+          # gh release create attaches the release to the existing tag.
+          gh release create "robne-${version}" \
+            --title "robne ${version}" \
+            --notes "$(printf 'Built from commit %s on the phase %s branch.\n\n%s\n' "$GITHUB_SHA" "$phase" "$subject")" \
+            "robne-${version}-linux-amd64.tar.gz" \
+            "robne-${version}-linux-arm64.tar.gz" \
+            SHA256SUMS
