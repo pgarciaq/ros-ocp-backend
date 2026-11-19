@@ -78,7 +78,13 @@ jobs:
             mv bin/robne "${bin}"
 
             # Smoke: the binary must self-identify as this release and compute.
-            ident="$(HOME="$(mktemp -d)" "./${bin}" version | head -1)"
+            # Take the first line in bash instead of piping into `head -1`: under
+            # `set -o pipefail` the producer dies of SIGPIPE as soon as head exits
+            # (robne writes `version` in 16 separate writes), and the pipeline then
+            # reports 141. The first release attempt failed exactly there on the
+            # arm64 leg.
+            version_out="$(HOME="$(mktemp -d)" "./${bin}" version)"
+            ident="${version_out%%$'\n'*}"
             if [[ "$ident" != "robne ${version}" ]]; then
               echo "release-robne: ${bin} identifies as '${ident}', expected 'robne ${version}'" >&2
               exit 1
