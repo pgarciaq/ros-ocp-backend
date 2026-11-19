@@ -31,3 +31,6 @@ site/
 dist/pdf/
 .docs-pdf-work/
 opencode.json
+
+# OpenChamber session artifacts (screenshots, harness state)
+.openchamber/
