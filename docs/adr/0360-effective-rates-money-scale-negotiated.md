@@ -104,6 +104,13 @@ dangerous one, because a float payload decodes into a pliant reader.
 - A stale Masu is now an operational event with a fingerprint: notification
   **25** with zero savings on every cluster of that Masu, and the scale string
   in the processor log. That is a diagnosable state; a wrong rate is not.
+- The refusal's **25** does not clear itself. Measured on the lab: after the
+  Masu upgrade and a successful recalc, the 796 affected rows carried restored
+  savings **and** `25` (`{1,9,25}` beside `3,980` cents) — the append-only
+  behaviour of [#881](https://github.com/pgarciaq/ros-ocp-backend/issues/881).
+  Clearing it is a data operation (`array_remove`), so a mixed-version window
+  leaves correct numbers wearing a "no cost data" warning until something
+  removes the code.
 - `markup_pct` is basis points only under `microcents`. Any future reader must
   read the echo before multiplying; there is no field name that says "basis
   points".
@@ -113,7 +120,11 @@ dangerous one, because a float payload decodes into a pliant reader.
   remain public library API (third-party callers, existing tests); nothing in
   the ROS cost path calls them.
 - `namespace_aggregates.cost_model_gpu_cost` is emitted by koku and still not
-  decoded by ROS. That is #467's ROS half, unaffected by the scale.
+  decoded by ROS. Whether Tier-B namespace spend should include it (and on
+  which denominator) is an open decision —
+  [#905](https://github.com/pgarciaq/ros-ocp-backend/issues/905); the
+  implementation, whichever way it goes, is #467's ROS half. Nothing here
+  depends on the scale.
 
 ## Verification
 
@@ -134,6 +145,33 @@ The koku suite ran as `masu.test.api.test_effective_rates` — 34 tests OK.
 Mutation check: stashing the implementation fails 6 of the 8 scale tests for
 the reason above; the two that still pass are the deliberate controls (explicit
 `dollars` equals the default; `rates[]` unchanged).
+
+### Live pairing, measured (2026-11-19)
+
+The tables above prove each side in isolation. The pairing was then exercised
+on the SNO lab (arm64), org `1234567`, cluster `cf09ed9d`, 796 recommendation
+rows, both images built on the lab hypervisor from the landed commits — koku
+`99462739e`, ros-ocp-backend `a0c83385` (containing `53c33270`), tag
+`461-202611191058`. ROS was rolled **first**, on purpose, to test the failure
+path before the happy one.
+
+| Order executed | Observation | What it proves |
+|---|---|---|
+| new ROS + pre-#461 Masu (`branch-202611181014`), recalc of 796 rows | 796/796 lost savings and gained **25**; cluster total `7,840,210` → `0` cents; log: `…predates #461; this build only reads money_scale="microcents"` | the refusal is live, and fails safe — no row was priced at 10⁸× |
+| Masu → `99462739e`, same recalc, ROS untouched | 796/796 savings restored; total back to **`7,840,210` cents** | the integer path reproduces the float path's total exactly on real data |
+| hand computation from the same payload, namespace `cost-onprem` | `32,908,970,883 ÷ 459,941` = `71,550` µ¢/mC-h; `91,359,212,007 ÷ 459,941` = `198,632` µ¢/mC-h (infra + distributed); `10,658,223,469 × 1000 ÷ 769,263` = `13,855,110` µ¢/GiB-h; `celery-beat` 50→25 mC, 204,800→297,636 KiB, 720 h ⇒ `3,980,076,162` µ¢ ⇒ **`3,980` cents**, equal to the stored value | the persisted figure is reproducible from the payload by hand, not just "an integer" |
+| payload shape under `?money_scale=microcents` | echo `microcents`; `$0.3` → `30,000,000`; `$200` → `20,000,000,000`; `3.645 h` → `3645`; `rates[]` byte-identical to the `dollars` response (4 rows) | the scale touches money (and hours) only |
+
+One mechanism detail the tests did not predict: a real pre-#461 producer trips
+the **decode** guard before the **echo** guard, because it sends
+`markup_pct: 0.0` and no `money_scale` at all. Both guards name `#461`, so the
+operator sees the same defect either way, but grepping the log for the echo
+sentence alone misses this case.
+
+Not covered by this run, and therefore still asserted: a ROS rollback to a
+pre-#461 build against a microcents-capable Masu (the `dollars` default is
+unchanged, so it should work, but it was not executed), and the per-request cost
+of the extra decode pass. Evidence: ros-ocp-backend #461 comment `7007432745`.
 
 ## Cross-Repo Dependencies
 
