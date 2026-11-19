@@ -83,7 +83,12 @@ jobs:
         include:
           - { os: ubuntu-latest, goos: linux, goarch: amd64, archive: tar.gz }
           - { os: ubuntu-latest, goos: linux, goarch: arm64, archive: tar.gz }
-          - { os: macos-latest, goos: darwin, goarch: arm64, archive: tar.gz }
+          # macos-15, not macos-latest: same arm64 architecture, separate
+          # (older, less contended) runner pool. On 2026-11-19 the
+          # macos-latest pool failed to acquire a runner twice — 15 minutes
+          # of queueing, then cancellation, zero steps executed. Revisit when
+          # capacity normalizes.
+          - { os: macos-15, goos: darwin, goarch: arm64, archive: tar.gz }
           - { os: windows-latest, goos: windows, goarch: amd64, archive: zip }
     runs-on: ${{ matrix.os }}
     defaults:
