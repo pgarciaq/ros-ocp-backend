@@ -49,11 +49,19 @@ jobs:
           # CGO=0 build means the Kafka dependency was lost, not that the
           # processor became portable (see #524). Assert failure, not message
           # text — the compiler reports undefined kafka.* symbols.
-          if CGO_ENABLED=0 go build -o /dev/null .; then
+          # #909: the compiler's stderr goes to a file, not the log — setup-go's
+          # Go problem matcher turns "file:line: undefined: ..." lines into
+          # ERROR annotations, rendering this passing guard's expected output
+          # as red X's on green runs. The summary line below carries no
+          # file:line patterns, so the matcher leaves it alone. A count of 0
+          # with a failed build means the failure is NOT the expected kafka
+          # one — the CGO=1 "Check Build" step will show the real error.
+          neg_err="$(mktemp)"
+          if CGO_ENABLED=0 go build -o /dev/null . 2>"$neg_err"; then
             echo "ERROR: CGO_ENABLED=0 build of rosocp unexpectedly succeeded (see #524)"
             exit 1
           fi
-          echo "OK: CGO_ENABLED=0 build fails as expected"
+          echo "OK: CGO_ENABLED=0 build fails as expected ($(grep -c 'undefined: kafka' "$neg_err" || true) expected undefined kafka.* compiler errors suppressed from annotations: #909)"
       - name: Guard middleware order (limiter before Rbac)
         run: |
           # Throttled identities must 429 before paying a full RBAC round-trip,
