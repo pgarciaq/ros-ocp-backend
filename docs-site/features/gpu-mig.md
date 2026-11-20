@@ -312,3 +312,12 @@ gating. See [Configuration](../configuration.md) and
 - [Savings Estimations](savings-estimations.md) — GPU savings on detail vs fleet summary
 - [Recommendation Engines — GPU](../architecture/recommendation-engines.md#gpu-recommendations)
 - [Tag Filtering](../features/tag-filtering.md)
+
+## RBAC grain
+
+**Owner decision (#873, 2026-11-20):** GPU MIG list results are **node-grain
+by design** — scoped by `openshift.cluster` (and the node grants where the
+surface applies them), and **not** narrowed by `openshift.project` grants:
+GPUs and MIG profiles attach to nodes, which do not belong to projects. Same
+grain split as #789: project grants scope namespace-scoped resources
+(containers, namespaces, PVCs as of #873), not node-grain surfaces.

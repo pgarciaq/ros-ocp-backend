@@ -363,6 +363,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **PVC lists respect `openshift.project` grants ([#873](https://github.com/pgarciaq/ros-ocp-backend/issues/873)):**
+  PVCs are namespace-scoped resources — the same grain as containers, whose
+  list already narrowed by project grants — but the PVC list, group-by, and
+  CSV paths applied only cluster (and node) scoping: a user granted
+  `openshift.cluster: [A]` + `openshift.project: [ns-rs]` saw every
+  namespace's PVCs on cluster A. The server-owned project scope now narrows
+  all three PVC serving paths, composing with (never replacing) client
+  filters and the cluster scope — the #752 composition rule. Verified
+  against Koku's permission semantics first: Koku's OCP reports carry no
+  project access filtering (the container/namespace lists' project scoping
+  is a ROS-native refinement), and the owner decision split the issue —
+  PVCs align to that refinement; **node-utilization and GPU MIG stay
+  node-grain by design** (nodes do not belong to projects; they already
+  scope by node grants — the #789 grain split, now documented on their
+  feature pages).
 - **NotifNoCostData (25) clears when cost data arrives ([#881](https://github.com/pgarciaq/ros-ocp-backend/issues/881)):**
   the code was append-only — a recommendation row that once missed cost
   data (Koku 404, transient outage, namespace not yet priced) kept the

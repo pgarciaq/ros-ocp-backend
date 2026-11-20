@@ -158,6 +158,19 @@ func GetPVCRecommendations(c echo.Context) error {
 		argIdx++
 	}
 
+	// #873: server-owned project scope — PVCs are namespace-scoped
+	// resources, the same grain as containers (whose list applies
+	// openshift.project grants). Same composition rule as the cluster
+	// scope: intersects with the client filter, never replaces it; an
+	// empty allowed set denies via ANY('{}') matching nothing. Applied
+	// before the grouped branch so the flat, grouped, and CSV paths all
+	// carry it.
+	if allowedProjects, projectScoped := dataProjectScope(get_user_permissions(c)); projectScoped {
+		filterSQL += ` AND namespace = ANY($` + strconv.Itoa(argIdx) + `)`
+		args = append(args, allowedProjects)
+		argIdx++
+	}
+
 	groupByCluster, groupByProject, groupByErr := parseStorageListGroupBy(c)
 	if groupByErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": groupByErr.Error()})

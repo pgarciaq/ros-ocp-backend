@@ -67,6 +67,7 @@ Reference: [notification-codes](../architecture/notification-codes.md).
 
 - Clusters: `openshift.cluster` — [`filterClustersByRBAC`](../../internal/api/handlers_gpu_mig.go).
 - Nodes: `openshift.node` — [`filterGPUMIGEntriesByRBAC`](../../internal/api/handlers_gpu_mig.go).
+- **Not project-scoped** (owner decision #873, 2026-11-20): GPU MIG results are node-grain — `openshift.project` grants do not narrow them (nodes do not belong to projects; same grain split as #789, and Koku's OCP reports carry no project access filtering either).
 - No ROS permissions → **403** (identity middleware).
 - `filter[cluster]` for a cluster outside RBAC → **empty list (200)**.
 

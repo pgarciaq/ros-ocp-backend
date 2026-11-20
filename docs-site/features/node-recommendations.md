@@ -502,3 +502,13 @@ notifications instead.
 - [Dual Engine](dual-engine.md) — Cost vs performance trade-offs
 - [Savings Estimations](savings-estimations.md) — Fleet-level node savings totals
 - [GPU Time-Slicing](gpu-time-slicing.md) — Separate node-level GPU feature
+
+## RBAC grain
+
+**Owner decision (#873, 2026-11-20):** node-utilization results are **node-grain
+by design** — they are scoped by `openshift.cluster` and `openshift.node`
+grants, and are **not** narrowed by `openshift.project` grants: nodes do not
+belong to projects. This matches Koku's permission model, where OCP report
+data carries no project access filtering (and the container/namespace lists'
+project scoping is a ROS-native refinement for namespace-scoped resources —
+PVCs, per #873, are aligned to it; node-grain surfaces are not).

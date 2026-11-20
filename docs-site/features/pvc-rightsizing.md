@@ -405,3 +405,14 @@ curl -s -H "x-rh-identity: $IDENTITY" \
 psql -c "SELECT * FROM daily_pvc_digests LIMIT 10;"
 psql -c "SELECT * FROM pvc_recommendation_sets ORDER BY usage_ratio DESC LIMIT 10;"
 ```
+
+## RBAC grain
+
+**PVC lists are project-scoped** (owner decision #873, 2026-11-20): PVCs are
+namespace-scoped resources — the same grain as containers — so
+`openshift.project` grants narrow the PVC list, group-by, and CSV paths,
+composing with (never replacing) client filters and the `openshift.cluster`
+scope (#752's composition rule). A project-restricted caller sees only their
+namespaces' PVCs; an empty project grant set denies; absent or `*` grants
+mean unscoped. Node-grain surfaces (node-utilization, GPU MIG) are
+deliberately not project-scoped — see the grain split on #789/#873.

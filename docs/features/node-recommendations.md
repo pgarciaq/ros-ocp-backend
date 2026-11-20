@@ -76,3 +76,10 @@ Gated behind the `ROS_VISUAL_INSIGHTS_ENABLED` Unleash feature toggle.
 - [Recommendation engines — Node](../architecture/recommendation-engines.md#node-cpu--memory-recommendations)
 - [MachineSet recommendations (Tier 2)](machineset-recommendations.md)
 - [Idle detection](idle-detection.md) — idle/zombie on nodes via shared settings
+
+## RBAC grain
+
+Owner decision (#873, 2026-11-20): node-utilization results are node-grain —
+scoped by `openshift.cluster` and `openshift.node`, **not** narrowed by
+`openshift.project` (nodes do not belong to projects; #789's grain split;
+Koku's OCP reports carry no project access filtering).

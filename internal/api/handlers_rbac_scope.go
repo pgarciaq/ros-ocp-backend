@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/labstack/echo/v4"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
 
 // dataClusterScope resolves the caller's allowed clusters for any data
@@ -33,6 +35,22 @@ func dataClusterScope(ctx context.Context, orgID string, userPerms map[string][]
 		return nil, true, err
 	}
 	return filterClustersByRBAC(all, userPerms), true, nil
+}
+
+// dataProjectScope returns the caller's server-owned project (namespace)
+// scope from their openshift.project grants (#873): the allowed namespace
+// list and whether scoping applies. Absent grants or a "*" grant mean
+// unscoped (the org-admin shape); an explicitly empty grant list scopes to
+// nothing (callers compose with ANY, which matches no rows). PVCs are
+// namespace-scoped resources — the same grain as containers, whose list
+// applies these grants; node-grain surfaces are not project-scoped (#789
+// grain split).
+func dataProjectScope(userPerms map[string][]string) ([]string, bool) {
+	projectPerms, ok := userPerms["openshift.project"]
+	if !ok || utils.StringInSlice("*", projectPerms) {
+		return nil, false
+	}
+	return projectPerms, true
 }
 
 // readerClusterAllowed reports whether the caller's server-owned cluster
