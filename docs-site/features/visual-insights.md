@@ -308,6 +308,16 @@ curl -s -H "x-rh-identity: $IDENTITY" \
 | `503` | DB pool unavailable or summary query fails (`database connection unavailable` / `unable to fetch fleet summary`) | From handler code paths; not triggered against the healthy local DB |
 | `200` with zeroed counts | RBAC cluster filter matches nothing (scoped caller, no allowed clusters) | From handler code path; not triggered live (local caller is org admin) |
 
+**RBAC grain (owner decision, #789, 2026-11-20):** the fleet summary is
+**org-level by design** under `openshift.cluster` read. `openshift.node`
+grants scope node-grain detail surfaces (the fleet heatmap, node and GPU
+details, machinesets) — not this aggregate. A user with a narrow node grant
+sees org-wide counts and savings by design. This matches Koku's permission
+model, where `openshift.node` is a view gate on node listings
+(`resource_types/openshift_nodes`) and the OCP cost summaries are gated by
+`openshift.cluster` only — no aggregate recomputation by node grants exists
+anywhere in Koku.
+
 **Cache:** in-memory LRU+TTL (`internal/fleetsummary/cache.go`, ADR-0112
 pattern). Key is org + RBAC scope (`CacheKey`: `orgID:all` or
 `orgID:rbac:<hash>`). TTL `ROS_FLEET_SUMMARY_CACHE_TTL` (default **300 s**),

@@ -175,6 +175,15 @@ for overview dashboards alongside the plugin breakdown above.
 }
 ```
 
+## RBAC grain
+
+**Owner decision (#789, 2026-11-20):** the `savings-summary` aggregate is
+**org-level by design** under `openshift.cluster` read. `openshift.node`
+grants scope node-grain detail surfaces — not this rollup: a user with a
+narrow node grant sees org-wide savings totals by design. This matches
+Koku's permission model, where `openshift.node` is a view gate on node
+listings and the OCP cost summaries are gated by `openshift.cluster` only.
+
 ## Cost data source
 
 ROS calls Koku Masu's internal **`effective_rates`** endpoint (service-to-service,

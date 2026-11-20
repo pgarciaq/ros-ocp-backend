@@ -24,6 +24,15 @@ ROS computes per-workload monthly savings estimates by comparing current resourc
 
 See [cost-integration.md](../../docs-site/architecture/cost-integration.md) for formulas, rate resolution chain, fleet aggregation, and recalculation design.
 
+## RBAC grain
+
+**Owner decision (#789, 2026-11-20):** the `savings-summary` aggregate is
+org-level by design under `openshift.cluster` read — `openshift.node` grants
+scope node-grain detail surfaces, not this rollup. Matches Koku's permission
+model (`openshift.node` is a view gate on node listings; OCP summaries are
+`openshift.cluster`-gated only). Recorded on
+[#789](https://github.com/pgarciaq/ros-ocp-backend/issues/789).
+
 ## Public Documentation
 
 See [docs-site/features/savings-estimations.md](../../docs-site/features/savings-estimations.md) for the user-facing feature page.
