@@ -52,7 +52,26 @@ func binaryVersion() string {
 }
 
 func writeVersion(w io.Writer) error {
-	if _, err := fmt.Fprintf(w, "robne %s\njson_envelope_max %d\n\n", binaryVersion(), jsonEnvelopeMax()); err != nil {
+	// Identity block (#908, Alternative A): line one stays byte-identical to
+	// the historical shape so first-line consumers (the release smoke's
+	// assertion, head -1 scripts) keep working; identity follows. The year is
+	// a static string by owner decision — bumped by hand like a LICENSE header.
+	if _, err := fmt.Fprintf(w, "robne %s\n", binaryVersion()); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "Resource Optimization for OpenShift CLI"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "(c) Copyright 2026 Red Hat"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "docs: https://pgarciaq.github.io/ros-ocp-backend/features/robne-cli/"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "json_envelope_max %d\n\n", jsonEnvelopeMax()); err != nil {
 		return err
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)

@@ -167,8 +167,14 @@ jobs:
           stage="$(mktemp -d)"
           cp bin/robne "${stage}/robne"
           cp cmd/robne/robne.yaml.sample cmd/robne/rate-card.json.sample "${stage}/"
+          # #908: identity and docs ride with the binary — README (from the
+          # dist source), the license, and the manpages in both formats.
+          cp cmd/robne/dist-README.md "${stage}/README.md"
+          cp LICENSE "${stage}/"
+          cp -r docs/man/man1 "${stage}/man1"
+          cp -r docs/man/markdown "${stage}/man-markdown"
           tar -czf "robne-${version}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" \
-            -C "${stage}" robne robne.yaml.sample rate-card.json.sample
+            -C "${stage}" robne robne.yaml.sample rate-card.json.sample README.md LICENSE man1 man-markdown
       - name: Package (zip)
         # Windows archives are zip per #906. Git Bash's tar is GNU tar and
         # cannot write zip; Compress-Archive is the native path.
@@ -176,7 +182,11 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ needs.guard.outputs.version }}"
-          Compress-Archive -Path robne.exe,cmd/robne/robne.yaml.sample,cmd/robne/rate-card.json.sample -DestinationPath "robne-$version-windows-amd64.zip"
+          # #908: same enrichment as the tarballs, Windows-named.
+          Copy-Item cmd/robne/dist-README.md README.md
+          Copy-Item -Recurse docs/man/man1 man1
+          Copy-Item -Recurse docs/man/markdown man-markdown
+          Compress-Archive -Path robne.exe,cmd/robne/robne.yaml.sample,cmd/robne/rate-card.json.sample,README.md,LICENSE,man1,man-markdown -DestinationPath "robne-$version-windows-amd64.zip"
       - name: Upload archive
         uses: actions/upload-artifact@v4
         with:

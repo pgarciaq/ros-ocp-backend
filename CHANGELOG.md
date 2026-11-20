@@ -119,6 +119,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI identity and release-archive enrichment ([#908](https://github.com/pgarciaq/ros-ocp-backend/issues/908)):**
+  the released binary now says what it is. `robne --help` leads with the
+  product line and home page; `robne version` follows its (byte-identical,
+  script-compatible) version line with the product name, `(c) Copyright 2026
+  Red Hat`, and the documentation URL. Every generated manpage — roff and
+  markdown — gains BUGS (GitHub Issues), COPYRIGHT, and an enriched SEE ALSO
+  (sibling pages plus the docs site) in GNU section order, replacing cobra's
+  bare parent reference. Release archives ship `README.md` (a user-facing
+  quickstart with the version-format explanation), the Apache-2.0 `LICENSE`,
+  and the manpages in both formats alongside the binary and sample configs.
+  No runtime banner, on any stream — stdout purity (#904) is preserved and
+  the no-banner decision is recorded on the issue.
 - **robne CLI release binaries for macOS and Windows ([#906](https://github.com/pgarciaq/ros-ocp-backend/issues/906)):**
   the tag-driven release pipeline (#877) now also publishes
   `darwin/arm64` (`.tar.gz`) and `windows/amd64` (`.zip`) archives alongside

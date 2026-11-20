@@ -46,7 +46,10 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "robne",
 		Short: "Offline/batch OpenShift recommendations (librobne)",
-		Long: `robne reads NISE or operator ROS container CSVs (directory, file, or .tar.gz)
+		Long: `robne — Resource Optimization for OpenShift (CLI)
+https://pgarciaq.github.io/ros-ocp-backend/
+
+robne reads NISE or operator ROS container CSVs (directory, file, or .tar.gz)
 and writes container recommendations to stdout. --output postgres:// upserts
 into a dedicated database this CLI owns (use case c; --apply-schema on bootstrap/upgrade).
 --input postgres:// recomputes from stored all_hours digests.
