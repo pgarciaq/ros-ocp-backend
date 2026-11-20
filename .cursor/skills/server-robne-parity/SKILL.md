@@ -157,6 +157,14 @@ The zombie verdict (#722) additionally needs **mgmt container CSVs** in the asso
 | headroom parity: window proof fails | The mgmt snapshot's `observedAt` must be within the fire window minus 5m skew (default window 1h); a 72h-fresh snapshot is still too stale for headroom |
 | api-tax parity: robne silent | The webhook p99 needs two cumulative snapshots 30m+ apart with the earlier one BEFORE the fire window (the delta baseline); one job's snapshots must not be split across `source` values |
 | zombie parity: robne fires, server silent | The zombie's activity measure is the daily p95 per workload, SUMMED over both digest streams when BH exists (#746/#747): robne's `business_hours` config must match the org's schedule PRESENCE — a BH-enabled robne against a non-BH org diverges the other way. Partial-day activity reads active on both sides with or without BH (the p95 measure) |
+| batch-injecting every payload before fetching | `org_container_keys`/`org_namespace_keys` are keyed WITHOUT cluster — every same-template payload's ingestion flips the whole org keyset to its own cluster, so the keyset-driven lists serve 0 rows for every other cluster. Sequential per entity is mandatory: re-inject → stamp moves → fetch → compare (#876) |
+| re-injecting a payload | The Sources API rejects a second source with the same `source_ref` ("not allow duplicate accounts") and `GET /sources` is PAGINATED — the idempotency check must pass `?limit=100` and skip registration when the `source_ref` exists |
+| vm payload never computes ("vm recs: no VM digests") | The vm template hardcodes April–May while `vm_runner` reads only the last ~30 days of digests — render the template with the parity window or the engine sees an empty window |
+| hcp-capacity compared against latest | The comparator's hcp kind keys the FULL series by `observed_at` — fetch `/hcp/fleet-capacity/history`, not the latest-only route |
+| VM list "robne-only" variants | The vm route serves one row per (vm, term, engine) — a fixture of 168 variants truncates at `limit=100`, and the missing 68 read as exactly 68 robne-only keys. Paginate (`offset`) and merge pages; the DB holds the full set |
+| advisory legs: correlator "0 fired, 0 silent" | The candidate gate requires `hosted_api_bucket_rollups` rows AND a complete `manifest_hcp_snapshots` row within the trailing 26h — guest payloads need SLO bucket rows and a fresh `observedAt`, or NO advisory is even considered (silence by design) |
+| advisory mgmt payload topology invisible | robne reads the payload dir's `manifest.json` directly; the upload package builder writes its own — carry `cr_status.topology` in BOTH (an overlay merged into the package manifest before upload) |
+| fetching advisories per cluster | The advisories route has NO user-facing cluster filter (the `ANY($2)` clause is RBAC scoping only) — fetch org-wide and split rows by `hosted_cluster_id` for per-pair comparison |
 
 ## Interrupted Runs
 
