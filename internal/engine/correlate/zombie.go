@@ -12,6 +12,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/hcp"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pgdigest"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
 )
 
@@ -317,13 +318,19 @@ func evalZombieStillOn(ctx context.Context, pool *pgxpool.Pool, orgID, mgmtClust
 	if len(namespaces) == 0 {
 		return 0, false, false
 	}
+	// #907: ONE coherent digest stream. Under a BH-enabled org the processor
+	// stores the same containers in both all_hours and business_hours rows;
+	// a filterless SUM double-counts the CP request (and flips sub-floor CPs
+	// to "on"). The activity measure in loadZombieDayCPU is the deliberate
+	// exception — dual-stream BY DESIGN (#746/#747).
 	var usage, requests *int64
 	err := pool.QueryRow(ctx, `
 		SELECT SUM(cpu_usage_p95_mc), SUM(cpu_request_p50_mc)
 		FROM daily_container_digests
 		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = ANY($3)
-		  AND bucket_date >= CURRENT_DATE - INTERVAL '1 day'`,
-		orgID, mgmtCluster, namespaces).Scan(&usage, &requests)
+		  AND bucket_date >= CURRENT_DATE - INTERVAL '1 day'
+		  AND schedule_type = $4`,
+		orgID, mgmtCluster, namespaces, pgdigest.ScheduleAllHours).Scan(&usage, &requests)
 	if err != nil {
 		return 0, false, false
 	}

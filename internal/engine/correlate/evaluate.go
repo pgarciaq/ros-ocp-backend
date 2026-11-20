@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pgdigest"
 )
 
 // hcCandidate is one hosted cluster with fresh bucket evidence plus the
@@ -240,13 +241,18 @@ func evalC(ctx context.Context, pool *pgxpool.Pool, orgID, mgmtCluster, hcID str
 	if len(namespaces) == 0 {
 		return 0, false, false
 	}
+	// #907: ONE coherent digest stream — same reasoning as the zombie
+	// still-on leg: under a BH org both schedule streams exist for the same
+	// containers, and blending them skews this ratio (the BH window carries
+	// different percentiles). Contrast loadZombieDayCPU, dual BY DESIGN.
 	var usage, requests *int64
 	err = pool.QueryRow(ctx, `
 		SELECT SUM(cpu_usage_p95_mc), SUM(cpu_request_p50_mc)
 		FROM daily_container_digests
 		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = ANY($3)
-		  AND bucket_date >= CURRENT_DATE - INTERVAL '1 day'`,
-		orgID, mgmtCluster, namespaces).Scan(&usage, &requests)
+		  AND bucket_date >= CURRENT_DATE - INTERVAL '1 day'
+		  AND schedule_type = $4`,
+		orgID, mgmtCluster, namespaces, pgdigest.ScheduleAllHours).Scan(&usage, &requests)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return 0, false, false

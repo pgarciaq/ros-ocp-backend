@@ -284,7 +284,7 @@ def cmp_hcp_advisory(rep, robne, server):
                      "present in robne only", "no server row (not fired, or superseded by last-writer-wins)")
             continue
         if c.get("confidence") != s.get("confidence"):
-            rep.diff(k, "confidence", c.get("confidence"), s.get("confidence"))
+            rep.diff(k, "confidence", s.get("confidence"), c.get("confidence"))
         cd = c.get("details") or {}
         sd = s.get("details") or {}
         # Key-union comparison: per-verdict detail fields differ across the
@@ -301,7 +301,7 @@ def cmp_hcp_advisory(rep, robne, server):
             if float_close(cd.get(f), sd.get(f)):
                 rep.good()
             else:
-                rep.diff(k, f"details.{f}", cd.get(f), sd.get(f))
+                rep.diff(k, f"details.{f}", sd.get(f), cd.get(f))
         if c.get("confidence") == s.get("confidence"):
             rep.good()
         if (c.get("window_start") or "")[:10] == (s.get("window_start") or "")[:10]:

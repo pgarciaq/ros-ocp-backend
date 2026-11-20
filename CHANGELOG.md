@@ -351,6 +351,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **HCP correlator reads one coherent digest stream under BH-enabled orgs
+  ([#907](https://github.com/pgarciaq/ros-ocp-backend/issues/907)):**
+  the zombie advisory's still-on leg (`evalZombieStillOn`) and the headroom
+  CP-stress ratio (`evalC`) summed `daily_container_digests` without a
+  `schedule_type` filter. Under an org with a business-hours schedule the
+  processor stores the same containers in both the `all_hours` and
+  `business_hours` streams, so the zombie's `control_plane_cpu_request_mc`
+  reported double the provisioned request — and a sub-floor control plane
+  (60mC against the 100mC floor) flipped the still-on leg from
+  known-not-on to "on", a verdict-level distortion. `evalC`'s ratio blended
+  the windows (the BH stream carries different percentiles). Both reads now
+  pin `schedule_type = 'all_hours'`; the zombie activity measure stays
+  dual-stream by design (#746/#747). Found by the #876 parity run's advisory
+  legs; regression coverage pins the single-stream value, the sub-floor
+  silence, and the ratio invariance.
 - **Benchmark generator no longer emits a fixture its own nodes cannot hold
   ([#891](https://github.com/pgarciaq/ros-ocp-backend/issues/891),
   [#897](https://github.com/pgarciaq/ros-ocp-backend/issues/897)):**
