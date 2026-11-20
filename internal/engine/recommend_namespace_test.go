@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -578,4 +579,32 @@ func TestRecommendAllNamespaces_ShortTermWithFutureEnd(t *testing.T) {
 
 	assert.True(t, termsSeen["short"],
 		"short-term must be produced even when end is days after the latest digest")
+}
+
+// TestApplyNamespaceSavingsEstimates_ClearsNoCostDataWhenPriced (#881):
+// NotifNoCostData was append-only; a priced namespace must clear it on the
+// run that computes savings, a genuinely unpriced one keeps it.
+func TestApplyNamespaceSavingsEstimates_ClearsNoCostDataWhenPriced(t *testing.T) {
+	cd := &costdata.ClusterCostData{
+		ConfiguredRates: map[string]costdata.RatePair{},
+		Namespaces: map[string]costdata.NamespaceCosts{
+			"priced-ns": {CostModelCPUCost: 100_000_000, CPURequestHours: 100},
+		},
+	}
+	recs := []NamespaceRec{{
+		Namespace:           "priced-ns",
+		CurrentCPURequestMC: 1000,
+		RecCPURequestMC:     500,
+		NotificationCodes:   []int16{NotifNoCostData},
+	}}
+	ApplyNamespaceSavingsEstimates(recs, cd, 730)
+	assert.NotContains(t, recs[0].NotificationCodes, NotifNoCostData,
+		"a priced namespace clears the stale no-cost-data code (#881)")
+
+	missing := []NamespaceRec{{
+		Namespace:         "unpriced-ns",
+		NotificationCodes: []int16{NotifNoCostData},
+	}}
+	ApplyNamespaceSavingsEstimates(missing, cd, 730)
+	assert.Contains(t, missing[0].NotificationCodes, NotifNoCostData)
 }

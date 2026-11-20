@@ -126,3 +126,21 @@ func TestStorageRequestPerMonth(t *testing.T) {
 	cd.ConfiguredRates["storage_gb_request_per_month"] = costdata.RatePair{}
 	assert.Equal(t, int64(50_000_000), costdata.StorageRequestPerMonth(cd), "$0.50/GiB-month usage fallback")
 }
+
+// TestApplyPVCSavings_ClearsNoCostDataWhenPriced (#881): NotifNoCostData was
+// append-only; a priced cluster must clear it on the run that computes savings.
+func TestApplyPVCSavings_ClearsNoCostDataWhenPriced(t *testing.T) {
+	recs := []PVCRec{{
+		Namespace:         "ns",
+		PVC:               "pvc-1",
+		CapacityBytes:     10 << 30,
+		RequestBytes:      10 << 30,
+		NotificationCodes: []int16{core.NotifNoCostData},
+	}}
+	cd := &costdata.ClusterCostData{ConfiguredRates: map[string]costdata.RatePair{
+		"storage_gb_request_per_month": {Supplementary: 1_000_000},
+	}}
+	ApplyPVCSavings(recs, cd)
+	assert.NotContains(t, recs[0].NotificationCodes, core.NotifNoCostData,
+		"a priced cluster clears the stale no-cost-data code (#881)")
+}

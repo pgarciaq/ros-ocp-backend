@@ -32,3 +32,51 @@ func TestReplicaCountForSavings_PrefersDesiredOverPodCount(t *testing.T) {
 		})
 	}
 }
+
+// TestApplySavingsEstimates_ClearsNoCostDataWhenPriced (#881): NotifNoCostData
+// was append-only — a row that once missed cost data kept the warning forever,
+// even after a run that priced its namespace and computed savings. The priced
+// path must CLEAR the code; a genuinely unpriced namespace keeps it.
+func TestApplySavingsEstimates_ClearsNoCostDataWhenPriced(t *testing.T) {
+	card := &types.RateCard{
+		Currency: "USD",
+		Namespaces: map[string]types.NamespaceSpend{
+			"priced-ns": {CostModelCPUMicroCents: 100_000_000, CPURequestMilliHours: 100},
+		},
+	}
+	recs := []types.ContainerRec{{
+		Namespace:           "priced-ns",
+		CurrentCPURequestMC: 1000,
+		RecCPURequestMC:     500,
+		NotificationCodes:   []int16{types.NotifNoCostData},
+	}}
+	ApplySavingsEstimates(recs, card, 730)
+	assert.NotContains(t, recs[0].NotificationCodes, types.NotifNoCostData,
+		"a priced namespace clears the stale no-cost-data code (#881)")
+	if recs[0].EstimatedSavingsCents != nil {
+		assert.Greater(t, *recs[0].EstimatedSavingsCents, int64(0))
+	}
+
+	// Inverse: a genuinely unpriced namespace keeps the code.
+	missing := []types.ContainerRec{{
+		Namespace:         "unpriced-ns",
+		NotificationCodes: []int16{types.NotifNoCostData},
+	}}
+	ApplySavingsEstimates(missing, card, 730)
+	assert.Contains(t, missing[0].NotificationCodes, types.NotifNoCostData)
+}
+
+// TestApplySavingsEstimates_ClearsNoCostDataTierA (#881): a non-empty Tier A
+// card prices every namespace — the stale code must clear on the Tier A path.
+func TestApplySavingsEstimates_ClearsNoCostDataTierA(t *testing.T) {
+	card := &types.RateCard{Currency: "USD", CPUMicroCentsPerCoreHour: 1_000_000}
+	recs := []types.ContainerRec{{
+		Namespace:           "any-ns",
+		CurrentCPURequestMC: 1000,
+		RecCPURequestMC:     500,
+		NotificationCodes:   []int16{types.NotifNoCostData},
+	}}
+	ApplySavingsEstimates(recs, card, 730)
+	assert.NotContains(t, recs[0].NotificationCodes, types.NotifNoCostData,
+		"a non-empty Tier A card clears the stale no-cost-data code (#881)")
+}

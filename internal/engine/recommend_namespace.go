@@ -216,6 +216,8 @@ func ApplyNamespaceSavingsEstimates(recs []NamespaceRec, costData *costdata.Clus
 			recs[i].NotificationCodes = appendUnique(recs[i].NotificationCodes, NotifNoCostData)
 			continue
 		}
+		// #881: the priced namespace clears the stale no-cost-data code.
+		recs[i].NotificationCodes = removeCode(recs[i].NotificationCodes, NotifNoCostData)
 
 		cpuDeltaMC := recs[i].CurrentCPURequestMC - recs[i].RecCPURequestMC
 		memDeltaKiB := recs[i].CurrentMemRequestKiB - recs[i].RecMemRequestKiB
@@ -243,8 +245,11 @@ func ApplyNamespaceSavingsEstimates(recs []NamespaceRec, costData *costdata.Clus
 		total := MicroCentsToCents(cpuMicro + memMicro)
 		cpuCents := MicroCentsToCents(cpuMicro)
 		memCents := MicroCentsToCents(memMicro)
+		//nolint:gosec // G602: i is bounded by the loop over recs (the removeCode reassignment above defeats gosec's inference, #881)
 		recs[i].EstimatedSavingsCents = &total
+		//nolint:gosec // G602: see above
 		recs[i].EstimatedCPUSavingsCents = &cpuCents
+		//nolint:gosec // G602: see above
 		recs[i].EstimatedMemSavingsCents = &memCents
 	}
 }

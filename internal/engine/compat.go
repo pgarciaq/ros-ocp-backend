@@ -167,6 +167,7 @@ var (
 	nullIfEmpty                     = core.NullIfEmpty
 	nullIfZeroInt64                 = core.NullIfZeroInt64
 	appendUnique                    = core.AppendUnique
+	removeCode                      = core.RemoveCode
 	splitCSVList                    = core.SplitCSVList
 	maxDailyCPUUsageP95             = core.MaxDailyCPUUsageP95
 	maxDailyMemUsageP95             = core.MaxDailyMemUsageP95

@@ -189,6 +189,7 @@ var (
 	ApplyOOMBumpScaled                  = libtypes.ApplyOOMBumpScaled
 	NotificationThresholdsFromSizing    = libtypes.NotificationThresholdsFromSizing
 	AppendUnique                        = libtypes.AppendUnique
+	RemoveCode                          = libtypes.RemoveCode
 	MergeNotificationCodes              = libtypes.MergeNotificationCodes
 	SortedNotificationCodes             = libtypes.SortedNotificationCodes
 	SelectCPUUsagePercentile            = libtypes.SelectCPUUsagePercentile

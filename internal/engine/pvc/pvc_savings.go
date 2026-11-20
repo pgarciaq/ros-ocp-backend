@@ -20,6 +20,9 @@ func ApplyPVCSavings(recs []PVCRec, costData *costdata.ClusterCostData) {
 	storageRate := costdata.StorageRequestPerMonth(costData)
 
 	for i := range recs {
+		// #881: cost data exists — clear the stale no-cost-data code from a
+		// prior run that missed it.
+		recs[i].NotificationCodes = core.RemoveCode(recs[i].NotificationCodes, core.NotifNoCostData)
 		savingsMicroCents := computePVCSavingsMicroCents(&recs[i], storageRate)
 		recs[i].EstimatedMonthlySavingsCents = core.MicroCentsToCents(savingsMicroCents)
 	}

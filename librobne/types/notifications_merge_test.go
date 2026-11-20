@@ -39,3 +39,16 @@ func TestAppendUnique_KeepsHighCodes(t *testing.T) {
 	got = AppendUnique(got, 77)
 	assert.Equal(t, []int16{77, 79}, got)
 }
+
+func TestRemoveCode(t *testing.T) {
+	assert.Equal(t, []int16{}, RemoveCode([]int16{25}, 25))
+	assert.Equal(t, []int16{12}, RemoveCode([]int16{12, 25}, 25))
+	assert.Equal(t, []int16{12, 74}, RemoveCode([]int16{12, 25, 74}, 25))
+	assert.Equal(t, []int16{12}, RemoveCode([]int16{12}, 25), "absent code is a no-op")
+	assert.Nil(t, RemoveCode(nil, 25))
+	// The input slice is not aliased into the output.
+	in := []int16{25, 30}
+	out := RemoveCode(in, 25)
+	assert.Equal(t, []int16{25, 30}, in, "input untouched")
+	assert.Equal(t, []int16{30}, out)
+}

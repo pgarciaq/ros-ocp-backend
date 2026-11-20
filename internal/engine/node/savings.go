@@ -24,6 +24,9 @@ func ApplyNodeSavings(recs []Rec, costData *costdata.ClusterCostData, hoursPerMo
 	nodeRate := costdata.NodeCostPerMonth(costData)
 
 	for i := range recs {
+		// #881: cost data exists — clear the stale no-cost-data code from a
+		// prior run that missed it.
+		recs[i].NotificationCodes = core.RemoveCode(recs[i].NotificationCodes, core.NotifNoCostData)
 		savingsMicroCents := computeNodeSavingsMicroCents(&recs[i], cpuRate, memRate, nodeRate, hoursPerMonth)
 		recs[i].EstimatedMonthlySavingsCents = core.MicroCentsToCents(savingsMicroCents)
 	}

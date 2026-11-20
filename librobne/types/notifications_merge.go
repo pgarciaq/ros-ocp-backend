@@ -11,6 +11,20 @@ func AppendUnique(codes []int16, code int16) []int16 {
 	return append(codes, code)
 }
 
+// RemoveCode strips one code from the slice (the array_remove equivalent).
+// #881: NotifNoCostData is a condition, not a history entry — the run that
+// prices the row's namespace must clear it, or the warning outlives its
+// cause across the database round-trip.
+func RemoveCode(codes []int16, code int16) []int16 {
+	out := codes[:0:0]
+	for _, c := range codes {
+		if c != code {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // MergeNotificationCodes returns sorted unique codes from existing plus new
 // entries. Codes < 1 are skipped. Codes ≥ 1 are kept (including 64+; #509).
 func MergeNotificationCodes(existing []int16, add ...int16) []int16 {

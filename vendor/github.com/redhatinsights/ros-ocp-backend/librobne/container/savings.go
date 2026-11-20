@@ -37,13 +37,23 @@ func ApplySavingsEstimates(recs []types.ContainerRec, card *types.RateCard, hour
 	}
 
 	for i := range recs {
+		// Hoisted row pointer: gosec's G602 bounds inference loses track of
+		// recs[i] once a slice field is reassigned mid-loop (#881).
+		rec := &recs[i]
+		// #881: a non-empty card means cost data exists — clear the stale
+		// no-cost-data code from a prior run that missed it.
+		if !useB {
+			rec.NotificationCodes = types.RemoveCode(rec.NotificationCodes, types.NotifNoCostData)
+		}
 		var modelCPURate, modelMemRate, infraCPURate, infraMemRate int64
 		if useB {
-			ns, ok := card.Namespaces[recs[i].Namespace]
+			ns, ok := card.Namespaces[rec.Namespace]
 			if !ok {
-				recs[i].NotificationCodes = types.AppendUnique(recs[i].NotificationCodes, types.NotifNoCostData)
+				rec.NotificationCodes = types.AppendUnique(rec.NotificationCodes, types.NotifNoCostData)
 				continue
 			}
+			// #881: the priced namespace clears the stale code.
+			rec.NotificationCodes = types.RemoveCode(rec.NotificationCodes, types.NotifNoCostData)
 			modelCPURate = types.EffectiveRateFromCPUTotals(ns.CostModelCPUMicroCents, ns.CPURequestMilliHours)
 			modelMemRate = types.EffectiveRateFromMemTotals(ns.CostModelMemMicroCents, ns.MemRequestMilliHours)
 			infraTotal := ns.InfraMicroCents + ns.DistributedMicroCents
@@ -57,29 +67,29 @@ func ApplySavingsEstimates(recs []types.ContainerRec, card *types.RateCard, hour
 			modelMemRate = aMem
 		}
 
-		if recs[i].IdleState.IsIdleOrZombie() {
+		if rec.IdleState.IsIdleOrZombie() {
 			cpuMicro, memMicro := computeIdleSavingsBreakdownMicroCents(
-				&recs[i], modelCPURate, modelMemRate, infraCPURate, infraMemRate, distType, hoursPerMonth,
+				rec, modelCPURate, modelMemRate, infraCPURate, infraMemRate, distType, hoursPerMonth,
 			)
 			total := types.MicroCentsToCents(cpuMicro + memMicro)
 			cpuCents := types.MicroCentsToCents(cpuMicro)
 			memCents := types.MicroCentsToCents(memMicro)
-			recs[i].EstimatedSavingsCents = &total
-			recs[i].EstimatedWasteCents = &total
-			recs[i].EstimatedCPUSavingsCents = &cpuCents
-			recs[i].EstimatedMemSavingsCents = &memCents
+			rec.EstimatedSavingsCents = &total
+			rec.EstimatedWasteCents = &total
+			rec.EstimatedCPUSavingsCents = &cpuCents
+			rec.EstimatedMemSavingsCents = &memCents
 			continue
 		}
 
 		cpuMicro, memMicro := computeSavingsBreakdownMicroCents(
-			&recs[i], modelCPURate, modelMemRate, infraCPURate, infraMemRate, distType, hoursPerMonth,
+			rec, modelCPURate, modelMemRate, infraCPURate, infraMemRate, distType, hoursPerMonth,
 		)
 		total := types.MicroCentsToCents(cpuMicro + memMicro)
 		cpuCents := types.MicroCentsToCents(cpuMicro)
 		memCents := types.MicroCentsToCents(memMicro)
-		recs[i].EstimatedSavingsCents = &total
-		recs[i].EstimatedCPUSavingsCents = &cpuCents
-		recs[i].EstimatedMemSavingsCents = &memCents
+		rec.EstimatedSavingsCents = &total
+		rec.EstimatedCPUSavingsCents = &cpuCents
+		rec.EstimatedMemSavingsCents = &memCents
 	}
 }
 

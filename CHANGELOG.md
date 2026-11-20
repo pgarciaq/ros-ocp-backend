@@ -363,6 +363,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **NotifNoCostData (25) clears when cost data arrives ([#881](https://github.com/pgarciaq/ros-ocp-backend/issues/881)):**
+  the code was append-only — a recommendation row that once missed cost
+  data (Koku 404, transient outage, namespace not yet priced) kept the
+  "no cost data" warning forever, surviving even a successful
+  `recalculate-savings` that computed dollar savings for the same row,
+  because nothing anywhere subtracted it. The savings application paths
+  (container Tier A and Tier B, node, PVC, namespace) now clear the code
+  on the run that prices the row's namespace or cluster; genuinely
+  unpriced namespaces keep it. The fix lives in the shared Apply
+  functions, so the ingest path and `recalculate-savings` are both
+  covered; the robne CLI inherits the same semantics through librobne.
+  Regression tests cover every family plus a recalc-level end-to-end
+  that seeds the stale code and asserts it clears while savings compute.
 - **robne CLI logs moved to stderr — `--format json` output is pipable
   ([#904](https://github.com/pgarciaq/ros-ocp-backend/issues/904)):**
   the CLI shared the server's logrus stdout destination, so every

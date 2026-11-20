@@ -453,3 +453,77 @@ func TestUpdatePVCSavings_BatchUpdate(t *testing.T) {
 		assert.Equal(t, want.EstimatedMonthlySavingsCents, got)
 	}
 }
+
+// TestRecalculateSavingsForOrg_ClearsStaleNoCostData (#881): NotifNoCostData
+// was append-only — the documented remedy (recalculate-savings) recomputed
+// savings but wrote the stored code straight back. A row seeded with the
+// stale code whose cluster is now priced must lose it on recalc.
+func TestRecalculateSavingsForOrg_ClearsStaleNoCostData(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_SAVINGS_ESTIMATES_ENABLED", "true")
+	t.Setenv("ROS_SAVINGS_RECALCULATION_ENABLED", "true")
+
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-savings-recalc-clear25"
+	clusterUUID := "22222222-2222-2222-2222-222222222222"
+	seedClustersForRecalcTest(t, pool, orgID, clusterUUID)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{
+			"cluster_id": %q,
+			"money_scale": "microcents",
+			"currency": "USD",
+			"configured_rates": {
+				"cpu_core_usage_per_hour": {"infrastructure": 0, "supplementary": 1000000},
+				"memory_gb_usage_per_hour": {"infrastructure": 0, "supplementary": 2000000},
+				"node_cost_per_month": {"infrastructure": 500000000000, "supplementary": 0}
+			},
+			"namespace_aggregates": {}
+		}`, clusterUUID)
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("KOKU_MASU_URL", srv.URL)
+	config.ResetForTest()
+	costdata.ClearCostDataCacheForTest()
+	t.Cleanup(costdata.ClearCostDataCacheForTest)
+
+	bucketDate := testutil.BaseDate
+	ensureDailyNodeDigestPartitions(t, pool, bucketDate, 1)
+	_, err := pool.Exec(ctx, `
+		INSERT INTO daily_node_digests (
+			bucket_date, org_id, cluster_uuid, node,
+			max_cpu_allocatable_mc, max_mem_allocatable_kib, max_cpu_requests_mc, max_mem_requests_kib,
+			sample_count
+		) VALUES ($1, $2, $3::uuid, 'worker-1', 8000, $4, 4000, $5, 1)
+		ON CONFLICT (org_id, cluster_uuid, node, bucket_date, schedule_type) DO NOTHING`,
+		bucketDate, orgID, clusterUUID, int64(32*1024*1024), int64(16*1024*1024))
+	require.NoError(t, err)
+
+	// The row carries the STALE code from a run when cost data was missing.
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
+			estimated_savings_cents, notification_codes
+		) VALUES ($1, $2::uuid, 'worker-1', 'medium', 'cost',
+			0.10, 0.25, 0.15, 0.30,
+			4.0, 16.0, 1, 0, '{25}')`,
+		orgID, clusterUUID)
+	require.NoError(t, err)
+
+	RecalculateSavingsForOrg(ctx, pool, orgID, clusterUUID, []string{savingsRecTypeNode})
+
+	var savingsAfter int64
+	var codes []int16
+	err = pool.QueryRow(ctx, `
+		SELECT estimated_savings_cents, notification_codes FROM node_recommendations
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND node = 'worker-1'`,
+		orgID, clusterUUID).Scan(&savingsAfter, &codes)
+	require.NoError(t, err)
+	require.Greater(t, savingsAfter, int64(0), "recalc computes savings on the priced cluster")
+	assert.NotContains(t, codes, int16(25),
+		"the stale no-cost-data code must clear on a successful recalc (#881)")
+}

@@ -157,3 +157,23 @@ func TestRecommendNodes_EngineSavingsDiffer(t *testing.T) {
 	assert.Greater(t, recs[0].EstimatedMonthlySavingsCents, recs[1].EstimatedMonthlySavingsCents,
 		"cost engine should show higher savings than performance for underutilized node")
 }
+
+// TestApplyNodeSavings_ClearsNoCostDataWhenPriced (#881): NotifNoCostData was
+// append-only; a priced cluster must clear it on the run that computes savings.
+func TestApplyNodeSavings_ClearsNoCostDataWhenPriced(t *testing.T) {
+	recs := []Rec{{
+		Node:               "worker-1",
+		CurrentCPUMC:       8000,
+		RecommendedCPUMC:   4000,
+		CurrentMemKiB:      32 * gibKiB,
+		RecommendedMemKiB:  16 * gibKiB,
+		NodeCountReduction: 1,
+		NotificationCodes:  []int16{core.NotifNoCostData},
+	}}
+	cd := &costdata.ClusterCostData{ConfiguredRates: map[string]costdata.RatePair{
+		"cpu_core_usage_per_hour": {Supplementary: 1_000_000},
+	}}
+	ApplyNodeSavings(recs, cd, 730)
+	assert.NotContains(t, recs[0].NotificationCodes, core.NotifNoCostData,
+		"a priced cluster clears the stale no-cost-data code (#881)")
+}
