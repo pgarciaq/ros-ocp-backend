@@ -1,6 +1,6 @@
 # robne CLI — Standalone Offline/Batch Recommendations
 
-> **Last verified:** 2026-11-19
+> **Last verified:** 2026-11-20
 
 !!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, 2b stdout, 2c other-entity rec upsert, other-entity digest INSERT, other-entity Path A SELECT, snapshot stdout, business hours, Phase 3 `diff` / container `explain`, other-entity `explain`, `robne version`, and HCP fleet-capacity ([#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)) shipped"
     Parent issue: [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99).
@@ -148,6 +148,11 @@ robne explain --input ./ocp_ros_usage.csv --plugins gpu \
 robne explain --input ./metrics.tar.gz --plugins hcp \
   --scenario average_qps --observed-at 2026-10-25T14:00:00Z
 ```
+
+Logs go to **stderr** and the payload (JSON, CSV, or table) to **stdout**, so
+every `--format json` output can be redirected and parsed as one document
+([#904](https://github.com/pgarciaq/ros-ocp-backend/issues/904)); pipe
+`2> robne.log` when you want the logs beside it.
 
 ### HCP capacity input: identity and series
 

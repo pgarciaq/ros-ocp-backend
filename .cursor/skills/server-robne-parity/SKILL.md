@@ -146,7 +146,7 @@ The zombie verdict (#722) additionally needs **mgmt container CSVs** in the asso
 | VM list endpoint 400 "bad recommendation_id" | List route is `/vm` (singular); `/vms/…` is the history route |
 | Container list 400 the same way | Container list is the base route or `/container` (singular) |
 | Container memory diffs in exact 2^20 ratios | Server served bytes — pin `memory-unit=MiB` on container-family fetches |
-| robne hcp stdout not pure JSON | The hcp path leaks log lines before the envelope — strip them (robne bug, tracked) |
+| robne hcp stdout not pure JSON | Fixed by [#904](https://github.com/pgarciaq/ros-ocp-backend/issues/904) (logs → stderr, payload → stdout): binaries from releases after `robne-0.17.20261120-*` emit pure JSON. Older binaries still leak log lines before the envelope — strip them |
 | sshuttle dies but the hypervisor answers | SSH `-L` port-forwards through the hypervisor + a kubeconfig pointing at localhost is a viable reconnection; if the hypervisor is unreachable too, stop and ask |
 | Payload files vanish from `/tmp` | Keep scratch under `.superpowers/tmp/` |
 | hcp-advisory parity: robne silent | The advisory needs a BH schedule (`business_hours.enabled`), a context payload (`--input` twice: guest first, mgmt second), and dual digests — silence is the designed missing-input posture, not a bug |

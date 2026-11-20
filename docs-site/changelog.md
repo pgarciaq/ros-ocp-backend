@@ -351,6 +351,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **robne CLI logs moved to stderr — `--format json` output is pipable
+  ([#904](https://github.com/pgarciaq/ros-ocp-backend/issues/904)):**
+  the CLI shared the server's logrus stdout destination, so every
+  `robne recommend --format json > recs.json` (the documented workflow)
+  produced a file starting with log lines that no JSON consumer could parse —
+  and `--format table` arrived with prose before the header. The logging
+  package gained `SetOutput` (the server keeps its stdout default for
+  container log collection; the divergence is stated in code), and robne's
+  startup redirects to stderr, making every output format a clean payload
+  stream. The release smoke gate was upgraded from a substring grep to a
+  real JSON parse — the gate had been green on an artifact no consumer could
+  read, which is how this shipped. A regression test captures stdout around
+  a full recommend run and requires the whole stream to parse as one JSON
+  document.
 - **HCP correlator reads one coherent digest stream under BH-enabled orgs
   ([#907](https://github.com/pgarciaq/ros-ocp-backend/issues/907)):**
   the zombie advisory's still-on leg (`evalZombieStillOn`) and the headroom

@@ -8,9 +8,12 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 func main() {
+	initCLI()
 	root := newRootCmd()
 	// Hidden docs generator (#703); excluded from the generated tree by
 	// generateDocs, which builds a fresh public root.
@@ -28,6 +31,15 @@ func main() {
 		}
 		os.Exit(1)
 	}
+}
+
+// initCLI performs the process-wide CLI setup main() needs before any
+// command runs.
+func initCLI() {
+	// #904: the CLI's stdout is the payload stream — logs go to stderr so
+	// `--format json > recs.json` parses as one document. The server keeps
+	// the logging package's stdout default (container log collection).
+	logging.SetOutput(os.Stderr)
 }
 
 func newRootCmd() *cobra.Command {

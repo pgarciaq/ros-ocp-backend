@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -18,7 +19,26 @@ var (
 	initOnce  sync.Once
 	logger    *logrus.Logger
 	rootEntry *logrus.Entry
+
+	outMu      sync.Mutex
+	pendingOut io.Writer // applied at init when set early (cmd/robne, #904)
 )
+
+// SetOutput redirects the process's log output. The server never calls it —
+// the daemon keeps the stdout default so container runtimes collect logs
+// from stdout. cmd/robne calls it with os.Stderr at startup: the CLI's
+// stdout is a payload stream (`--format json > recs.json` must parse as one
+// document, #904). Safe before or after the first GetLogger: an early call
+// is applied at init (so even the "Logging initialized" line lands on the
+// redirected stream); a late call swaps the live logger.
+func SetOutput(w io.Writer) {
+	outMu.Lock()
+	defer outMu.Unlock()
+	pendingOut = w
+	if logger != nil {
+		logger.Out = w
+	}
+}
 
 func initLogger() {
 	logger = logrus.New()
@@ -44,6 +64,9 @@ func initLogger() {
 
 	logger.Level = logLevel
 	logger.Out = os.Stdout
+	if pendingOut != nil {
+		logger.Out = pendingOut
+	}
 	logger.ReportCaller = true
 
 	if cfg.CwAccessKey != "" {
