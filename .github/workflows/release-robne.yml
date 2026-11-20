@@ -150,8 +150,10 @@ jobs:
             --now 2026-10-26T22:30:00Z > "${smoke_json}"
           # The gate must PARSE the payload, not grep it (#904): a grep is
           # satisfied by a log-polluted file no JSON consumer can read —
-          # exactly how this defect shipped green once.
-          if ! python3 -c "import json, sys; d = json.load(open('${smoke_json}')); sys.exit(0 if 'hcp_recommendations' in d else 1)"; then
+          # exactly how this defect shipped green once. The file is piped to
+          # python's stdin because a native Windows python cannot open Git
+          # Bash's /tmp paths (the first run failed exactly there).
+          if ! cat "${smoke_json}" | python3 -c "import json, sys; d = json.load(sys.stdin); sys.exit(0 if 'hcp_recommendations' in d else 1)"; then
             echo "release-robne: ${bin} smoke output is not one parseable JSON document with hcp_recommendations:" >&2
             cat "${smoke_json}" >&2
             exit 1
