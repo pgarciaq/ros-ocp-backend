@@ -236,6 +236,14 @@ func LoadTermConfig(ctx context.Context, pool *pgxpool.Pool, orgID, recommendati
 		}
 
 		result[i].ReplicaTargetUtilizationPct = replicaTargetPct
+		// #866: name stability — the resolved Name is always the plugin's
+		// own display vocabulary (defaults[i].Name), regardless of which
+		// override source filled the values. DB rows are ord-keyed and env
+		// rows loop the ord names; both stamp the ord spelling, which
+		// flipped VM's display names ("short_term" → "short") whenever an
+		// override existed. The container family is unaffected (its
+		// defaults already use the ord spellings).
+		result[i].Name = defaults[i].Name
 	}
 
 	return result, nil

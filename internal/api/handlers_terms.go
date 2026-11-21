@@ -41,7 +41,22 @@ type termSettingsResponseItem struct {
 	IsDefault          bool    `json:"is_default"`
 }
 
-var termNameToOrd = map[string]int{"short": 1, "medium": 2, "long": 3}
+// termOrdNames is the resolver's positional ord vocabulary — the name
+// space the ROS_TERMS_* env vars (and therefore the lock probes) use.
+// Display names come from each plugin's DefaultTerms (VM serves
+// short_term/…, the container family short/…); these are the env/lock
+// spellings (#866). Shared with the dedicated VM terms route.
+var termOrdNames = []string{"short", "medium", "long"}
+
+// termNameToOrd maps BOTH the ord spellings (short/medium/long — the
+// resolver's vocabulary) and the display spellings (short_term/… — what
+// the GET serves for VM) to the storage ord (#866: the PUT must accept
+// the names its own GET serves).
+var termNameToOrd = map[string]int{
+	"short": 1, "short_term": 1,
+	"medium": 2, "medium_term": 2,
+	"long": 3, "long_term": 3,
+}
 
 func getRecommendationType(c echo.Context) (string, error) {
 	rt := c.QueryParam("recommendation_type")
@@ -98,8 +113,12 @@ func GetTermSettings(c echo.Context) error {
 			WindowDays:         t.WindowDays,
 			MinDataDays:        t.MinDataDays,
 			DecayHalfLifeHours: t.DecayHalfLifeHours,
-			Locked:             engine.IsTermLocked(rt, t.Name),
-			IsDefault:          isDefault,
+			// #866: the lock probe uses the resolver's ord vocabulary by
+			// position — the spelling the ROS_TERMS_* env vars actually
+			// resolve. t.Name is the display vocabulary (short_term for
+			// VM); probing it reads a spelling nothing resolves.
+			Locked:    engine.IsTermLocked(rt, termOrdNames[i]),
+			IsDefault: isDefault,
 		}
 	}
 
@@ -152,7 +171,7 @@ func PutTermSettings(c echo.Context) error {
 		if _, ok := termNameToOrd[t.Name]; !ok {
 			return c.JSON(http.StatusBadRequest, echo.Map{
 				"status":  "error",
-				"message": "term name must be one of: short, medium, long",
+				"message": "term name must be one of: short, medium, long (short_term/medium_term/long_term also accepted)",
 			})
 		}
 		if t.WindowDays < 1 || t.WindowDays > maxWin {

@@ -8950,16 +8950,20 @@
         "properties": {
           "name": {
             "type": "string",
+            "description": "The plugin's own term vocabulary: short/medium/long for container, namespace, node, gpu, pvc; short_term/medium_term/long_term for vm (#866).",
             "enum": [
               "short",
               "medium",
-              "long"
+              "long",
+              "short_term",
+              "medium_term",
+              "long_term"
             ]
           },
           "window_days": {
             "type": "integer",
             "minimum": 1,
-            "description": "Maximum varies by plugin: 90 for container/namespace/node/gpu, 365 for pvc"
+            "description": "Maximum varies by plugin: 90 for container/namespace/node/gpu/vm, 365 for pvc"
           },
           "min_data_days": {
             "type": "integer",
@@ -9004,16 +9008,20 @@
         "properties": {
           "name": {
             "type": "string",
+            "description": "Both spellings accepted: short/medium/long (ord) or short_term/medium_term/long_term (display, as the GET serves for vm) (#866).",
             "enum": [
               "short",
               "medium",
-              "long"
+              "long",
+              "short_term",
+              "medium_term",
+              "long_term"
             ]
           },
           "window_days": {
             "type": "integer",
             "minimum": 1,
-            "description": "Maximum varies by plugin: 90 for container/namespace/node/gpu, 365 for pvc"
+            "description": "Maximum varies by plugin: 90 for container/namespace/node/gpu/vm, 365 for pvc"
           },
           "min_data_days": {
             "type": "integer",

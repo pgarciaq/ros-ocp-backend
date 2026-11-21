@@ -1121,12 +1121,12 @@ When an admin sets `ROS_TERMS_{PLUGIN}_{TERM}_{FIELD}` env vars, the correspondi
 Changes apply on the **next ingestion/recommendation cycle** (not retroactive to cached API responses).
 Call `DELETE` to reset to compiled defaults.
 
-Default max windows: 90 days (container/namespace/node/gpu), 365 days (pvc).
+Default max windows: 90 days (container/namespace/node/gpu/vm), 365 days (pvc).
 
 ### UI Integration Recommendations
 
-- Show term settings in a **Form** grouped by plugin (`recommendation_type` selector: container, namespace, node, gpu, pvc).
-- Display three term rows (short, medium, long) with fields: `window_days`, `min_data_days`, `decay_halflife_hours`.
+- Show term settings in a **Form** grouped by plugin (`recommendation_type` selector: container, namespace, node, gpu, pvc, vm).
+- Display three term rows with fields: `window_days`, `min_data_days`, `decay_halflife_hours`. The row `name` is the plugin's own vocabulary — `short`/`medium`/`long` for most plugins, `short_term`/`medium_term`/`long_term` for vm; PUT accepts either spelling.
 - Indicate `locked: true` terms with disabled fields and tooltip: "Set by administrator."
 - Show `is_default: true` badge when tenant has not customized; offer "Reset to defaults" via DELETE.
 - Validate client-side before PUT: window_days within plugin max (90 days for most, 365 for pvc).

@@ -18,7 +18,6 @@ import (
 const vmRecommendationType = "vm"
 
 var vmTermAPINames = []string{"short_term", "medium_term", "long_term"}
-var vmTermEngineOrd = []string{"short", "medium", "long"}
 
 type vmTermSettingsRequest struct {
 	Terms []vmTermSettingsItem `json:"terms"`
@@ -211,8 +210,10 @@ func GetVMTermSettings(c echo.Context) error {
 			WindowDays:         t.WindowDays,
 			MinDataDays:        t.MinDataDays,
 			DecayHalfLifeHours: t.DecayHalfLifeHours,
-			Locked:             engine.IsTermLocked(vmRecommendationType, vmTermEngineOrd[i]),
-			IsDefault:          isDefault,
+			// #866: lock probes use the shared ord vocabulary (the env
+			// spellings), not the display names served above.
+			Locked:    engine.IsTermLocked(vmRecommendationType, termOrdNames[i]),
+			IsDefault: isDefault,
 		}
 	}
 

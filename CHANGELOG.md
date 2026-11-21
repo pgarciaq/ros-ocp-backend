@@ -392,6 +392,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the HCP detail keeps them, serving the native detail shape). The UI's
   warning icon is unaffected — `hasNotificationsWarning` reads the
   top-level array first.
+- **VM term name spaces agree on the generic terms route ([#866](https://github.com/pgarciaq/ros-ocp-backend/issues/866)):**
+  two name spaces for VM terms never agreed — the resolver's env-var
+  vocabulary (`short`/`medium`/`long`, `ROS_TERMS_VM_SHORT_*`) and the
+  plugin's display vocabulary (`short_term`/`medium_term`/`long_term`,
+  ADR-0346). On the generic `/settings/terms?recommendation_type=vm`
+  route this made the lock probe read a spelling nothing resolves (the
+  dead `…VM_SHORT_TERM_*` spelling reported `locked: true` with the
+  default window — locked-but-unapplied), flipped the served term name
+  to the ord spelling whenever an env or DB override existed, and the
+  PUT rejected the very names the GET serves. The fix maps at the API
+  boundary, the pattern the dedicated VM route and the engine's
+  `VMTermWindowsFromConfig` already use: the resolver now stamps the
+  plugin's display names on resolved terms (stable regardless of
+  override source), lock probes use the ord vocabulary by position, and
+  the PUT accepts both spellings. The vm-specific route, koku-ui (which
+  reads the dedicated route), and the engine's own windows are
+  unchanged; the dead spelling is now reported unlocked and the
+  startup validator (from #792) still refuses it.
 - **NotifNoCostData (25) clears when cost data arrives ([#881](https://github.com/pgarciaq/ros-ocp-backend/issues/881)):**
   the code was append-only — a recommendation row that once missed cost
   data (Koku 404, transient outage, namespace not yet priced) kept the

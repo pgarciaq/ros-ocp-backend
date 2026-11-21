@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +21,7 @@ import (
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/namespace"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/node"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/pvc"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -467,4 +469,110 @@ func TestGetTermSettings_QuotaUnsupported(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code,
 		"quota is term-less (threshold-based) — the existing term-less rejection (#793 control)")
+}
+
+// getVMTerms fetches the generic terms route for VM with a cache-busted
+// resolution, so the env state at call time is the only influence.
+func getVMTerms(t *testing.T, app *echo.Echo, identity string) termsResponse {
+	t.Helper()
+	engine.InvalidateTermCache(testutil.TestOrgID, "vm")
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/settings/terms?recommendation_type=vm", nil)
+	req.Header.Set("X-Rh-Identity", identity)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	var resp termsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Terms, 3)
+	return resp
+}
+
+// TestGetTermSettings_VMNameStabilityAndLockAgreement (#866): the generic
+// route serves VM in the plugin's own display vocabulary (short_term…),
+// stable regardless of which override source filled the values, and its
+// lock probes use the resolver's ord vocabulary — the spelling the env
+// vars actually resolve. Pre-fix failures: the dead spelling reported
+// locked (locked-but-unapplied), and any env/DB override flipped the
+// served name to the ord spelling.
+func TestGetTermSettings_VMNameStabilityAndLockAgreement(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	app, identity := setupTermsApp(t)
+
+	t.Run("env unset: display names, unlocked", func(t *testing.T) {
+		resp := getVMTerms(t, app, identity)
+		assert.Equal(t, "short_term", resp.Terms[0].Name)
+		assert.Equal(t, "medium_term", resp.Terms[1].Name)
+		assert.Equal(t, "long_term", resp.Terms[2].Name)
+		assert.False(t, resp.Terms[0].Locked)
+		assert.Equal(t, 7, resp.Terms[0].WindowDays)
+	})
+
+	t.Run("operative env: applied, locked, name stable", func(t *testing.T) {
+		t.Setenv("ROS_TERMS_VM_SHORT_WINDOW_DAYS", "5")
+		resp := getVMTerms(t, app, identity)
+		assert.Equal(t, "short_term", resp.Terms[0].Name,
+			"the served name must not flip to the ord spelling when an env override exists (#866)")
+		assert.Equal(t, 5, resp.Terms[0].WindowDays, "the operative env value applies")
+		assert.True(t, resp.Terms[0].Locked, "the operative spelling locks")
+	})
+
+	t.Run("dead spelling: not locked, default holds", func(t *testing.T) {
+		// Bypasses startup validation inside the test; the route must not
+		// probe a spelling the resolver never resolves.
+		t.Setenv("ROS_TERMS_VM_SHORT_TERM_WINDOW_DAYS", "5")
+		resp := getVMTerms(t, app, identity)
+		assert.False(t, resp.Terms[0].Locked,
+			"a spelling the resolver never resolves must not report locked — the locked-but-unapplied shape (#866)")
+		assert.Equal(t, 7, resp.Terms[0].WindowDays, "the dead spelling applies nothing; the default holds")
+	})
+
+	t.Run("db override: name stable", func(t *testing.T) {
+		_, err := database.Pool.Exec(context.Background(),
+			`INSERT INTO org_recommendation_terms (org_id, recommendation_type, term_ord, window_days, min_data_days, decay_halflife_hours)
+			 VALUES ($1, 'vm', 1, 9, 3, NULL) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			_, _ = database.Pool.Exec(context.Background(),
+				`DELETE FROM org_recommendation_terms WHERE org_id = $1 AND recommendation_type = 'vm'`, testutil.TestOrgID)
+		})
+		resp := getVMTerms(t, app, identity)
+		assert.Equal(t, "short_term", resp.Terms[0].Name,
+			"a tenant DB override must not flip the served name to the ord spelling (#866)")
+		assert.Equal(t, 9, resp.Terms[0].WindowDays)
+	})
+}
+
+// TestPutTermSettings_VMAcceptsDisplayNames (#866): the generic PUT must
+// accept the names its own GET serves — the display vocabulary — not only
+// the ord spellings.
+func TestPutTermSettings_VMAcceptsDisplayNames(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	app, identity := setupTermsApp(t)
+	engine.InvalidateTermCache(testutil.TestOrgID, "vm")
+	t.Cleanup(func() {
+		_, _ = database.Pool.Exec(context.Background(),
+			`DELETE FROM org_recommendation_terms WHERE org_id = $1 AND recommendation_type = 'vm'`, testutil.TestOrgID)
+	})
+
+	body := `{"terms":[{"name":"short_term","window_days":9,"min_data_days":3}]}`
+	req := httptest.NewRequest(http.MethodPut,
+		"/api/cost-management/v1/recommendations/openshift/settings/terms?recommendation_type=vm",
+		strings.NewReader(body))
+	req.Header.Set("X-Rh-Identity", identity)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String(),
+		"the generic PUT must accept the names its own GET serves (#866)")
+
+	// Round-trip: the GET serves the display name with the stored value.
+	resp := getVMTerms(t, app, identity)
+	assert.Equal(t, "short_term", resp.Terms[0].Name)
+	assert.Equal(t, 9, resp.Terms[0].WindowDays)
+	assert.False(t, resp.Terms[0].IsDefault)
 }
