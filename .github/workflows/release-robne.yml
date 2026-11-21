@@ -200,6 +200,10 @@ jobs:
     steps:
       - name: Checkout tag
         uses: actions/checkout@v4
+        with:
+          # #910: the notes' "This release carries" section needs the
+          # previous robne-* tag — full history makes git tag -l see it.
+          fetch-depth: 0
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -224,11 +228,29 @@ jobs:
           version="${{ needs.guard.outputs.version }}"
           subject="$(git log -1 --format=%s)"
           phase="${version#0.}"; phase="${phase%%.*}"
+          # #910: "This release carries" — the commits between the previous
+          # robne-* tag and this one (sort -V for phase-number safety; the
+          # range is commits reachable from HEAD but not the previous tag,
+          # correct under any branch topology including a phase rollover).
+          # First release ever: no previous tag, today's notes shape.
+          # Plain string concatenation, not printf format strings: command
+          # substitution strips trailing newlines, which glued the subject
+          # onto the last bullet in the first draft (caught by local
+          # verification against the real tags).
+          prev_tag="$(git tag -l 'robne-*' | sort -V | grep -v "^robne-${version}$" | tail -1)"
+          notes="Built from commit ${GITHUB_SHA} on the phase ${phase} branch."
+          notes+=$'\n\n'
+          if [ -n "$prev_tag" ]; then
+            notes+=$'This release carries:\n\n'
+            notes+="$(git log --format='- %s' "${prev_tag}..HEAD")"
+            notes+=$'\n\n'
+          fi
+          notes+="${subject}"
           # The tag was pushed by make robne-release before this run started;
           # gh release create attaches the release to the existing tag.
           gh release create "robne-${version}" \
             --title "robne ${version}" \
-            --notes "$(printf 'Built from commit %s on the phase %s branch.\n\n%s\n' "$GITHUB_SHA" "$phase" "$subject")" \
+            --notes "$notes" \
             "dist/robne-${version}-linux-amd64.tar.gz" \
             "dist/robne-${version}-linux-arm64.tar.gz" \
             "dist/robne-${version}-darwin-arm64.tar.gz" \
