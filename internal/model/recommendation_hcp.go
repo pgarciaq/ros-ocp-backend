@@ -270,6 +270,11 @@ func GetHCPRecommendationSets(orgID, scope string, opts listoptions.ListOptions,
 		if len(blob) == 0 {
 			continue
 		}
+		// #880 (D1): slim the per-engine notifications maps off list rows —
+		// ADR-0293 keeps full maps detail-only; the top-level array the
+		// synthesizer sets carries the codes. The HCP detail path
+		// (populateDetailRecommendations) synthesizes without this strip.
+		kruizeplugin.StripEngineNotifications(blob)
 		raw, merr := json.Marshal(blob)
 		if merr != nil {
 			continue

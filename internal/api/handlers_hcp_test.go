@@ -1142,3 +1142,105 @@ func TestHCPDetail_ExplanationAndProjectionParity(t *testing.T) {
 		require.Equal(t, true, body["incomplete"], "evidenced+unassociated detail keeps the data-quality fact")
 	})
 }
+
+// TestHCPList_NotificationCodesSlimArray (#880): list rows carry the
+// ADR-0293 slim shape — recommendations.notification_codes, deduplicated
+// across engines and terms — and the per-engine notifications maps are
+// slimmed off list rows (full maps stay detail-only). Codes are seeded
+// adversarially: 77 in BOTH engines of the short term (dedup bait) and 1
+// and 3 distinct elsewhere, so a missing dedup or an engine-scoped union
+// cannot green the assertion.
+func TestHCPList_NotificationCodesSlimArray(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID + "-hcp-notifcodes"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	seedHCPServerFixtures(t, pool, orgID)
+
+	_, err := pool.Exec(context.Background(), `
+		UPDATE recommendation_sets SET notification_codes = CASE
+			WHEN term = 'short' AND engine = 'cost' THEN '{77,1}'::smallint[]
+			WHEN term = 'short' AND engine = 'performance' THEN '{77}'::smallint[]
+			WHEN term = 'medium' AND engine = 'cost' THEN '{3}'::smallint[]
+			ELSE NULL END
+		WHERE org_id = $1`, orgID)
+	require.NoError(t, err)
+
+	e := hcpTestEcho(nil)
+	code, body := hcpGET(t, e, makeIdentityHeader(orgID),
+		"/api/cost-management/v1/recommendations/openshift/hcp?limit=50")
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	items := hcpDataItems(t, body)
+	require.NotEmpty(t, items)
+	for _, item := range items {
+		m := item.(map[string]interface{})
+		recs, ok := m["recommendations"].(map[string]interface{})
+		require.True(t, ok, "row must carry recommendations: %v", m)
+		raw, ok := recs["notification_codes"].([]interface{})
+		require.True(t, ok, "HCP list row must carry top-level notification_codes (#880): %v", recs)
+		vals := make([]int, 0, len(raw))
+		for _, v := range raw {
+			f, isNum := v.(float64)
+			require.True(t, isNum, "codes must be numbers: %v", v)
+			vals = append(vals, int(f))
+		}
+		assert.ElementsMatch(t, []int{1, 3, 77}, vals,
+			"each code once across engines and terms")
+		terms, ok := recs["recommendation_terms"].(map[string]interface{})
+		require.True(t, ok)
+		for _, term := range terms {
+			engines, ok := term.(map[string]interface{})["recommendation_engines"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			for name, eng := range engines {
+				_, hasMaps := eng.(map[string]interface{})["notifications"]
+				assert.False(t, hasMaps,
+					"engine %s notifications maps must be slimmed off HCP list rows (ADR-0293: detail-only)", name)
+			}
+		}
+	}
+}
+
+// TestHCPDetail_KeepsEngineNotifications pins the D1 boundary of #880:
+// slimming is list-only. The HCP detail serves the native shape (#696
+// native-first), whose contract is maps-only on engines — "Notifications
+// live on each engine only" (DetailRecommendations) — while the slim
+// notification_codes array is the LIST contract (asserted by the list
+// test above).
+func TestHCPDetail_KeepsEngineNotifications(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID + "-hcp-notifcodes-detail"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	seedHCPServerFixtures(t, pool, orgID)
+
+	_, err := pool.Exec(context.Background(), `
+		UPDATE recommendation_sets SET notification_codes = '{77,1}'
+		WHERE org_id = $1 AND term = 'short' AND engine = 'cost'`, orgID)
+	require.NoError(t, err)
+
+	var etcdID string
+	require.NoError(t, pool.QueryRow(context.Background(),
+		`SELECT container_id FROM recommendation_sets WHERE org_id = $1 AND cluster_uuid = $2 AND workload = 'etcd'`,
+		orgID, hcpTestMC1).Scan(&etcdID))
+
+	e := hcpTestEcho(nil)
+	code, body := hcpGET(t, e, makeIdentityHeader(orgID),
+		"/api/cost-management/v1/recommendations/openshift/hcp/"+etcdID)
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	recs, ok := body["recommendations"].(map[string]interface{})
+	require.True(t, ok, "detail must carry recommendations: %v", body)
+	short, ok := recs["recommendation_terms"].(map[string]interface{})["short_term"].(map[string]interface{})
+	require.True(t, ok, "detail must carry short_term: %v", recs)
+	cost, ok := short["recommendation_engines"].(map[string]interface{})["cost"].(map[string]interface{})
+	require.True(t, ok, "detail must carry the cost engine: %v", short)
+	notifs, ok := cost["notifications"].(map[string]interface{})
+	require.True(t, ok, "detail keeps full engine notifications maps (D1: slimming is list-only): %v", cost)
+	for _, seeded := range []string{"1", "77"} {
+		_, has := notifs[seeded]
+		assert.True(t, has, "seeded code %s renders its map entry: %v", seeded, notifs)
+	}
+}

@@ -20,6 +20,7 @@ For operator-facing explanations and remediation steps, see
 | Plugin | Table / column | List API | Detail / per-engine API |
 |--------|----------------|----------|-------------------------|
 | Container | `recommendation_sets.notification_codes` | `notification_codes` (int array) | Full `notifications` map |
+| HCP containers | `recommendation_sets.notification_codes` (sibling rows; HCP surface) | `notification_codes` (int array, deduped by the blob synthesizer, [#880](https://github.com/pgarciaq/ros-ocp-backend/issues/880)); per-engine maps never nest on HCP list rows | Native-detail shape: full `notifications` map per engine ([#696](https://github.com/pgarciaq/ros-ocp-backend/issues/696) native-first) |
 | Namespace | `namespace_recommendation_sets.notification_codes` | `notification_codes` (int array). Nested `business_hours` is never on list ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)). | Full `notifications` map. Nested `business_hours` on **detail** only. |
 | Node | `node_recommendations.notification_codes` | `notification_codes` (int array) | Full `notifications` map per engine |
 | GPU (container) | Embedded in GPU enrichment / recommendation flow | `notification_codes` on list when present | Full map on detail GPU blocks |

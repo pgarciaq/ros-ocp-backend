@@ -7832,6 +7832,13 @@
                   }
                 }
               },
+              "notification_codes": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "description": "Notification codes for the row, deduplicated across terms and engines (ADR-0293 slim list shape). Served on HCP list rows and on engine-synthesized (native) rows of the classic lists; full per-engine notifications maps are detail-only and never nest on HCP list rows."
+              },
               "monitoring_end_time": {
                 "type": "string",
                 "format": "date-time"
@@ -8510,6 +8517,13 @@
                     }
                   }
                 }
+              },
+              "notification_codes": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "description": "Notification codes for the row, deduplicated across terms and engines (ADR-0293 slim list shape); served on engine-synthesized (native) rows. Full per-engine notifications maps are detail-only."
               },
               "monitoring_end_time": {
                 "type": "string",

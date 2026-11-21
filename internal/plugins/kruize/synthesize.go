@@ -2,6 +2,7 @@ package kruize
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -127,8 +128,68 @@ func SynthesizeKruizeJSON(rows []SynthInput) map[string]interface{} {
 		termObj["recommendation_engines"] = engObj
 		terms[term] = termObj
 	}
+	// #880: ADR-0293 slim shape — the deduplicated union of engine codes
+	// rides at the blob top level (sibling of recommendation_terms),
+	// matching the native lists' notification_codes array. Sorted
+	// ascending so synthesized blobs are deterministic; no codes → key
+	// omitted. The full per-engine maps stay synthesized (detail surfaces
+	// need them); list surfaces that slim them call StripEngineNotifications.
+	if codes := synthNotificationCodes(byTerm); len(codes) > 0 {
+		data["notification_codes"] = codes
+	}
 	data["recommendation_terms"] = terms
 	return data
+}
+
+// synthNotificationCodes returns the deduplicated union of engine
+// notification codes across terms and engines, sorted ascending. Mirrors
+// the native lists' aggregateNotificationCodes semantics (union across
+// terms × engines). Engine-level codes are all showable, so the
+// NotificationsToShow allowlist does not apply to the array — that
+// allowlist is a legacy-map mechanism (constants.go Phase 2(a)).
+func synthNotificationCodes(byTerm map[string]map[string]SynthInput) []int16 {
+	seen := make(map[int16]struct{})
+	var codes []int16
+	for _, engines := range byTerm {
+		for _, r := range engines {
+			for _, c := range r.NotificationCodes {
+				if _, ok := seen[c]; ok {
+					continue
+				}
+				seen[c] = struct{}{}
+				codes = append(codes, c)
+			}
+		}
+	}
+	if len(codes) == 0 {
+		return nil
+	}
+	sort.Slice(codes, func(i, j int) bool { return codes[i] < codes[j] })
+	return codes
+}
+
+// StripEngineNotifications removes the per-engine notifications maps from
+// a synthesized blob (#880 D1): list rows serve the slim top-level
+// notification_codes array; full message maps are detail-only per
+// ADR-0293. Only the HCP list slims (new surface, no legacy readers) —
+// the classic compat list keeps both shapes for its legacy consumers.
+// Safe on blobs without maps.
+func StripEngineNotifications(data map[string]interface{}) {
+	terms, ok := data["recommendation_terms"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	for _, term := range terms {
+		engines, ok := term.(map[string]interface{})["recommendation_engines"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		for _, eng := range engines {
+			if em, ok := eng.(map[string]interface{}); ok {
+				delete(em, "notifications")
+			}
+		}
+	}
 }
 
 func pickCurrentRow(rows []SynthInput) SynthInput {

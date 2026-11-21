@@ -1,11 +1,11 @@
 # Notification codes
 
-> **Last verified:** 2026-10-12
+> **Last verified:** 2026-11-21
 
 Every ROS recommendation can include **notification codes**: small integers that explain
 *why* a row looks the way it does (low confidence, idle workload, orphaned PVC, and so on).
 Use this page as a single lookup for **all notification codes** across containers, namespaces, nodes,
-GPUs, PVCs, snapshots, and virtual machines.
+GPUs, PVCs, snapshots, virtual machines, and hosted control plane (HCP) containers.
 
 **Maintainer reference** (emitters, constants, migrations): `docs/architecture/notification-codes.md` in the repository.
 
@@ -16,6 +16,7 @@ Per [ADR-0293](adrs.md), notifications are emitted **per engine** (cost and perf
 | Resource | List rows | Detail / per-engine |
 |----------|-----------|---------------------|
 | Containers, namespaces, PVCs, snapshots | `notification_codes` (int array). Code **80** is never on list. Namespace list never nests `business_hours` ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)). | `recommendation_engines.{cost,performance}.notifications` map keyed by code string; map entries include `type`, `message`, `code` (Kruize-compatible shape). Nested container-detail `gpu.{term}.business_hours.notifications` may include **80** (`GPU_BH_OFFICE_WINDOW`) when BH sizing is present — not merged into parent engines or list badges. Namespace **detail** may nest `business_hours` (list omits it). `robne recommend` JSON `business_hours_gpu_recommendations` rows may include **80**; all-hours CLI GPU rows omit `notification_codes`. |
+| HCP containers | `notification_codes` (int array, deduplicated across engines — the sibling-row synthesis sets it, [#880](https://github.com/pgarciaq/ros-ocp-backend/issues/880)). Per-engine `notifications` maps never nest on HCP list rows. | `recommendation_terms.<term>.recommendation_engines.{cost,performance}.notifications` map keyed by code string (native detail shape, [#696](https://github.com/pgarciaq/ros-ocp-backend/issues/696) native-first). |
 | Nodes | `notification_codes` on list rows (deduplicated across engines). Code **79** is never on list. | `recommendation_terms.<term>.recommendation_engines.{cost,performance}.notifications` map keyed by code string (`"11"`, `"13"`, …). Code **13** may include `suggested_direction`. Code **76** message includes MachineSet name when fleet consolidation applies. Nested **detail** `business_hours.notifications` may include **79** (`NODE_BH_NOT_PEAK_SAFE`) when BH sizing is present — not merged into parent engines. `robne recommend` JSON `business_hours_node_recommendations` rows may include **79** on `notification_codes`; all-hours CLI node rows omit the key. |
 | GPU time-slicing | `notification_codes` (int array, typically **36**). Code **81** is never on list. | Nested **detail** `business_hours.notifications` on `GET .../gpu/timeslicing/{node}` may include **81** (`GPU_TS_BH_CLUSTER_WINDOW`) when BH replica sizing is present — not merged into list rows, history, or GPU summary. `robne recommend` JSON `business_hours_gpu_timeslicing_recommendations` rows may include **81**; all-hours CLI timeslicing rows omit `notification_codes`. |
 | Virtual machines | `notifications` (JSON array) on list. Code **82** is never on list. | Same JSON **array** on detail. Nested **detail** `business_hours.notifications` is the Kruize **map** and may include **82** (`VM_BH_OFFICE_WINDOW`) when BH sizing is present — not merged into the parent array. `robne recommend` JSON `business_hours_vm_recommendations` rows may include **82** on `notification_codes`; all-hours CLI VM rows omit the key. |

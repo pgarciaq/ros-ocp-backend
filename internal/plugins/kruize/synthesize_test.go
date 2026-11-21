@@ -249,3 +249,43 @@ func TestSynthesizeKruizeJSON_NamespaceBlob(t *testing.T) {
 	synthAmount(t, current["requests"].(map[string]interface{}), "cpu", "cores", 1.0)
 	synthAmount(t, current["limits"].(map[string]interface{}), "memory", "bytes", 2147483648.0)
 }
+
+// TestSynthesizeKruizeJSON_NotificationCodesArray pins the #880 slim-list
+// contract: the deduplicated union of engine codes rides at the blob top
+// level (sibling of recommendation_terms), sorted ascending so blobs are
+// deterministic. Codes overlapping across engines and terms appear once;
+// rows without codes omit the key. Every synthesized surface gains the
+// array (D2: synthesizer-level, additive); slimming the per-engine maps
+// off list rows is a per-surface decision (D1: HCP list only).
+func TestSynthesizeKruizeJSON_NotificationCodesArray(t *testing.T) {
+	start := synthTestTime("2024-01-14T00:00:00Z")
+	end := synthTestTime("2024-01-15T00:00:00Z")
+	mk := func(term, engine string, codes ...int16) SynthInput {
+		return SynthInput{
+			Term: term, Engine: engine,
+			CurrentCPURequestMC: synthP64(1000), CurrentMemRequestKiB: synthP64(1048576),
+			RecCPURequestMC: synthP64(500), RecMemRequestKiB: synthP64(524288),
+			MonitoringStartTime: start, MonitoringEndTime: end,
+			NotificationCodes: codes,
+		}
+	}
+
+	t.Run("dedup across engines and terms, sorted ascending", func(t *testing.T) {
+		rows := []SynthInput{
+			mk("short_term", "cost", 77, 1), // 77 shared with performance, 1 unique
+			mk("short_term", "performance", 77),
+			mk("medium_term", "cost", 3),
+		}
+		data := SynthesizeKruizeJSON(rows)
+		require.NotEmpty(t, data)
+		got, ok := data["notification_codes"]
+		require.True(t, ok, "blob must carry top-level notification_codes (#880): %v", data)
+		assert.Equal(t, []int16{1, 3, 77}, got, "each code once across engines and terms, sorted")
+	})
+
+	t.Run("no codes omits the key", func(t *testing.T) {
+		data := SynthesizeKruizeJSON(synthFullRows()[:2])
+		_, ok := data["notification_codes"]
+		assert.False(t, ok, "rows without codes must omit the key: %v", data)
+	})
+}

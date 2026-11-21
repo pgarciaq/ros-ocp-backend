@@ -378,6 +378,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   node-grain by design** (nodes do not belong to projects; they already
   scope by node grants — the #789 grain split, now documented on their
   feature pages).
+- **HCP list rows carry the top-level `notification_codes` array ([#880](https://github.com/pgarciaq/ros-ocp-backend/issues/880)):**
+  the HCP container list was the one surface not conforming to ADR-0293's
+  slim-list contract — its rows carried notification codes only nested
+  inside the synthesized Kruize-shaped per-engine `notifications` maps,
+  forcing consumers to read two shapes and shipping full message text on
+  list rows. Every synthesized recommendation blob now carries
+  `notification_codes` (deduplicated across terms and engines, sorted) at
+  the top of the `recommendations` object — the same shape as the native
+  lists; the classic compat list gains it additively on its
+  engine-synthesized rows. The HCP list additionally slims the per-engine
+  `notifications` maps off its rows (maps are detail-only per ADR-0293;
+  the HCP detail keeps them, serving the native detail shape). The UI's
+  warning icon is unaffected — `hasNotificationsWarning` reads the
+  top-level array first.
 - **NotifNoCostData (25) clears when cost data arrives ([#881](https://github.com/pgarciaq/ros-ocp-backend/issues/881)):**
   the code was append-only — a recommendation row that once missed cost
   data (Koku 404, transient outage, namespace not yet priced) kept the
