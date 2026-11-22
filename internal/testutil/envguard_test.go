@@ -4,6 +4,8 @@ package testutil
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 )
@@ -34,14 +36,23 @@ func TestParseKeyringUsage(t *testing.T) {
 	}
 }
 
+// keyUsersLine builds a /proc/key-users-shaped line for the uid the test
+// process actually runs as — checkKeyringBudget parses for os.Getuid(),
+// so a hardcoded uid made these tests pass on the workstation that
+// authored them and fail on CI (whose runner uid differs). maxkeys is
+// the universally observed default (200, /proc/sys/kernel/keys/maxkeys).
+func keyUsersLine(count int) string {
+	uid := os.Getuid()
+	return fmt.Sprintf("%d:   %d %d/%d %d/200 12672/20000\n", uid, count, count, count, count)
+}
+
 func TestCheckKeyringBudgetPassesOnHealthyBudget(t *testing.T) {
 	// The post-cleanup state observed live: 7/200.
-	if err := checkKeyringBudget(readFileReturning(`4203706:     7 7/7 7/200 127/20000
-`)); err != nil {
+	if err := checkKeyringBudget(readFileReturning(keyUsersLine(7))); err != nil {
 		t.Fatalf("healthy budget must pass, got: %v", err)
 	}
 	// 107/200 (54%) — the leak state observed before the failure threshold.
-	if err := checkKeyringBudget(readFileReturning(realKeyUsers)); err != nil {
+	if err := checkKeyringBudget(readFileReturning(keyUsersLine(107))); err != nil {
 		t.Fatalf("half-full budget must pass, got: %v", err)
 	}
 }
@@ -50,8 +61,7 @@ func TestCheckKeyringBudgetFailsWhenNearlyFull(t *testing.T) {
 	// The failure state from the issue: 194/200. The guard must fail with
 	// ONE actionable message naming the reclaim command and the root cause,
 	// so the mass setup failure cannot be misread as a code regression.
-	err := checkKeyringBudget(readFileReturning(`4203706:   194 194/194 194/200 12672/20000
-`))
+	err := checkKeyringBudget(readFileReturning(keyUsersLine(194)))
 	if err == nil {
 		t.Fatal("nearly-full budget must fail")
 	}
@@ -76,12 +86,10 @@ func TestCheckKeyringBudgetSkipsWhenUnreadable(t *testing.T) {
 
 func TestCheckKeyringBudgetEdgeThresholds(t *testing.T) {
 	// 159/200 = 79.5% passes; 160/200 = 80% fails — the threshold contract.
-	if err := checkKeyringBudget(readFileReturning(`4203706:   159 159/159 159/200 12672/20000
-`)); err != nil {
+	if err := checkKeyringBudget(readFileReturning(keyUsersLine(159))); err != nil {
 		t.Fatalf("79.5%% must pass, got: %v", err)
 	}
-	if err := checkKeyringBudget(readFileReturning(`4203706:   160 160/160 160/200 12672/20000
-`)); err == nil {
+	if err := checkKeyringBudget(readFileReturning(keyUsersLine(160))); err == nil {
 		t.Fatal("80% must fail")
 	}
 }
