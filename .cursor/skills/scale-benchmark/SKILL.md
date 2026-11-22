@@ -696,11 +696,48 @@ If any count is zero when it should not be, check:
 | `400: missing x-rh-identity` | No auth header | Add base64-encoded identity header |
 | `unable to retrieve auth token` | podman push blob reuse bug | Use `skopeo copy` instead |
 | `statement_timeout` | Large batch exceeds DB timeout | Set `ROS_DB_INGEST_STATEMENT_TIMEOUT=120` |
+| `HTTP 413` uploading the tarball | Gateway/Envoy body limit (sno lab is demo-sized) | Use direct-to-MinIO mode, or raise the gateway limit in a bench values file |
+| `iterate staged samples: statement timeout` | ~1M staged rows exceed the 25s `ROS_DB_STATEMENT_TIMEOUT` default | `oc set env deploy/cost-onprem-ros-processor ROS_DB_STATEMENT_TIMEOUT=300` |
+| `staged sample count mismatch` looping forever | A timed-out iterate makes the Kafka retry re-stage on top; the #758 wrote/read count check then never matches | Stop the processor, `DELETE` the cluster's `container_metric_samples_staging` + `report_file_status` rows, restart, re-publish once |
+| Processor restarts mid-ingest, staging keeps growing | Demo-sized pod (1 CPU/1Gi) OOM-crash-loops on 1M-row in-memory staging; each restart re-consumes uncommitted messages | `oc set resources deploy/cost-onprem-ros-processor --limits memory=4Gi,cpu=2 --requests memory=2Gi,cpu=1` |
 | 3h for 10K containers | Intermediate flush threshold cliff | Set `ROS_INGEST_FLUSH_BATCH_SIZE` to `math.MaxInt32` |
 | `Received unexpected OCP report` | Cluster UUID not registered as source | Register source BEFORE uploading (see [Source registration](#source-registration)) |
 | `source_type or source_type_id is required` | Used `type` instead of `source_type` in API | Use `source_type: "OCP"` in POST body |
 | `relation "api_provider" does not exist` | Wrong database name | On-prem uses `costonprem_koku` (user: `koku`), not `postgres` |
 | All chunks rejected, DB stays empty | Uploaded before registering source | Register source, then re-upload ALL tarballs |
+
+## Lab notes: sno (Ampere, arm64)
+
+Bench-scale ingest on the sno lab (verified 2026-11-22, #894's live
+verification — small profile × 15 days, ~1.08M rows) needs four things the
+demo deployment does not give you:
+
+1. **Skip the gateway for the tarball** — its Envoy body limit is
+   demo-sized (HTTP 413 on a 106 MB tarball). Use Mode 2
+   (direct-to-MinIO): stream the tarball into an in-cluster
+   `python:3.11` pod (`oc run` + `oc cp`), unpack, and run
+   `scripts/direct_to_minio.py` from inside (in-cluster MinIO/Kafka DNS,
+   creds from `cost-onprem-storage-credentials`).
+2. **Raise `ROS_DB_STATEMENT_TIMEOUT` to ~300** — the 25s default cannot
+   iterate ~1M staged rows on this DB, and the failure mode is nasty (see
+   the count-mismatch row in Common errors).
+3. **Raise the processor to 4Gi/2CPU** — the chart's 1 CPU/1Gi demo
+   sizing OOM-crash-loops on 1M-row staging; every restart re-consumes
+   the uncommitted Kafka messages and re-stages.
+4. **Generate on the hypervisor in a container** — the host python is
+   3.6 and has no nise checkout: `podman run --security-opt
+   label=disable -v <work>:/work python:3.11` (the label flag is
+   required — SELinux blocks the bind mount otherwise), `pip install
+   <nise-checkout> pyyaml`, then run
+   `cost-onprem-chart/scripts/generate-scale-bench-data.py` (it computes
+   the #894-aligned `--file-row-limit` and enforces the hour-completeness
+   scan; that script and its tests live in the chart repo).
+
+`oc set` overrides (2) and (3) reset to chart values on the next
+`helm upgrade` — if benching here becomes routine, put them in a bench
+values file together with the gateway limit from (1). Results from this
+lab are arm64 single-node: fine for correctness verification, not
+comparable to amd64 multi-node performance baselines.
 
 ## Scaling estimates
 
