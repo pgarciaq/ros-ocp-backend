@@ -102,6 +102,9 @@ Versions: see `go.mod` and the Dockerfile. Do not pin copies here.
 ```bash
 make test-short   # unit tests only (skips Docker/testcontainers)
 make test         # full suite including Postgres integration (~30m; RACE=1 for race detector)
+                   # needs container headroom: the testutil guard fails fast if the
+                   # kernel keyring budget is exhausted (leaked testcontainers
+                   # containers under rootless podman — see #902)
 make lint
 make build        # rosocp, CGO_ENABLED=1
 make robne        # CGO_ENABLED=0 CLI

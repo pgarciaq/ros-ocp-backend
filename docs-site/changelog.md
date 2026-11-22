@@ -363,6 +363,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **A full kernel keyring budget fails the test suite as one actionable line, not a mass regression ([#902](https://github.com/pgarciaq/ros-ocp-backend/issues/902)):**
+  on a rootless-podman host the testcontainers Ryuk reaper cannot run
+  (its container dies within a minute), so `TESTCONTAINERS_RYUK_DISABLED`
+  must stay set and every test process leaks its shared postgres
+  container — each holding a kernel keyring slot. Once the per-user
+  budget (`/proc/sys/kernel/keys/maxkeys`, 200 by default) fills, every
+  container start fails with "Disk quota exceeded" and the suite dies as
+  sixty identical setup failures that read as a code regression. The
+  shared-DB init now guards the budget first and fails with one message
+  naming the root cause and the reclaim command
+  (`podman rm -f $(podman ps -aq --filter label=org.testcontainers=true)`).
+  The check skips on hosts without `/proc/key-users` (macOS, CI) and
+  never fails on unparseable input.
 - **PVC lists respect `openshift.project` grants ([#873](https://github.com/pgarciaq/ros-ocp-backend/issues/873)):**
   PVCs are namespace-scoped resources — the same grain as containers, whose
   list already narrowed by project grants — but the PVC list, group-by, and

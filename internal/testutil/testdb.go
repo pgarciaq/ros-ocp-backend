@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -110,6 +111,15 @@ func truncatePublicTables(tb testing.TB, pool *pgxpool.Pool) {
 
 func initSharedTestDB() {
 	ctx := context.Background()
+
+	// #902: guard the environment before starting the shared container —
+	// a full kernel keyring budget turns every DB-backed test into the
+	// same "Disk quota exceeded" setup failure, which reads as a mass code
+	// regression. One actionable line instead (see checkKeyringBudget).
+	if err := checkKeyringBudget(os.ReadFile); err != nil {
+		sharedTestDBErr = err
+		return
+	}
 
 	pgContainer, err := tcpostgres.Run(ctx,
 		"postgres:16-alpine",
