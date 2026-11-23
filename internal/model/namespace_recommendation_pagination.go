@@ -72,16 +72,14 @@ func nsVariationOrderByParts(apiKey string) (term, engine, resource string, ok b
 	return term, engine, resource, true
 }
 
-// nativeNSDistinctOnOrder is the ORDER BY required by PostgreSQL DISTINCT ON for namespace pages.
-func nativeNSDistinctOnOrder(sortExpr, orderHow string) string {
-	nulls := "NULLS FIRST"
-	if orderHow == listoptions.OrderDesc {
-		nulls = "NULLS LAST"
-	}
-	return fmt.Sprintf(
-		"ns.cluster_uuid, ns.namespace_name, %s %s %s, ns.term ASC, ns.engine ASC",
-		sortExpr, orderHow, nulls,
-	)
+// nativeNSDistinctOnOrder is the ORDER BY required by PostgreSQL DISTINCT ON
+// for namespace pages. #923: the DISTINCT ON row selection picks the same row
+// the detail collapse displays — the term/engine-ASC-first row among the
+// projection-filtered rows — so the sort key is the value the response
+// shows, not the extreme across all term/engine rows. The distinctNS query
+// already carries the request's term/engine predicates (applyNSQueryParams).
+func nativeNSDistinctOnOrder() string {
+	return "ns.cluster_uuid, ns.namespace_name, ns.term ASC, ns.engine ASC"
 }
 
 // nativeNSPageOrder orders the paginated namespace key subquery (must match keyset seek).

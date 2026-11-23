@@ -203,7 +203,7 @@ func getNativeNamespaceRecommendationsDistinct(db *gorm.DB, orgID string, opts l
 	if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
 		distinctNS = ApplyTagFiltersToClusterNamespace(distinctNS, orgID, tagFilters, "ns.cluster_uuid", "ns.namespace_name")
 	}
-	distinctNS = distinctNS.Order(nativeNSDistinctOnOrder(sortExpr, orderHow))
+	distinctNS = distinctNS.Order(nativeNSDistinctOnOrder())
 
 	countDistinct := db.Table("(?) AS dn", distinctNS).
 		Select("dn.cluster_uuid, dn.namespace_name")

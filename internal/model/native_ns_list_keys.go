@@ -318,6 +318,7 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 			pageKeys = pageKeys.Where(nsSortFilter)
 		} else {
 			pageKeys = pageKeys.Joins(nativeNSKeysNRSJoin)
+			pageKeys = applyNSProjectionToSortJoin(pageKeys, queryParams)
 		}
 		pageSortExpr = remapNSSortExprToNRS(sortExpr)
 	}
@@ -335,7 +336,7 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 		pageKeys = pageKeys.Order(nativeNSKeysPageOrder("onk", pageSortExpr, orderHow))
 		pageKeys = applyNativeNSKeysPageSeek(pageKeys, opts, pageSortExpr, orderHow)
 	} else {
-		pageKeys = pageKeys.Order(nativeNSKeysDistinctOnOrder(pageSortExpr, orderHow))
+		pageKeys = pageKeys.Order(nativeNSKeysDistinctOnOrder())
 	}
 
 	numSort := isNumericNSSort(sortExpr)
@@ -418,16 +419,29 @@ func nativeNSKeysPageOrder(alias, sortExpr, orderHow string) string {
 }
 
 // nativeNSKeysDistinctOnOrder is the ORDER BY required by DISTINCT ON when the
-// sort expression requires a JOIN to namespace_recommendation_sets.
-func nativeNSKeysDistinctOnOrder(sortExpr, orderHow string) string {
-	nulls := "NULLS FIRST"
-	if orderHow == listoptions.OrderDesc {
-		nulls = "NULLS LAST"
+// sort expression requires a JOIN to namespace_recommendation_sets. #923: the
+// row selection picks the same row the detail collapse displays — the
+// term/engine-ASC-first row among the projection-filtered rows — so the sort
+// key is the value the response shows, not the extreme across all rows. The
+// variation-alias branch pins its term/engine via nsSortFilter; the plain
+// branch is constrained by applyNSProjectionToSortJoin.
+func nativeNSKeysDistinctOnOrder() string {
+	return "onk.cluster_uuid, onk.namespace_name, nrs.term ASC, nrs.engine ASC"
+}
+
+// applyNSProjectionToSortJoin constrains the page-key sort-value join to the
+// request's term/engine projection (#923): the sort key must come from the
+// same rows the detail query serves, so the served order matches the served
+// column. Namespaces lacking the projected term are already excluded by the
+// detail eligibility gating (#842), so the inner join drops nothing.
+func applyNSProjectionToSortJoin(pageKeys *gorm.DB, queryParams map[string]interface{}) *gorm.DB {
+	if terms, ok := queryParams["ns.term IN ?"].([]string); ok && len(terms) > 0 {
+		pageKeys = pageKeys.Where("nrs.term IN ?", terms)
 	}
-	return fmt.Sprintf(
-		"onk.cluster_uuid, onk.namespace_name, %s %s %s, nrs.term ASC, nrs.engine ASC",
-		sortExpr, orderHow, nulls,
-	)
+	if engines, ok := queryParams["ns.engine IN ?"].([]string); ok && len(engines) > 0 {
+		pageKeys = pageKeys.Where("nrs.engine IN ?", engines)
+	}
+	return pageKeys
 }
 
 // nativeNSKeysSubqueryPageOrder orders the page subquery after DISTINCT ON deduplication.

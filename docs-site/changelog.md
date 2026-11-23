@@ -363,6 +363,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Namespace list sorts now match the served column ([#923](https://github.com/pgarciaq/ros-ocp-backend/issues/923)):**
+  the sort key for term-dependent columns (`estimated_monthly_savings`,
+  `estimated_monthly_waste`) was the extreme value across ALL term/engine
+  rows, while the response displays the projected row's value — so the served
+  order didn't match the served column (e.g. a namespace displaying $252.27
+  sorted above one displaying $416.00 because a hidden medium-term row held
+  $600). The sort key now comes from the same row the display shows: the
+  term/engine-first row among the projection-filtered rows (`long`/`cost`
+  when unfiltered; the `filter[term]`/`filter[engine]` row when projected —
+  the UI always projects, default `short_term`+`cost`). Cursor anchors and
+  page keys are now consistent with the display on both list paths. Variation
+  sorts (already term-pinned per #844/#852) and keys-only sorts are
+  unaffected.
 - **Namespace list and detail responses serve the unified classification ([#914](https://github.com/pgarciaq/ros-ocp-backend/issues/914)):**
   the default namespace list path (no projection params) and the namespace
   detail endpoint map rows through `NamespaceDetailResponse`, which lacked the
