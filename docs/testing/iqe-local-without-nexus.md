@@ -267,6 +267,42 @@ checkout, running `-k` against the whole plugin also collected unrelated
 collection. The command above selected and ran the three HCP tests: **3 passed,
 5 deselected**. Do not infer success from a preflight GET or collection alone.
 
+## RBAC-scoped tests — real grants through the gateway (validated 2026-11-22, #913)
+
+The tests above run with an org-admin identity. To exercise **RBAC scoping**
+(the layer in-repo tests mock — real grants narrowing what the API returns),
+the lab needs three pieces beyond the standard run:
+
+1. **RBAC enforcement on the ros-api**: `RBAC_ENABLE=true` on the
+   `cost-onprem-ros-api` deployment. Without it the API ignores permissions
+   entirely and every scoped test trivially passes against unscoped data.
+2. **`ROLE_CREATE_ALLOW_LIST=cost-management` on the rbac-api**: unlocks
+   role and group creation through the standard RBAC v1 API for the
+   `cost-management` application. Tests provision their own scoped grants
+   (group + role + principal) and clean them up — no seed data.
+3. **A second port-forward for the rbac-api** (e.g. `18485 →
+   svc/cost-onprem-rbac-api 8000`) and `RBAC_API_URL=http://127.0.0.1:18485`
+   in the runner environment so tests can manage fixtures.
+
+The fixture pattern (see `test_pvc_list_project_scoped`,
+`test_fleet_heatmap_node_scoped`, and `test_container_detail_tenant_isolation`
+in `iqe_ros_ocp/tests/rest/test_hcp_recommendations.py`): create a group with
+a role granting a scoped permission (e.g. `openshift.project:read` on specific
+cluster/project UUIDs), send an `x-rh-identity` carrying the group's principal,
+assert the API narrows to the granted scope, then delete the group.
+
+**The platform-default constraint**: the insights-rbac "Default access" group
+grants every principal `openshift.cluster:*` and `aws.account:*`. Project and
+node dimensions narrow independently of it; the **cluster dimension does not**
+— a cluster-scoped grant cannot restrict a caller that already holds the
+wildcard. Tests that need cluster-dimension narrowing are blocked on
+[#920](https://github.com/pgarciaq/ros-ocp-backend/issues/920).
+
+The lab state (enforcement on, allow-list, fixture group) is recorded in the
+cluster's `ACCESS.md`. Reference close-out: #913; the arm64 insights-rbac
+build note lives there too (the published image is amd64-only; the arm64
+build is a lab artifact).
+
 ## Cleanup
 
 Stop the port-forward with Ctrl-C, then remove the temporary runner:
