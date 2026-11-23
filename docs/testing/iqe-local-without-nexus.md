@@ -291,17 +291,9 @@ a role granting a scoped permission (e.g. `openshift.project:read` on specific
 cluster/project UUIDs), send an `x-rh-identity` carrying the group's principal,
 assert the API narrows to the granted scope, then delete the group.
 
-**The platform-default constraint**: the insights-rbac "Default access" group
-grants every principal `openshift.cluster:*` and `aws.account:*`. Project and
-node dimensions narrow independently of it; the **cluster dimension does not**
-— a cluster-scoped grant cannot restrict a caller that already holds the
-wildcard. Tests that need cluster-dimension narrowing are blocked on
-[#920](https://github.com/pgarciaq/ros-ocp-backend/issues/920).
+**The platform-default constraint — and the service-account exemption (#920):** the insights-rbac "Default access" group grants every **user** principal `openshift.cluster:*` and `aws.account:*`, so the cluster dimension cannot narrow for user identities. **Service-account principals get no default groups at all** (`service-account-<uuid>` username pattern; the identity carries `type: ServiceAccount` + `service_account_id`) — a scoped grant on a service-account identity fully narrows the cluster dimension, live-verified end-to-end (#920's close record; the fixture pattern with payloads is on #925). Cluster-dimension tests should use service-account identities; project/node-dimension tests work with regular user principals.
 
-The lab state (enforcement on, allow-list, fixture group) is recorded in the
-cluster's `ACCESS.md`. Reference close-out: #913; the arm64 insights-rbac
-build note lives there too (the published image is amd64-only; the arm64
-build is a lab artifact).
+The lab state (enforcement on, allow-list, fixture group) is recorded in the cluster's `ACCESS.md`. Reference close-outs: #913, #920; the arm64 insights-rbac build note lives there too (the published image is amd64-only; the arm64 build is a lab artifact).
 
 ## Cleanup
 
