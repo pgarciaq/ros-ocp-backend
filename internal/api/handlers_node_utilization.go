@@ -131,6 +131,13 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		c.Response().Header().Set("Link", `</api/cost-management/v1/recommendations/openshift/nodes>; rel="alternate"`)
 	}
 
+	// #922: reject out-of-vocabulary group_by values before any resolution
+	// work — an unknown field must 400, not silently fall through to the
+	// ungrouped list.
+	if err := queryparams.ValidateGroupBy(c, "cluster"); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
+
 	limit := defaultNodeUtilLimit
 	if v := strings.TrimSpace(c.QueryParam("limit")); v != "" {
 		n, err := strconv.Atoi(v)

@@ -165,3 +165,46 @@ func TestParseOrderByAPIKey(t *testing.T) {
 	assert.Equal(t, "estimated_monthly_savings_usd", field)
 	assert.Equal(t, "desc", dir)
 }
+
+// --- #922: group_by vocabulary validation ---
+
+func newGroupByContext(t *testing.T, rawQuery string) echo.Context {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/?"+rawQuery, nil)
+	return echo.New().NewContext(req, httptest.NewRecorder())
+}
+
+func TestGroupByFieldsUnionAndDedup(t *testing.T) {
+	c := newGroupByContext(t, "group_by%5Bcluster%5D=true&group_by=project%2Ccluster&group_by%5Bnode%5D=1")
+	fields := GroupByFields(c)
+	assert.ElementsMatch(t, []string{"cluster", "project", "node"}, fields)
+}
+
+func TestValidateGroupBy(t *testing.T) {
+	tests := []struct {
+		name      string
+		rawQuery  string
+		allowed   []string
+		wantError bool
+	}{
+		{"no group_by", "limit=10", []string{"cluster", "project"}, false},
+		{"bracket valid", "group_by%5Bcluster%5D=true", []string{"cluster", "project"}, false},
+		{"flat valid", "group_by=cluster,project", []string{"cluster", "project"}, false},
+		{"bracket invalid", "group_by%5Bnode%5D=true", []string{"cluster", "project"}, true},
+		{"flat invalid", "group_by=cluster,node", []string{"cluster", "project"}, true},
+		{"mixed one invalid", "group_by%5Bcluster%5D=true&group_by=node", []string{"cluster", "project"}, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newGroupByContext(t, tc.rawQuery)
+			err := ValidateGroupBy(c, tc.allowed...)
+			if tc.wantError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "invalid group_by value")
+				assert.Contains(t, err.Error(), "valid: cluster, project")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

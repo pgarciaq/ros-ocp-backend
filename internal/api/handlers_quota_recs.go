@@ -149,6 +149,9 @@ func GetQuotaRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": projErr.Error()})
 	}
 
+	if err := queryparams.ValidateGroupBy(c, "cluster", "project"); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
 	groupByCluster := queryparams.GroupByField(c, "cluster")
 	groupByProject := queryparams.GroupByField(c, "project")
 	if groupByCluster && groupByProject {

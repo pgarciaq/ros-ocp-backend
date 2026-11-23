@@ -363,6 +363,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Out-of-vocabulary `group_by` values are rejected with 400 ([#922](https://github.com/pgarciaq/ros-ocp-backend/issues/922)):**
+  every group-capable list endpoint (VM, GPU MIG, GPU time-slicing, nodes,
+  PVC/snapshot, quota) silently ignored unknown `group_by` values — the
+  request returned 200 with the ungrouped list, indistinguishable from no
+  parameter (#841's mechanism on the group_by dimension; live-verified on
+  four endpoints). All six parsers/handlers now validate the request's
+  group_by fields (bracket and flat forms) against the entity's vocabulary
+  and reject unknowns with 400 naming the valid set, following the
+  `filter[category]` convention (#914). All working dimensions are
+  unchanged; the VM `node` dimension planned in #112 is rejected, not
+  implemented (the UI never offered it).
 - **Namespace list sorts now match the served column ([#923](https://github.com/pgarciaq/ros-ocp-backend/issues/923)):**
   the sort key for term-dependent columns (`estimated_monthly_savings`,
   `estimated_monthly_waste`) was the extreme value across ALL term/engine

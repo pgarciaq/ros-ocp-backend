@@ -155,6 +155,57 @@ func GroupByTagKey(c echo.Context) string {
 	return ""
 }
 
+// GroupByFields returns every group_by field the request names, from both
+// the bracket form (group_by[cluster]=true) and the flat comma-separated
+// form (?group_by=cluster,project). The forms are unioned and deduplicated.
+func GroupByFields(c echo.Context) []string {
+	seen := make(map[string]struct{})
+	var out []string
+	add := func(v string) {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			return
+		}
+		if _, dup := seen[v]; dup {
+			return
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	for key := range c.QueryParams() {
+		if strings.HasPrefix(key, GroupByPrefix) && strings.HasSuffix(key, "]") {
+			add(strings.TrimSuffix(strings.TrimPrefix(key, GroupByPrefix), "]"))
+		}
+	}
+	for _, raw := range c.QueryParams()["group_by"] {
+		for _, part := range SplitCommaValues([]string{raw}) {
+			add(part)
+		}
+	}
+	return out
+}
+
+// ValidateGroupBy rejects out-of-vocabulary group_by values (#922, the
+// #841 mechanism on the group_by dimension): an unknown field must fail
+// with the valid set named, never silently fall through to the ungrouped
+// list.
+func ValidateGroupBy(c echo.Context, allowed ...string) error {
+	fields := GroupByFields(c)
+	if len(fields) == 0 {
+		return nil
+	}
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, a := range allowed {
+		allowedSet[a] = struct{}{}
+	}
+	for _, f := range fields {
+		if _, ok := allowedSet[f]; !ok {
+			return fmt.Errorf("invalid group_by value: %q (valid: %s)", f, strings.Join(allowed, ", "))
+		}
+	}
+	return nil
+}
+
 // GroupByField reports whether group_by[field] was requested (value is ignored).
 func GroupByField(c echo.Context, name string) bool {
 	bracketKey := GroupByPrefix + name + "]"

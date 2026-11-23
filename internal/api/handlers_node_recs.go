@@ -82,6 +82,9 @@ func GetNodeRecommendations(c echo.Context) error {
 	if termNormErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termNormErr.Error()})
 	}
+	if err := queryparams.ValidateGroupBy(c, "cluster"); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
 	gpuMinDataDays := engine.MinDataDaysForTerm(terms, termFilter)
 
 	clusterUUIDs, err := getClustersForOrg(ctx, orgIDStr)

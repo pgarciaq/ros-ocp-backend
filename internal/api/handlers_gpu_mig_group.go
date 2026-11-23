@@ -27,6 +27,9 @@ type gpuMIGGroupedResponse struct {
 }
 
 func parseGPUMIGListGroupBy(c echo.Context) (groupByCluster, groupByProject bool, err error) {
+	if err := queryparams.ValidateGroupBy(c, "cluster", "project", "namespace"); err != nil {
+		return false, false, err
+	}
 	groupByCluster = queryparams.GroupByField(c, "cluster")
 	groupByProject = queryparams.GroupByField(c, "project") || queryparams.GroupByField(c, "namespace")
 	if groupByCluster && groupByProject {

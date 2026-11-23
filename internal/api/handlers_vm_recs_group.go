@@ -28,6 +28,9 @@ type vmGroupedResponse struct {
 }
 
 func parseVMListGroupBy(c echo.Context) (field string, err error) {
+	if err := queryparams.ValidateGroupBy(c, "cluster", "project", "namespace"); err != nil {
+		return "", err
+	}
 	groupByCluster := queryparams.GroupByField(c, "cluster")
 	groupByNamespace := queryparams.GroupByField(c, "project") || queryparams.GroupByField(c, "namespace")
 
