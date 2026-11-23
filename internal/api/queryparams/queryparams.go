@@ -365,6 +365,42 @@ func RecommendationCategoryFilter(c echo.Context) ([]string, error) {
 	return cats, nil
 }
 
+// ClassificationFilterValues collects filter[classification] values (bracket
+// and flat comma-separated forms) and validates them against the entity's
+// recommendation-type vocabulary — the storage tabs' UI-facing filter
+// (#915 Wave B): invalid values are rejected with the valid set named, never
+// silently dropped to the unfiltered list.
+func ClassificationFilterValues(c echo.Context, valid []string) ([]string, error) {
+	raw := IncludeValues(c, "classification")
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	validSet := make(map[string]struct{}, len(valid))
+	for _, v := range valid {
+		validSet[v] = struct{}{}
+	}
+	seen := make(map[string]struct{}, len(raw))
+	var out []string
+	for _, rv := range raw {
+		for _, part := range SplitCommaValues([]string{rv}) {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			if _, ok := validSet[part]; !ok {
+				return nil, fmt.Errorf("invalid filter[classification] value: %q (valid: %s)",
+					part, strings.Join(valid, ", "))
+			}
+			if _, dup := seen[part]; dup {
+				continue
+			}
+			seen[part] = struct{}{}
+			out = append(out, part)
+		}
+	}
+	return out, nil
+}
+
 func bracketOrderByAPIKey(c echo.Context, allowedFields map[string]string) (apiField, direction string, err error) {
 	for key, values := range c.QueryParams() {
 		if !strings.HasPrefix(key, OrderByPrefix) || !strings.HasSuffix(key, "]") {

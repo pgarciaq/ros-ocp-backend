@@ -363,6 +363,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **The storage tabs' `filter[classification]` filters and rejects invalid values ([#915](https://github.com/pgarciaq/ros-ocp-backend/issues/915)):**
+  the PVC and snapshot list endpoints silently ignored `filter[classification]`
+  — the param the koku-ui classification dropdowns send (#841's mechanism;
+  #109's close had claimed the filters complete). Both now filter
+  `recommendation_type` (comma-separated multi-value) with the entity's
+  engine vocabulary — PVC: `oversized`, `near_full`, `orphaned`, `healthy`;
+  snapshot: `orphaned`, `stale`, `never_restored`, `redundant`, `managed`,
+  `active` — and reject out-of-vocabulary values with 400 naming the valid
+  set (the #914 convention). The VM list's `filter[node]` 503
+  (a `node_name` column that was never carried into `vm_recommendations`)
+  is filed separately as #926.
 - **Out-of-vocabulary `group_by` values are rejected with 400 ([#922](https://github.com/pgarciaq/ros-ocp-backend/issues/922)):**
   every group-capable list endpoint (VM, GPU MIG, GPU time-slicing, nodes,
   PVC/snapshot, quota) silently ignored unknown `group_by` values — the

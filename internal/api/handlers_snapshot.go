@@ -108,6 +108,13 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
 	namespaceFilter := queryparams.FirstFilter(c, "project")
 	typeFilter := queryparams.FirstFilter(c, "recommendation_type")
+	// #915 Wave B: the UI's classification dropdown sends the snapshot
+	// engine's type values (librobne/snapshot/classify.go) as
+	// filter[classification] — validated, never silently dropped.
+	classificationFilter, classErr := queryparams.ClassificationFilterValues(c, snapshotClassificationValues)
+	if classErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": classErr.Error()})
+	}
 	userPerms := get_user_permissions(c)
 
 	ctx := c.Request().Context()
@@ -158,6 +165,11 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	if typeFilter != "" {
 		filterSQL += ` AND recommendation_type = $` + strconv.Itoa(argIdx)
 		args = append(args, typeFilter)
+		argIdx++
+	}
+	if len(classificationFilter) > 0 {
+		filterSQL += ` AND recommendation_type = ANY($` + strconv.Itoa(argIdx) + `)`
+		args = append(args, classificationFilter)
 		argIdx++
 	}
 
@@ -330,3 +342,8 @@ func snapshotRBACClusterFilter(userPerms map[string][]string, argIdx int) (sql s
 	sql = " AND cluster_uuid IN (" + strings.Join(placeholders, ",") + ")"
 	return sql, args, nextIdx, false
 }
+
+// snapshotClassificationValues is the snapshot classification filter's
+// vocabulary: the engine's classification values (librobne/snapshot/classify.go),
+// which the UI's classification dropdown sends as filter[classification] values.
+var snapshotClassificationValues = []string{"orphaned", "stale", "never_restored", "redundant", "managed", "active"}

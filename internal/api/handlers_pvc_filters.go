@@ -11,13 +11,19 @@ import (
 )
 
 type pvcListFilters struct {
-	termFilter         string
-	clusterFilter      string
-	namespaceFilter    string
-	pvcNameFilter      string
-	typeFilter         string
-	storageclassFilter string
+	termFilter           string
+	clusterFilter        string
+	namespaceFilter      string
+	pvcNameFilter        string
+	typeFilter           string
+	storageclassFilter   string
+	classificationFilter []string
 }
+
+// pvcClassificationValues is the PVC classification filter's vocabulary: the
+// engine's recommendation types (librobne/pvc/types.go), which the UI's
+// classification dropdown sends as filter[classification] values.
+var pvcClassificationValues = []string{"oversized", "near_full", "orphaned", "healthy"}
 
 func parsePVCListFilters(c echo.Context) (pvcListFilters, error) {
 	termFilter := queryparams.FirstFilter(c, "term")
@@ -34,14 +40,19 @@ func parsePVCListFilters(c echo.Context) (pvcListFilters, error) {
 	if pvcNameFilter == "" {
 		pvcNameFilter = strings.TrimSpace(c.QueryParam("persistentvolumeclaim"))
 	}
+	classificationFilter, classErr := queryparams.ClassificationFilterValues(c, pvcClassificationValues)
+	if classErr != nil {
+		return pvcListFilters{}, classErr
+	}
 
 	return pvcListFilters{
-		termFilter:         termFilter,
-		clusterFilter:      queryparams.FirstFilter(c, "cluster"),
-		namespaceFilter:    queryparams.FirstFilter(c, "project"),
-		pvcNameFilter:      pvcNameFilter,
-		typeFilter:         queryparams.FirstFilter(c, "recommendation_type"),
-		storageclassFilter: queryparams.FirstFilter(c, "storageclass"),
+		termFilter:           termFilter,
+		clusterFilter:        queryparams.FirstFilter(c, "cluster"),
+		namespaceFilter:      queryparams.FirstFilter(c, "project"),
+		pvcNameFilter:        pvcNameFilter,
+		typeFilter:           queryparams.FirstFilter(c, "recommendation_type"),
+		storageclassFilter:   queryparams.FirstFilter(c, "storageclass"),
+		classificationFilter: classificationFilter,
 	}, nil
 }
 
@@ -74,6 +85,11 @@ func buildPVCRecommendationFilterSQL(c echo.Context, orgID string, f pvcListFilt
 	if f.typeFilter != "" {
 		filterSQL += ` AND recommendation_type = $` + strconv.Itoa(argIdx)
 		args = append(args, f.typeFilter)
+		argIdx++
+	}
+	if len(f.classificationFilter) > 0 {
+		filterSQL += ` AND recommendation_type = ANY($` + strconv.Itoa(argIdx) + `)`
+		args = append(args, f.classificationFilter)
 		argIdx++
 	}
 	if f.storageclassFilter != "" {
