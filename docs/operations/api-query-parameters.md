@@ -70,6 +70,12 @@ from nested `recommendation_engines` on list responses. Fleet rollup uses
 `GET .../savings-summary?engine=cost|performance` (default `cost`). See
 [validating-native-engine.md](../../docs-site/testing/validating-native-engine.md#dual-engine-testing-cost-vs-performance).
 
+**Category filter** (`filter[category]` or flat `?category=`): on container and namespace lists —
+`zombie`, `idle`, `undersized`, `oversized`, `optimized` (comma-separated OR). Invalid values are
+rejected with **400** (not silently dropped). Node lists use a different vocabulary — see the node
+utilization filters below. List and detail rows serve the classification as `category`,
+`category_cpu`, `category_memory` (`omitempty`).
+
 ## Filtering (flat syntax)
 
 Equivalent flat parameters:

@@ -1,6 +1,6 @@
 # Namespace Recommendations
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-11-23
 
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift/namespaces` (list),
@@ -65,6 +65,10 @@ flowchart TD
 
 List and detail responses nest engines under
 `recommendations.recommendation_terms.{short|medium|long}_term.{cost|performance}`.
+Every list and detail row also carries the unified classification:
+`category`, `category_cpu`, `category_memory` (see
+[Container Right-Sizing](container-recommendations.md) for the vocabulary;
+values are omitted when unset).
 
 See [Dual engine (cost vs performance)](dual-engine.md).
 
@@ -101,6 +105,7 @@ Legacy aliases (deprecated): `GET .../openshift/namespace/recommendations`,
 | `filter[idle_state]` | `active`, `idle`, or `zombie` (comma-separated OR) — see [Idle / zombie detection](idle-detection.md) |
 | `filter[stale]` / `stale` | Staleness filter: `false` (default, exclude stale), `true` (include stale and fresh), `only` (stale rows only). Recommendations older than 48h without fresh cluster data. |
 | `filter[engine]` | `cost` or `performance` (omits the other engine from each item) |
+| `filter[category]` | `zombie`, `idle`, `undersized`, `oversized`, `optimized` — comma-separated for multiple values; invalid values are rejected with **400** |
 | `filter[tag:<key>]` | OpenShift label filter (`ROS_TAGS_ENABLED=true`) |
 | `order_by` / `order_how` | Sort (e.g. `project`, `cluster`, `last_reported`, variation fields) |
 | `limit` / `offset` | Pagination (default limit 100, max 1000) |

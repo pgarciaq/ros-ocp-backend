@@ -432,17 +432,11 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	}
 
 	// Category filter (includes activity states: zombie, idle)
-	if catVals := queryparams.IncludeValues(c, "category"); len(catVals) > 0 {
-		var cats []string
-		for _, cv := range catVals {
-			switch cv {
-			case "zombie", "idle", "undersized", "oversized", "optimized":
-				cats = append(cats, cv)
-			}
-		}
-		if len(cats) > 0 {
-			queryParams["rs.category IN ?"] = cats
-		}
+	cats, catErr := queryparams.RecommendationCategoryFilter(c)
+	if catErr != nil {
+		filterErrs = append(filterErrs, catErr)
+	} else if len(cats) > 0 {
+		queryParams["rs.category IN ?"] = cats
 	}
 
 	if len(filterErrs) > 0 {

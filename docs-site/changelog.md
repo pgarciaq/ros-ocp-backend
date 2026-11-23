@@ -363,6 +363,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Namespace list and detail responses serve the unified classification ([#914](https://github.com/pgarciaq/ros-ocp-backend/issues/914)):**
+  the default namespace list path (no projection params) and the namespace
+  detail endpoint map rows through `NamespaceDetailResponse`, which lacked the
+  `category`, `category_cpu` and `category_memory` fields the slim projection
+  path (`NamespaceListResponse`) already served. The DB populated the
+  classification on every namespace row (#361) but the default serving path
+  dropped it. The three fields are now served on both paths, `omitempty` like
+  the container list.
+- **`filter[category]` rejects invalid values with 400 instead of silently returning the unfiltered set ([#914](https://github.com/pgarciaq/ros-ocp-backend/issues/914)):**
+  the container and namespace list mappers silently dropped unknown
+  `filter[category]` values (the #841 mechanism on the category dimension):
+  `filter[category]=not-a-category` returned the full unfiltered list with
+  200. Both mappers now validate against the served vocabulary
+  (zombie, idle, undersized, oversized, optimized) and reject invalid values
+  with 400, matching the `filter[term]` and node-utilization `category`
+  conventions.
 - **A full kernel keyring budget fails the test suite as one actionable line, not a mass regression ([#902](https://github.com/pgarciaq/ros-ocp-backend/issues/902)):**
   on a rootless-podman host the testcontainers Ryuk reaper cannot run
   (its container dies within a minute), so `TESTCONTAINERS_RYUK_DISABLED`

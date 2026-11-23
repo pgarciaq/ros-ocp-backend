@@ -872,17 +872,11 @@ func MapNativeNamespaceQueryParameters(c echo.Context) (map[string]interface{}, 
 	}
 
 	// Category filter (includes activity states: zombie, idle)
-	if catVals := queryparams.IncludeValues(c, "category"); len(catVals) > 0 {
-		var cats []string
-		for _, cv := range catVals {
-			switch cv {
-			case "zombie", "idle", "undersized", "oversized", "optimized":
-				cats = append(cats, cv)
-			}
-		}
-		if len(cats) > 0 {
-			queryParams["ns.category IN ?"] = cats
-		}
+	cats, catErr := queryparams.RecommendationCategoryFilter(c)
+	if catErr != nil {
+		errs = append(errs, catErr)
+	} else if len(cats) > 0 {
+		queryParams["ns.category IN ?"] = cats
 	}
 
 	if len(errs) > 0 {

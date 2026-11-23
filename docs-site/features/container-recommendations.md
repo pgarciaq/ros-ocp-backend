@@ -1,6 +1,6 @@
 # Container Right-Sizing
 
-> **Last verified:** 2026-11-02
+> **Last verified:** 2026-11-23
 
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift` (list),
@@ -215,7 +215,7 @@ Bracket syntax (`filter[field]`) and legacy flat params are both accepted.
 | Workload type | `filter[workload_type]` | `daemonset`, `deployment`, `deploymentconfig`, `replicaset`, `replicationcontroller`, `statefulset` |
 | Container | `filter[container]` | Container name (partial match) |
 | Engine | `filter[engine]` | `cost` or `performance` — limits nested engines per term |
-| Category | `filter[category]` | `zombie`, `idle`, `undersized`, `oversized`, `optimized` — comma-separated for multiple values |
+| Category | `filter[category]` | `zombie`, `idle`, `undersized`, `oversized`, `optimized` — comma-separated for multiple values; invalid values are rejected with **400** |
 | Term | `filter[term]` | `short`/`medium`/`long` or `short_term`/`medium_term`/`long_term` |
 | Idle state | `filter[idle_state]` | Comma-separated: `active`, `idle`, `zombie` |
 | GPU presence | `filter[has_gpu]` | `true` / `false` / `1` / `0` |

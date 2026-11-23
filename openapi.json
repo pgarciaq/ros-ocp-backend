@@ -283,7 +283,7 @@
           {
             "name": "filter[category]",
             "in": "query",
-            "description": "Filter by container category. Comma-separated for multiple values.",
+            "description": "Filter by container category (activity states zombie, idle; sizing classes undersized, oversized, optimized). Comma-separated for multiple values. Invalid values are rejected with 400.",
             "required": false,
             "schema": {
               "type": "string",
@@ -4308,7 +4308,7 @@
                 "optimized"
               ]
             },
-            "description": "Filter by namespace category (includes activity states), comma-separated for multiple values."
+            "description": "Filter by namespace category (activity states zombie, idle; sizing classes undersized, oversized, optimized). Comma-separated for multiple values. Invalid values are rejected with 400."
           }
         ],
         "responses": {

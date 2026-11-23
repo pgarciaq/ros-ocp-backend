@@ -278,6 +278,42 @@ func NormalizeRecommendationTermFilter(raw string) (dbTerm string, err error) {
 	}
 }
 
+// RecommendationCategories is the served classification vocabulary for
+// filter[category]: zombie and idle are activity states; undersized, oversized
+// and optimized are the sizing classes (librobne/types/category.go).
+var RecommendationCategories = []string{"zombie", "idle", "undersized", "oversized", "optimized"}
+
+// RecommendationCategoryFilter validates filter[category] values and returns
+// the deduplicated list. Invalid values are an error — the #841 mechanism on
+// the category dimension: reject, never silently drop to the unfiltered set.
+func RecommendationCategoryFilter(c echo.Context) ([]string, error) {
+	vals := IncludeValues(c, "category")
+	if len(vals) == 0 {
+		return nil, nil
+	}
+	seen := make(map[string]struct{}, len(vals))
+	var cats []string
+	for _, cv := range vals {
+		valid := false
+		for _, allowed := range RecommendationCategories {
+			if cv == allowed {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return nil, fmt.Errorf("invalid filter[category] value: %q (valid: %s)",
+				cv, strings.Join(RecommendationCategories, ", "))
+		}
+		if _, dup := seen[cv]; dup {
+			continue
+		}
+		seen[cv] = struct{}{}
+		cats = append(cats, cv)
+	}
+	return cats, nil
+}
+
 func bracketOrderByAPIKey(c echo.Context, allowedFields map[string]string) (apiField, direction string, err error) {
 	for key, values := range c.QueryParams() {
 		if !strings.HasPrefix(key, OrderByPrefix) || !strings.HasSuffix(key, "]") {

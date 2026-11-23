@@ -394,17 +394,23 @@ func pctToValue(pct *int32) *DetailResourceValue {
 // recommendations. It mirrors DetailResponse but without container-specific
 // fields (Container, Workload, WorkloadType, GPU).
 type NamespaceDetailResponse struct {
-	ID                    string                `json:"id"`
-	ClusterAlias          string                `json:"cluster_alias"`
-	ClusterUUID           string                `json:"cluster_uuid"`
-	Project               string                `json:"project"`
-	SourceID              string                `json:"source_id"`
-	LastReported          string                `json:"last_reported"`
-	IdleState             string                `json:"idle_state"`
-	IdleSince             *string               `json:"idle_since,omitempty"`
-	IdleDurationDays      *int                  `json:"idle_duration_days,omitempty"`
-	EstimatedMonthlyWaste *money.MoneyAmount    `json:"estimated_monthly_waste,omitempty"`
-	Recommendations       DetailRecommendations `json:"recommendations"`
+	ID                    string             `json:"id"`
+	ClusterAlias          string             `json:"cluster_alias"`
+	ClusterUUID           string             `json:"cluster_uuid"`
+	Project               string             `json:"project"`
+	SourceID              string             `json:"source_id"`
+	LastReported          string             `json:"last_reported"`
+	IdleState             string             `json:"idle_state"`
+	IdleSince             *string            `json:"idle_since,omitempty"`
+	IdleDurationDays      *int               `json:"idle_duration_days,omitempty"`
+	EstimatedMonthlyWaste *money.MoneyAmount `json:"estimated_monthly_waste,omitempty"`
+	// Unified classification (#358-#362, #914): served on the default list
+	// path (no projection params) and the detail endpoint, matching the slim
+	// NamespaceListResponse projection path.
+	Category        string                `json:"category,omitempty"`
+	CategoryCPU     string                `json:"category_cpu,omitempty"`
+	CategoryMemory  string                `json:"category_memory,omitempty"`
+	Recommendations DetailRecommendations `json:"recommendations"`
 }
 
 // BuildNamespaceDetailResponse converts a NativeNamespaceResult (with flat
@@ -487,6 +493,9 @@ func BuildNamespaceDetailResponse(
 		IdleSince:             native.IdleSince,
 		IdleDurationDays:      native.IdleDurationDays,
 		EstimatedMonthlyWaste: native.EstimatedMonthlyWaste,
+		Category:              native.Category,
+		CategoryCPU:           native.CategoryCPU,
+		CategoryMemory:        native.CategoryMemory,
 		Recommendations:       recs,
 	}
 }
