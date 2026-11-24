@@ -121,9 +121,17 @@ func attachGPUBusinessHoursToDetail(gpuMap map[string]*model.GPURecommendation, 
 		}
 		tc := gpuTermConfigByName(terms, termKey)
 		rec := byTerm[termKey]
-		if rec == nil || bhDayCount < tc.MinDataDays {
+		// #934: the day gate and the missing-rec gate are distinct — see
+		// NoQualifyingBusinessHoursReason.
+		if bhDayCount < tc.MinDataDays {
 			parent.BusinessHours = &model.GPUBHRecommendation{
 				Reason: insufficientBusinessHoursReason(bhDayCount, tc.MinDataDays),
+			}
+			continue
+		}
+		if rec == nil {
+			parent.BusinessHours = &model.GPUBHRecommendation{
+				Reason: NoQualifyingBusinessHoursReason(bhDayCount, tc.MinDataDays),
 			}
 			continue
 		}

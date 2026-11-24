@@ -239,9 +239,17 @@ func attachNodeBHEngine(eng *model.NodeUtilizationEngineRec, tc TermConfig, engi
 		return
 	}
 	rec, ok := byTermEngine[tc.Name+"|"+engineName]
-	if !ok || bhDayCount < tc.MinDataDays {
+	// #934: the day gate and the missing-rec gate are distinct — see
+	// NoQualifyingBusinessHoursReason.
+	if bhDayCount < tc.MinDataDays {
 		eng.BusinessHours = &model.NodeBHRecommendation{
 			Reason: insufficientBusinessHoursReason(bhDayCount, tc.MinDataDays),
+		}
+		return
+	}
+	if !ok {
+		eng.BusinessHours = &model.NodeBHRecommendation{
+			Reason: NoQualifyingBusinessHoursReason(bhDayCount, tc.MinDataDays),
 		}
 		return
 	}

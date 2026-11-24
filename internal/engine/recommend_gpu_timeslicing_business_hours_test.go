@@ -118,7 +118,10 @@ func TestAttachTimeslicingBusinessHours_NilRecOmitsCode81(t *testing.T) {
 	require.NotNil(t, bh)
 	assert.Nil(t, bh.RecommendedReplicas)
 	assert.Empty(t, bh.Notifications)
-	assert.Contains(t, bh.Reason, "insufficient business hours data")
+	// #934: the day count is NOT the failing gate here (7 >= 3) — the nil
+	// rec must not be reported as insufficient data.
+	assert.Contains(t, bh.Reason, "no qualifying business-hours recommendation")
+	assert.NotContains(t, bh.Reason, "insufficient business hours data")
 }
 
 func TestEnrichNodeGPUTimeslicingDetailWithBusinessHours_KillSwitch(t *testing.T) {

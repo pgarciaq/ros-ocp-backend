@@ -200,6 +200,18 @@ func insufficientBusinessHoursReason(dataDays, minDataDays int) string {
 	return fmt.Sprintf("insufficient business hours data: %d days available, %d required", dataDays, minDataDays)
 }
 
+// NoQualifyingBusinessHoursReason explains an absent business-hours sizing
+// when the observed-day count is NOT the failing gate (#934): the day gate
+// passed, but no recommendation was produced — no rec row exists for the
+// term/engine, or the compute found nothing to size (no containers in the
+// group, a stale node, no qualifying candidates after partition, the
+// candidate majority below the timeslicing threshold, or replicas not
+// computable). Unlike insufficientBusinessHoursReason, waiting for more
+// observation days does not change this outcome.
+func NoQualifyingBusinessHoursReason(dataDays, minDataDays int) string {
+	return fmt.Sprintf("no qualifying business-hours recommendation: %d days available, %d required", dataDays, minDataDays)
+}
+
 func int64Ptr(v int64) *int64 {
 	return &v
 }

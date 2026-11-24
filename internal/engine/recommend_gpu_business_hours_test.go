@@ -74,6 +74,22 @@ func TestAttachGPUBusinessHours_InsufficientReasonOmitsCode80(t *testing.T) {
 	assert.Contains(t, bh.Reason, "insufficient business hours data")
 }
 
+func TestAttachGPUBusinessHours_MissingRecWithSufficientDaysUsesNoQualifyingReason(t *testing.T) {
+	t.Parallel()
+	gpuMap := map[string]*model.GPURecommendation{
+		"medium": {CurrentGPUModel: "A100"},
+	}
+	// #934: no rec for the term but 7 >= 3 days — must not claim
+	// insufficient data.
+	attachGPUBusinessHoursToDetail(gpuMap, nil, []TermConfig{{Name: "medium", MinDataDays: 3, WindowDays: 7}}, 7)
+	bh := gpuMap["medium"].BusinessHours
+	require.NotNil(t, bh)
+	assert.Nil(t, bh.RecommendedGPUProfile)
+	assert.Empty(t, bh.Notifications)
+	assert.Contains(t, bh.Reason, "no qualifying business-hours recommendation")
+	assert.NotContains(t, bh.Reason, "insufficient business hours data")
+}
+
 func TestEnrichContainerDetailGPUWithBusinessHours_KillSwitch(t *testing.T) {
 	t.Setenv("ROS_BUSINESS_HOURS_ENABLED", "false")
 	config.ResetForTest()

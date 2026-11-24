@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Business-hours detail reasons no longer mislabel a sufficient day count as insufficient data ([#934](https://github.com/pgarciaq/ros-ocp-backend/issues/934)):**
+  the node, GPU container, GPU timeslicing and VM business-hours detail
+  sections used one `insufficient business hours data: N days available, M
+  required` reason for two distinct gates — the observed-day gate and the
+  missing-recommendation gate — so a row with sufficient days but no sizing
+  (no rec for the term/engine, or nothing qualifying to size: no containers,
+  a stale node, no candidates after partition, majority below the
+  timeslicing threshold) served a self-contradictory "24 days available, 7
+  required". Those gates now report separately: the day-count reason only
+  appears when the day count is actually failing, and the no-sizing case
+  serves `no qualifying business-hours recommendation: N days available, M
+  required` — waiting for more observation days does not change that
+  outcome. The container (processor-path) reasons were already day-gated
+  and are unchanged.
+
 ### Changed
 
 - **Cost data arrives in integer micro-cents, on a scale negotiated per request ([#461](https://github.com/pgarciaq/ros-ocp-backend/issues/461)):**

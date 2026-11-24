@@ -218,9 +218,18 @@ func attachTimeslicingBusinessHours(rec *model.NodeGPURecommendation, tsRec *Tim
 	if rec == nil {
 		return
 	}
-	if tsRec == nil || bhDayCount < tc.MinDataDays {
+	// #934: the day gate and the missing-rec gate are distinct — report
+	// each with its own reason so a sufficient day count is never mislabeled
+	// as insufficient data.
+	if bhDayCount < tc.MinDataDays {
 		rec.BusinessHours = &model.TimeslicingBHRecommendation{
 			Reason: insufficientBusinessHoursReason(bhDayCount, tc.MinDataDays),
+		}
+		return
+	}
+	if tsRec == nil {
+		rec.BusinessHours = &model.TimeslicingBHRecommendation{
+			Reason: NoQualifyingBusinessHoursReason(bhDayCount, tc.MinDataDays),
 		}
 		return
 	}

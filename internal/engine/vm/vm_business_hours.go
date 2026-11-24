@@ -129,8 +129,12 @@ func enrichVMDetailWithBusinessHours(
 		return nil, fmt.Errorf("recommend VM business hours: %w", recErr)
 	}
 	if rec == nil {
+		// #934: the day gate above already passed here, so the absent rec
+		// is never a day-count failure — report it as no-qualifying (the
+		// branch is defensive: the aligned gates make a nil rec with
+		// sufficient days unreachable via public fixtures today).
 		return &VMBHRecommendation{
-			Reason: insufficientVMBusinessHoursReason(bhDayCount, tw.MinDataDays),
+			Reason: engine.NoQualifyingBusinessHoursReason(bhDayCount, tw.MinDataDays),
 		}, nil
 	}
 

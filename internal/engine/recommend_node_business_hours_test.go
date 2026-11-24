@@ -90,6 +90,28 @@ func TestAttachNodeBusinessHours_InsufficientReasonOmitsCode79(t *testing.T) {
 	assert.Contains(t, bh.Reason, "insufficient business hours data")
 }
 
+func TestAttachNodeBusinessHours_MissingRecWithSufficientDaysUsesNoQualifyingReason(t *testing.T) {
+	t.Parallel()
+	detail := &model.NodeUtilizationDetailRec{
+		RecommendationTerms: map[string]model.NodeUtilizationTermRec{
+			"medium_term": {
+				RecommendationEngines: &model.NodeUtilizationEngines{
+					Cost: &model.NodeUtilizationEngineRec{RecommendedCPUCores: 8},
+				},
+			},
+		},
+	}
+	// #934: no rec for the term/engine but 7 >= 3 days — must not claim
+	// insufficient data.
+	attachNodeBusinessHoursToDetail(detail, nil, []TermConfig{{Name: "medium", MinDataDays: 3, WindowDays: 7}}, 7)
+	bh := detail.RecommendationTerms["medium_term"].RecommendationEngines.Cost.BusinessHours
+	require.NotNil(t, bh)
+	assert.Nil(t, bh.RecommendedCPUCores)
+	assert.Empty(t, bh.Notifications)
+	assert.Contains(t, bh.Reason, "no qualifying business-hours recommendation")
+	assert.NotContains(t, bh.Reason, "insufficient business hours data")
+}
+
 func TestEnrichNodeDetailWithBusinessHours_KillSwitch(t *testing.T) {
 	t.Setenv("ROS_BUSINESS_HOURS_ENABLED", "false")
 	config.ResetForTest()
