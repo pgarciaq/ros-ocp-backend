@@ -53,7 +53,16 @@ otherwise write persistent test data.
   `iqe-bindings`, and `iqe-service-accounts-plugin`.
 - The local Nise fork, with its `5.4.0` tag available. The Cost Management
   plugin pins `koku-nise==5.4.0`; do not install the current Nise working tree
-  if it is at another version.
+  if it is at another version. **Exception (#919, 2026-11-24):** runs that need
+  features past the pinned version — notably `OCPVirtualMachineGenerator`
+  (the `ocp_report_ros_vm.yml` and `ocp_report_ros_complete.yml` templates)
+  — use the fork at the pinned SHA
+  `9c35c0fee815abd40c869003350a027b0ebe4277` (the proven lineage: the #894
+  bench, the parity fixtures, and #919's end-to-end verification all ran on
+  it). A fixed SHA, not a moving branch — the same reproducibility
+  discipline as the tag pin. The plugin pin itself moves to a published
+  version at the upstreaming phase; no fork tag exists that carries the VM
+  generator (verified: upstream tags 5.4.2–5.4.5 predate it).
 - For SNO execution: read the linked SNO operations guide, connect VPN/start
   sshuttle, and verify `oc whoami` before continuing. The SNO API must have
   management-scope recommendation data for the list/detail checks not to skip.
