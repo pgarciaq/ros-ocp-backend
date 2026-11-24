@@ -99,7 +99,7 @@ func ListVMRecommendations(
 
 	query := `
 		SELECT
-			id, org_id, cluster_uuid, vm_name, namespace, guest_os,
+			id, org_id, cluster_uuid, vm_name, namespace, node_name, guest_os,
 			current_vcpu, current_memory_gib, current_disk_gib, current_instance_type,
 			recommended_vcpu, recommended_memory_gib, recommended_disk_gib,
 			recommended_instance_type, recommended_series,
@@ -185,7 +185,7 @@ func GetVMRecommendationDetail(
 
 	recQuery := `
 		SELECT
-			id, org_id, cluster_uuid, vm_name, namespace, guest_os,
+			id, org_id, cluster_uuid, vm_name, namespace, node_name, guest_os,
 			current_vcpu, current_memory_gib, current_disk_gib, current_instance_type,
 			recommended_vcpu, recommended_memory_gib, recommended_disk_gib,
 			recommended_instance_type, recommended_series,
@@ -446,7 +446,7 @@ func scanVMRecommendation(rows vmRecScanner) (Recommendation, error) {
 func scanVMRecommendationRow(row pgx.Row) (Recommendation, error) {
 	var r Recommendation
 	err := row.Scan(
-		&r.ID, &r.OrgID, &r.ClusterUUID, &r.VMName, &r.Namespace, &r.GuestOS,
+		&r.ID, &r.OrgID, &r.ClusterUUID, &r.VMName, &r.Namespace, &r.NodeName, &r.GuestOS,
 		&r.CurrentVCPU, &r.CurrentMemoryGiB, &r.CurrentDiskGiB, &r.CurrentInstanceType,
 		&r.RecommendedVCPU, &r.RecommendedMemoryGiB, &r.RecommendedDiskGiB,
 		&r.RecommendedInstanceType, &r.RecommendedSeries,

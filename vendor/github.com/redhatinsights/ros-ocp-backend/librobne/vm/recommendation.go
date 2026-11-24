@@ -13,6 +13,7 @@ type VMRecommendation struct {
 	ClusterUUID uuid.UUID `db:"cluster_uuid"`
 	VMName      string    `db:"vm_name"`
 	Namespace   string    `db:"namespace"`
+	NodeName    string    `db:"node_name"`
 	GuestOS     string    `db:"guest_os"`
 
 	// Current allocation

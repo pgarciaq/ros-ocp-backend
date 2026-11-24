@@ -106,6 +106,7 @@ type VMRecommendationItem struct {
 	Namespace                 string                  `json:"namespace"`
 	ClusterUUID               string                  `json:"cluster_uuid"`
 	GuestOS                   string                  `json:"guest_os"`
+	NodeName                  string                  `json:"node_name"`
 	Category                  string                  `json:"category,omitempty"`
 	Current                   vmSizingBlock           `json:"current"`
 	Recommended               vmRecommendedSizing     `json:"recommended"`
@@ -603,6 +604,7 @@ func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 		VMName:      r.VMName,
 		Namespace:   r.Namespace,
 		ClusterUUID: r.ClusterUUID.String(),
+		NodeName:    r.NodeName,
 		GuestOS:     r.GuestOS,
 		Category:    r.Category,
 		Current: vmSizingBlock{

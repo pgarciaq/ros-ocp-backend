@@ -363,6 +363,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **VM list `filter[node]` works and the response serves `node_name` ([#926](https://github.com/pgarciaq/ros-ocp-backend/issues/926)):**
+  the filter 503'd on every use — the SQL targets `node_name`, which was
+  never carried into `vm_recommendations` (the digests always had it; the
+  recommendation struct dropped it). The column is added (migration 000224,
+  `TEXT NOT NULL DEFAULT ''`) and **backfilled from the latest digest per
+  VM** — the same "current node" semantics the recommender's NUMA
+  resolution uses — so existing rows filter immediately. The writer
+  populates it from the digests on every rec run; the response serves
+  `node_name` on every row. The filter semantics stay exact-match as
+  wired.
 - **The storage tabs' `filter[classification]` filters and rejects invalid values ([#915](https://github.com/pgarciaq/ros-ocp-backend/issues/915)):**
   the PVC and snapshot list endpoints silently ignored `filter[classification]`
   — the param the koku-ui classification dropdowns send (#841's mechanism;

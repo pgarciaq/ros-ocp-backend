@@ -309,6 +309,7 @@ func RecommendVM(
 		ClusterUUID:                clusterUUID,
 		VMName:                     latest.VMName,
 		Namespace:                  latest.Namespace,
+		NodeName:                   latest.NodeName,
 		GuestOS:                    guestOS,
 		CurrentVCPU:                currentVCPU,
 		CurrentMemoryGiB:           currentMemGiB,

@@ -33,7 +33,7 @@ func WriteVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []vm.V
 		for _, r := range recs[chunkStart:chunkEnd] {
 			batch.Queue(`
 			INSERT INTO vm_recommendations (
-				org_id, cluster_uuid, vm_name, namespace, guest_os,
+				org_id, cluster_uuid, vm_name, namespace, node_name, guest_os,
 				current_vcpu, current_memory_gib, current_disk_gib, current_instance_type,
 				recommended_vcpu, recommended_memory_gib, recommended_disk_gib,
 				recommended_instance_type, recommended_series,
@@ -50,20 +50,21 @@ func WriteVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []vm.V
 				estimated_savings_cents, savings_currency,
 				last_recommended_at, updated_at,`+types.VMExplSQLColumns+`
 			) VALUES (
-				$1, $2, $3, $4, $5,
-				$6, $7, $8, $9,
-				$10, $11, $12,
-				$13, $14,
-				$15, $16, $17, $18,
-				$19, $20, $21,
-				$22, $23, $24,
-				$25, $26, $27, $28, $29, $30,
-				$31, $32, $33,
-				$34,
-				$35, $36, $37, $38, $39, $40, $41, $42, $43, $44,
-				$45, $46, $47, now(), $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62
+				$1, $2, $3, $4, $5, $6,
+				$7, $8, $9, $10,
+				$11, $12, $13,
+				$14, $15,
+				$16, $17, $18, $19,
+				$20, $21, $22,
+				$23, $24, $25,
+				$26, $27, $28, $29, $30, $31,
+				$32, $33, $34,
+				$35,
+				$36, $37, $38, $39, $40, $41, $42, $43, $44, $45,
+				$46, $47, $48, now(), $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63
 			)
 			ON CONFLICT (org_id, cluster_uuid, vm_name, namespace, term, engine) DO UPDATE SET
+				node_name = EXCLUDED.node_name,
 				guest_os = EXCLUDED.guest_os,
 				current_vcpu = EXCLUDED.current_vcpu,
 				current_memory_gib = EXCLUDED.current_memory_gib,
@@ -107,7 +108,7 @@ func WriteVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []vm.V
 				last_recommended_at = EXCLUDED.last_recommended_at,
 				updated_at = now(),`+types.VMExplUpdateSet,
 				append([]any{
-					r.OrgID, r.ClusterUUID, r.VMName, r.Namespace, r.GuestOS,
+					r.OrgID, r.ClusterUUID, r.VMName, r.Namespace, r.NodeName, r.GuestOS,
 					r.CurrentVCPU, r.CurrentMemoryGiB, r.CurrentDiskGiB, r.CurrentInstanceType,
 					r.RecommendedVCPU, r.RecommendedMemoryGiB, r.RecommendedDiskGiB,
 					r.RecommendedInstanceType, r.RecommendedSeries,
