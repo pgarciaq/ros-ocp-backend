@@ -9896,7 +9896,7 @@
           },
           "reason": {
             "type": "string",
-            "description": "Present when nested sizing is omitted (for example insufficient business-hours days). Code 80 is not emitted on reason-only blocks."
+            "description": "Present when nested sizing is omitted. Two reason classes: \"insufficient business hours data: N days available, M required\" (the day gate failed, N < M) or \"no qualifying business-hours recommendation: N days available, M required\" (days sufficient; no rec for the term or nothing qualifying to size). Code 80 is not emitted on reason-only blocks."
           },
           "notifications": {
             "type": "object",
@@ -10098,7 +10098,7 @@
           },
           "reason": {
             "type": "string",
-            "description": "Present when BH replica sizing is unavailable (insufficient business-hours days or no BH timeslicing rec). Omits code 81."
+            "description": "Present when BH replica sizing is unavailable. Two reason classes: \"insufficient business hours data: N days available, M required\" (the day gate failed, N < M) or \"no qualifying business-hours recommendation: N days available, M required\" (days sufficient; no BH group for the model+term, or nothing qualifying to size — stale node, no candidates, majority below threshold). Omits code 81."
           },
           "notifications": {
             "type": "object",
@@ -11360,7 +11360,7 @@
           },
           "reason": {
             "type": "string",
-            "description": "Present when nested sizing is omitted (for example insufficient business-hours days). Code 79 is not emitted on reason-only blocks."
+            "description": "Present when nested sizing is omitted. Two reason classes: \"insufficient business hours data: N days available, M required\" (the day gate failed, N < M) or \"no qualifying business-hours recommendation: N days available, M required\" (days sufficient; no rec for the term/engine or nothing qualifying to size). Code 79 is not emitted on reason-only blocks."
           },
           "notifications": {
             "type": "object",
@@ -11398,7 +11398,7 @@
           },
           "reason": {
             "type": "string",
-            "description": "Present when nested sizing is omitted (for example insufficient business-hours days). Code 82 is not emitted on reason-only blocks."
+            "description": "Present when nested sizing is omitted. Two reason classes: \"insufficient business hours data: N days available, M required\" (the day gate failed, N < M) or \"no qualifying business-hours recommendation: N days available, M required\" (days sufficient; no sizing produced — defensive on this route, the day gate runs first). Code 82 is not emitted on reason-only blocks."
           },
           "notifications": {
             "type": "object",
