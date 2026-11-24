@@ -304,6 +304,31 @@ assert the API narrows to the granted scope, then delete the group.
 
 The lab state (enforcement on, allow-list, fixture group) is recorded in the cluster's `ACCESS.md`. Reference close-outs: #913, #920; the arm64 insights-rbac build note lives there too (the published image is amd64-only; the arm64 build is a lab artifact).
 
+## Running cost_management-plugin tests (the koku-api base)
+
+The cost_management plugin's package conftest has session-scoped autouse
+fixtures that probe **koku-api** routes (`/exchange-rates/`); the default
+local config points the shared client at the ROS API (18484), which 404s
+them. For files under `iqe_cost_management/`, run with a koku-api-pointed
+config variant and the koku-api port-forward:
+
+```bash
+# port-forward: 18000 -> svc/cost-onprem-koku-api 8000
+# inside the runner (root, once):
+cp -r /iqe-local-config /iqe-koku-config
+sed -i 's/127.0.0.1:18484/127.0.0.1:18000/' /iqe-koku-config/*.yaml
+chmod -R a+rX /iqe-koku-config
+# then per-run:
+podman exec -e ENV_FOR_DYNACONF=local -e IQE_ADDITIONAL_CONF_PATH=/iqe-koku-config \
+  -e DYNACONF_IQE_VAULT_LOADER_ENABLED=false iqe-<runner> \
+  /iqe_venv/bin/iqe tests plugin ros_ocp \
+  /iqe_venv/lib64/python3.12/site-packages/iqe_cost_management/tests/rest_api/v1/<file>.py
+```
+
+Direct-masu tests (e.g. the #918 effective-rates pins) additionally need
+`18042 -> svc/cost-onprem-koku-masu 8000` and reach the endpoint with raw
+requests (validated 2026-11-24, #918).
+
 ## Cleanup
 
 Stop the port-forward with Ctrl-C, then remove the temporary runner:
