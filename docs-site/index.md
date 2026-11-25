@@ -59,6 +59,7 @@ These capabilities span multiple plugins rather than separate registry entries:
 - [Notification codes](architecture/notification-codes.md) — All API notification codes in one place
 - [Notification codes API](api-reference/notification-codes.md) — `GET .../notification-codes` reference catalog
 - [Contributing Guide](contributing.md) — Setup, testing, PR process
+- [PDF books](downloads.md) — Every section as a downloadable PDF (release assets)
 - [Plugin Architecture](architecture/plugin-architecture.md) — How plugins work
 - [Plugin Execution Phases](architecture/plugin-phases.md) — Phase and priority ordering
 - [Plugin Reference](plugin-reference/index.md) — Auto-generated from source code

@@ -63,7 +63,7 @@ there, do not invest further in the chart.
 
 **On-prem vs SaaS.** `oc` / unique tags / sshuttle / `docs/agents/sno-cluster-operations.md` are **on-prem** (SNO, `cost-onprem-*`). SaaS is Clowder/ephemeral — do not apply the sno runbook there. API, engine, plugins, and docs-site rules apply to both.
 
-**Docs trees.** `docs-site/` = public facts; `docs/` = internal. Do not clobber one with the other. Class A pages need `> **Last verified:** YYYY-MM-DD`. Run `make docs-lint docs-drift`. Two site pages are **derived**: `docs-site/contributing.md` from `CONTRIBUTING.md` and `docs-site/changelog.md` from `CHANGELOG.md` — edit the root source, run `make docs-generate`, and commit the regenerated page. `make docs-check-generated` is the only gate that catches a stale derived page (it is not part of `docs-lint`/`docs-drift`); skip it and the miss surfaces in the `Documentation` workflow instead (#872).
+**Docs trees.** `docs-site/` = public facts; `docs/` = internal. Do not clobber one with the other. Class A pages need `> **Last verified:** YYYY-MM-DD`. Run `make docs-lint docs-drift`. Two site pages are **derived**: `docs-site/contributing.md` from `CONTRIBUTING.md` and `docs-site/changelog.md` from `CHANGELOG.md` — edit the root source, run `make docs-generate`, and commit the regenerated page. PDF books are **generated nav**, not a second copy: `scripts/docs_pdf_nav.py` derives one book per top-level `mkdocs.yml` section, and `make docs-pdf-nav-check` fails when a nav page is missing or a section has no pinned slug — mkdocs only warns, which is how pages quietly dropped out of the books (#383). Books publish as assets of the rolling `docs-pdf` release (`.github/workflows/docs-pdf.yml`); never commit a PDF. `make docs-check-generated` is the only gate that catches a stale derived page (it is not part of `docs-lint`/`docs-drift`); skip it and the miss surfaces in the `Documentation` workflow instead (#872).
 
 **Cluster (on-prem).** If `oc login` / `oc whoami` fails, stop and ask the user for VPN/sshuttle — do not retry around it. Never `kubectl logs --follow`, `oc logs -f`, or `tail -f` unless the user asked. Rebuild, unique-tag, push, and wait for rollout **before** cluster E2E. Local Go check is `make test-short`; `make test` is the full testcontainers suite. Chart pytest (`run-pytest.sh`) is not in this repository.
 
@@ -110,6 +110,7 @@ make build        # rosocp, CGO_ENABLED=1
 make robne        # CGO_ENABLED=0 CLI
 make docs-lint docs-drift docs-sync-check
 make docs-check-generated   # after editing CHANGELOG.md / CONTRIBUTING.md (derived site pages)
+make docs-pdf-nav-check     # book nav coverage: every mkdocs.yml nav page reaches a PDF book
 ```
 
 ## Layout

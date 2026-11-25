@@ -18,10 +18,11 @@ make docs-pdf-all            # all nav sections → dist/pdf/*.pdf
 make docs-pdf-features       # single section (also architecture, operations, historical, …)
 ```
 
-PDFs are local-only (gitignored). See
-[Contributing — Generate PDF books](contributing.md#generate-pdf-books-local-only)
+PDFs are gitignored locally and **published** as assets of the rolling
+`docs-pdf` GitHub Release (see [Downloads](downloads.md)). See
+[Contributing — Generate PDF books](contributing.md#generate-pdf-books)
 for sections, Mermaid/`mmdc`, Chrome, print-CSS rules, and known limitations
-(#381 / #382).
+(#381 / #382 / #383).
 
 ## Prerequisites
 

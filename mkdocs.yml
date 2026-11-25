@@ -83,6 +83,7 @@ nav:
       - Contributing: contributing.md
       - Local Development: development.md
       - Testing & Quality: testing.md
+      - Downloads: downloads.md
   - Features:
       - features/index.md
       - Container Right-Sizing: features/container-recommendations.md

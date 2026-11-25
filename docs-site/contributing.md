@@ -581,7 +581,8 @@ go run rosocp.go db migrate create -ext sql -dir migrations -seq create_myplugin
 # Nested librobne module (no PostgreSQL)
 go test -C librobne ./...
 
-# Unit tests (fast, no external dependencies) — includes librobne
+# Unit tests (fast) — includes librobne. ./scripts/ needs PyYAML for the
+# PDF nav generator tests: python3 -m pip install pyyaml
 make test-short
 # equivalent: go test -C librobne -short ./... && go test -short ./...
 
@@ -1308,21 +1309,26 @@ Links into sibling checkouts (`~/dev/koku/koku`, `koku-metrics-operator`,
 `make docs-links` hard-fails; `DOCS_LINKS_SOFT=1 make docs-links` reports only.
 CI workflow `docs-lint.yml` runs the hard check.
 
-### Generate PDF books (local only)
+### Generate PDF books
 
-Build **per-section PDF books** offline for ebook/reader use. PDFs are **not**
-committed and **not** published to GitHub Pages (see
-[#379](https://github.com/pgarciaq/ros-ocp-backend/issues/379) /
-[#380](https://github.com/pgarciaq/ros-ocp-backend/issues/380) /
-[#381](https://github.com/pgarciaq/ros-ocp-backend/issues/381)).
+Build **per-section PDF books** for offline/ebook use. The HTML site stays
+canonical; the books are published as assets of a rolling **`docs-pdf`** GitHub
+Release by `.github/workflows/docs-pdf.yml`, so they are downloadable without a
+login and **no PDF is ever committed** (see
+[#379](https://github.com/pgarciaq/ros-ocp-backend/issues/379) and
+[#383](https://github.com/pgarciaq/ros-ocp-backend/issues/383)). The site's
+[Downloads](https://pgarciaq.github.io/ros-ocp-backend/downloads/) page links
+every book.
 
 ```bash
-# One-time deps
+# One-time deps (pinned: scripts/docs-pdf/requirements.txt)
 make docs-pdf-install
-# Also need: npm install -g @mermaid-js/mermaid-cli
-# And Chrome/Chromium (or set DOCS_PDF_CHROME=/path/to/chrome)
+# Also need: npm install -g @mermaid-js/mermaid-cli@11.12.0
+# Chrome/Chromium is used if found (or DOCS_PDF_CHROME=/path/to/chrome);
+# otherwise mmdc falls back to the browser puppeteer downloaded with it.
 
-# All nav-section books → dist/pdf/*.pdf (gitignored; can take 15–30+ min)
+# All nav-section books → dist/pdf/*.pdf (gitignored; ~10–15 min — the
+# Features book dominates because it renders 13 Mermaid diagrams in Chrome)
 make docs-pdf-all
 # equivalent: ./scripts/docs-pdf.sh all
 
@@ -1334,15 +1340,23 @@ make docs-pdf-all
                                         # historical
 ```
 
-Pipeline: optional `generate-docs.sh` (CONTRIBUTING/changelog copies) → copy section pages →
-`mmdc` (Mermaid → PNG) → `mkdocs-to-pdf` / WeasyPrint (macros expand) →
-`dist/pdf/<section>.pdf`. Use `SKIP_GENERATE=1` if copies are already fresh.
+Pipeline: optional `generate-docs.sh` (CONTRIBUTING/changelog copies) → copy the
+whole `docs-site/` tree (relative images and cross-section links resolve) →
+`mmdc` (Mermaid → PNG, book pages only) → `mkdocs-to-pdf` / WeasyPrint (macros
+expand) → `dist/pdf/<section>.pdf`. Use `SKIP_GENERATE=1` if copies are already
+fresh. Two guards run on every book: `verify_pdf_complete` (no silent
+WeasyPrint truncation) and `check_pdf_size` (size cap + no CJK face).
 
 Work tree: `.docs-pdf-work/` (gitignored). Print CSS:
-`scripts/docs-pdf/styles.scss` (A4). Nav mirrors `mkdocs.yml` (hardcoded in
-the script). Home (`index.md`) is not a separate book. Full OpenAPI and Plugin
-Reference are included (long books are expected). Historical is its own PDF
-target (frozen narratives and point-in-time benchmark reports).
+`scripts/docs-pdf/styles.scss` (A4). Book navs are **generated** from
+`mkdocs.yml` by `scripts/docs_pdf_nav.py`: a book is one top-level nav section,
+its nav is flat, and its slug is a pinned release-asset name. `make
+docs-pdf-nav-check` (also run by `docs-lint.yml`) fails when a nav page is
+missing or a new section has no slug — mkdocs itself only warns, which is how
+pages silently dropped out of the books before #383. Home (`index.md`) is not a
+separate book. Full OpenAPI and Plugin Reference are included (long books are
+expected). Historical is its own PDF target (frozen narratives and point-in-time
+benchmark reports).
 
 #### Known limitations
 
@@ -1352,7 +1366,7 @@ target (frozen narratives and point-in-time benchmark reports).
 | Tall diagrams | Height-capped and **allowed to break** across pages. Do **not** set `break-inside: avoid` on tall `img`/`svg`/`figure` — WeasyPrint can **silently drop all following content** when an unbreakable box is taller than one page. |
 | Tall tables / long code | Allowed to split across pages; table headers repeat when the engine supports `thead { display: table-header-group }`. Individual rows try to stay together. |
 | Wide tables | May still overflow or wrap awkwardly; landscape-only pages are out of scope. |
-| File size | Features book can be tens of MB (embedded Mermaid PNGs + fonts). Optional light PNG `optimize=True`; aggressive compression deferred. |
+| File size | Books are now single-digit MB (a text book ~0.4 MB, the diagram-heavy Features book ~6 MB). A book over 15 MB fails the build: that means the Noto Sans CJK fallback in `styles.scss` is back (#383). |
 | Font warnings | WeasyPrint may log `Embedded font file may be invalid` (Material icon/emoji fonts). Usually cosmetic for body text. |
 | Plugin defaults | `mkdocs-to-pdf` ships `page-break-inside: avoid` on `img`/`table`; our `styles.scss` overrides those with `!important`. |
 
