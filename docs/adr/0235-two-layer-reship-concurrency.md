@@ -50,3 +50,10 @@ Heavier than in-process coordinator; cross-process reship is single-worker per d
 - [internal/reship/trigger_guard.go](../../internal/reship/trigger_guard.go)
 - [internal/reship/service.go](../../internal/reship/service.go)
 - [internal/reship/lock_coordinator.go](../../internal/reship/lock_coordinator.go)
+
+## Amendment (2026-11-25, #863)
+
+The outer layer's "Pending cluster UUID lists are replaced while in-flight; latest
+parameters win (ADR-0218)" is superseded by ADR-0218's #863 amendment: the guard
+merges the pending cluster set (union with dedup) and the trailing loop consumes it
+before each batch run. The per-cluster advisory layer (inner) is unchanged.

@@ -60,13 +60,40 @@ func copyClusterUUIDs(ids []uuid.UUID) []uuid.UUID {
 	return append([]uuid.UUID(nil), ids...)
 }
 
+// mergeClusterUUIDs unions two cluster lists, preserving order and dropping
+// duplicates (an org-level set subsumes a cluster-level addition).
+func mergeClusterUUIDs(existing, incoming []uuid.UUID) []uuid.UUID {
+	if len(existing) == 0 {
+		return copyClusterUUIDs(incoming)
+	}
+	seen := make(map[uuid.UUID]struct{}, len(existing)+len(incoming))
+	out := copyClusterUUIDs(existing)
+	for _, id := range existing {
+		seen[id] = struct{}{}
+	}
+	for _, id := range incoming {
+		if _, ok := seen[id]; !ok {
+			seen[id] = struct{}{}
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
 func triggerReshipCoalesced(ctx context.Context, trigger Triggerer, orgID string, clusterUUIDs []uuid.UUID) {
 	key := orgID
 	flightIface, _ := reshipFlights.LoadOrStore(key, &reshipFlight{})
 	flight := flightIface.(*reshipFlight)
 
 	flight.mu.Lock()
-	flight.latestClusterUUIDs = copyClusterUUIDs(clusterUUIDs)
+	// #863: merge, not replace. Concurrent BH settings edits at different
+	// scopes pass different cluster sets for the same org (an org-level edit
+	// resolves to all org clusters; a cluster/namespace-level edit to just
+	// that cluster). Latest-wins silently dropped the earlier arrival's
+	// clusters from the in-memory batch — the poller recovered them, delayed
+	// (#812's bug class). Aligned with #812's pending-set semantics; the
+	// poller stays as the backstop.
+	flight.latestClusterUUIDs = mergeClusterUUIDs(flight.latestClusterUUIDs, clusterUUIDs)
 	if flight.running {
 		flight.pending = true
 		flight.mu.Unlock()
@@ -79,6 +106,10 @@ func triggerReshipCoalesced(ctx context.Context, trigger Triggerer, orgID string
 	for {
 		flight.mu.Lock()
 		clusters := copyClusterUUIDs(flight.latestClusterUUIDs)
+		// Consume the accumulated set (#812's snapshot-and-clear): without
+		// the clear, the next flight's initial trigger would merge into this
+		// flight's leftover set and re-reship it.
+		flight.latestClusterUUIDs = nil
 		flight.mu.Unlock()
 
 		runReshipBatch(ctx, trigger, orgID, clusters)

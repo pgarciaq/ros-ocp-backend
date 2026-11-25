@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **The reship coalescing guard drains the SET of pending clusters, not the latest slot ([#863](https://github.com/pgarciaq/ros-ocp-backend/issues/863)):**
+  concurrent business-hours settings edits at different scopes (an org-level edit
+  resolving to all org clusters vs. a cluster/namespace-level edit) pass different
+  cluster sets for the same org; the guard's latest-wins replace silently dropped
+  the earlier arrival's clusters from the in-memory batch, relying on the
+  background poller to recover them, delayed. The guard now merges (unions with
+  dedup) coalesced arrivals and the trailing loop consumes the accumulated set —
+  #812's pending-set semantics applied to the reship sibling. ADR-0218/0235
+  amended; the poller backstop is unchanged. Discovered during the readiness pass:
+  the poller's exhaustion path has no terminal state (an eternally-warning tick
+  for permanently-failed clusters) — filed separately as #936.
+
 - **Business-hours detail reasons no longer mislabel a sufficient day count as insufficient data ([#934](https://github.com/pgarciaq/ros-ocp-backend/issues/934)):**
   the node, GPU container, GPU timeslicing and VM business-hours detail
   sections used one `insufficient business hours data: N days available, M

@@ -90,10 +90,10 @@ func TestTriggerAsync_CoalescedMetricIncrements(t *testing.T) {
 	assert.InDelta(t, 2, promtest.ToFloat64(reshipCoalescedTotal)-before, 0)
 }
 
-func TestTriggerReshipCoalesced_UsesLatestParameters(t *testing.T) {
+func TestTriggerReshipCoalesced_DrainsPendingSet(t *testing.T) {
 	resetReshipFlightsForTest()
 
-	orgID := "org-reship-latest"
+	orgID := "org-reship-drain"
 	clusterA := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 	clusterB := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 	clusterC := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
@@ -123,6 +123,8 @@ func TestTriggerReshipCoalesced_UsesLatestParameters(t *testing.T) {
 		close(done)
 	}()
 	<-trigger.started
+	// #863: two scoped edits coalescing during one running batch — both
+	// sets must survive the trailing run (latest-wins dropped clusterB).
 	triggerReshipCoalesced(ctx, trigger, orgID, []uuid.UUID{clusterB})
 	triggerReshipCoalesced(ctx, trigger, orgID, []uuid.UUID{clusterC})
 	close(proceed)
@@ -132,8 +134,98 @@ func TestTriggerReshipCoalesced_UsesLatestParameters(t *testing.T) {
 	defer mu.Unlock()
 	require.GreaterOrEqual(t, len(batches), 2, "expected initial run plus one coalesced follow-up")
 	last := batches[len(batches)-1]
-	require.Len(t, last, 1)
-	assert.Equal(t, clusterC, last[0], "coalesced follow-up should use latest cluster list")
+	assert.ElementsMatch(t, []uuid.UUID{clusterB, clusterC}, last,
+		"coalesced follow-up should drain the SET of pending clusters, not the latest slot (#863, #812 parity)")
+}
+
+func TestTriggerReshipCoalesced_MergesOrgThenClusterScoped(t *testing.T) {
+	resetReshipFlightsForTest()
+
+	orgID := "org-reship-org-then-cluster"
+	clusterA := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	clusterW := uuid.MustParse("dddddddd-dddd-dddd-dddd-dddddddddddd")
+	clusterX := uuid.MustParse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
+
+	var mu sync.Mutex
+	var batches [][]uuid.UUID
+	reshipBatchHookMu.Lock()
+	reshipBatchHook = func(ids []uuid.UUID) {
+		mu.Lock()
+		batches = append(batches, ids)
+		mu.Unlock()
+	}
+	reshipBatchHookMu.Unlock()
+	defer func() {
+		reshipBatchHookMu.Lock()
+		reshipBatchHook = nil
+		reshipBatchHookMu.Unlock()
+	}()
+
+	proceed := make(chan struct{})
+	trigger := &countingTriggerer{started: make(chan struct{}, 1), proceed: proceed}
+	ctx := context.Background()
+
+	done := make(chan struct{})
+	go func() {
+		triggerReshipCoalesced(ctx, trigger, orgID, []uuid.UUID{clusterA})
+		close(done)
+	}()
+	<-trigger.started
+	// The discriminating ordering (#863): an org-level edit (a broad set)
+	// coalesces FIRST, then a cluster-level edit arrives — latest-wins kept
+	// only the narrow set, dropping the org edit's other clusters.
+	triggerReshipCoalesced(ctx, trigger, orgID, []uuid.UUID{clusterW, clusterX})
+	triggerReshipCoalesced(ctx, trigger, orgID, []uuid.UUID{clusterX})
+	close(proceed)
+	<-done
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.GreaterOrEqual(t, len(batches), 2, "expected initial run plus one coalesced follow-up")
+	last := batches[len(batches)-1]
+	assert.ElementsMatch(t, []uuid.UUID{clusterW, clusterX}, last,
+		"the org-level set must survive a later cluster-scoped arrival — concurrent edits at different scopes must both reship (#863)")
+	assert.Len(t, last, 2, "the union dedupes: cluster X appears once")
+}
+
+func TestTriggerReshipCoalesced_ConsumesSetAcrossFlights(t *testing.T) {
+	resetReshipFlightsForTest()
+
+	orgID := "org-reship-consume"
+	clusterA := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	clusterB := uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+
+	var mu sync.Mutex
+	var batches [][]uuid.UUID
+	reshipBatchHookMu.Lock()
+	reshipBatchHook = func(ids []uuid.UUID) {
+		mu.Lock()
+		batches = append(batches, ids)
+		mu.Unlock()
+	}
+	reshipBatchHookMu.Unlock()
+	defer func() {
+		reshipBatchHookMu.Lock()
+		reshipBatchHook = nil
+		reshipBatchHookMu.Unlock()
+	}()
+
+	trigger := &countingTriggerer{}
+	ctx := context.Background()
+
+	// Flight 1 with clusterA completes fully...
+	triggerReshipCoalesced(ctx, trigger, orgID, []uuid.UUID{clusterA})
+	// ...then a new flight starts for clusterB: its batch must not merge
+	// clusterA back in (the snapshot-and-clear concern — without the
+	// consume-on-read, the union would re-reship the previous set).
+	triggerReshipCoalesced(ctx, trigger, orgID, []uuid.UUID{clusterB})
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, batches, 2, "two sequential flights produce two batches")
+	assert.Equal(t, []uuid.UUID{clusterA}, batches[0])
+	assert.Equal(t, []uuid.UUID{clusterB}, batches[1],
+		"a new flight's batch must not carry the previous flight's clusters (consume-on-read, #812's M3)")
 }
 
 // #534: per-cluster trigger failures must surface via rosocp_reship_errors_total.

@@ -40,3 +40,17 @@ Blocks unrelated orgs unnecessarily.
 
 - [internal/reship/trigger_guard.go](../../internal/reship/trigger_guard.go)
 - [internal/reship/service.go](../../internal/reship/service.go)
+
+## Amendment (2026-11-25, #863)
+
+The Decision's "replaced (not appended) — latest parameters win" is superseded: the
+guard now **merges** (unions with dedup) the pending cluster set on each coalesced
+arrival, and the trailing loop **consumes** the accumulated set (snapshot-and-clear)
+before each batch run. Concurrent BH settings edits at different scopes pass
+different cluster sets for the same org (org-level resolves to all org clusters;
+cluster/namespace-level to just that cluster) — latest-wins silently dropped the
+earlier arrival's clusters from the in-memory batch, relying on the background
+poller to recover them, delayed. This aligns the guard with #812's pending-set
+semantics (the savings-recalc sibling's fix, same bug class); the poller remains
+the backstop, unchanged. The marker/poller recovery path is documented in ADR-0219
+and has its own exhaustion-handling gap tracked as #936.
