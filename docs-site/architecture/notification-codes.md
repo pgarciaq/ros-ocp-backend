@@ -1,6 +1,6 @@
 # Notification codes
 
-> **Last verified:** 2026-11-21
+> **Last verified:** 2026-11-25
 
 Every ROS recommendation can include **notification codes**: small integers that explain
 *why* a row looks the way it does (low confidence, idle workload, orphaned PVC, and so on).
@@ -136,6 +136,37 @@ having no actionable savings.
 | 82 | WARNING | VM (detail `business_hours` or robne BH sibling) | Business-hours VM sizing uses the namespace office window | Overnight batch and off-hours bursts are excluded; thin nest (vCPU/GiB only); do not merge into the parent VM notifications array |
 | 86 | WARNING | Container | Unstable container (frequent restarts) | Investigate crash loop; cost downsize withheld while churning |
 | 87 | WARNING | Node | Node pressure (kubelet conditions observed) | Investigate Memory/Disk/PID pressure; consolidation withheld while pressured |
+| 88 | WARNING | Node | Usage exceeds allocatable capacity — implausible data ([#890](https://github.com/pgarciaq/ros-ocp-backend/issues/890)) | The reported usage cannot be real; check the producer for double-counting or misattributed pods. Sizing on the node is unreliable until the data is corrected. The code clears by itself once corrected data replaces the window |
+
+#### Why 1%? (code 88's tolerance)
+
+The gate fires when a node's summed p95 usage exceeds its allocatable capacity by more
+than **1%**. The threshold is derived, not tuned:
+
+- **Physically impossible for honest data.** An hourly mean of summed usage above the
+  node's capacity cannot happen — the node cannot sustain more than 100% of its
+  CPU/memory for an hour, and a percentile of values at or below capacity cannot
+  exceed capacity. So anything meaningfully above 100% means the *reported* data is
+  wrong, not the node: double-counted pods, misattributed usage, or a broken producer
+  query.
+- **The honest noise floor is roughly zero.** The only genuine measurement artifact is
+  kernel/cgroup accounting error, bounded around 1%. (Percentile interpolation cannot
+  overshoot, and the digest compares against the largest allocatable seen, which is
+  conservative.) A real cluster measured on a lab topped out at 99.6% of allocatable —
+  healthy data sits *at or below* the line, not near it.
+- **Why not a larger tolerance (15%, 50%)?** Gross breakage (usage at 120%+ of
+  capacity) fires at any tolerance — the tolerance only decides the borderline. A
+  larger tolerance would miss the 101–105% class: subtle double-counting bugs that
+  are otherwise undetectable, which is exactly the failure this code exists to catch.
+- **Why not smaller (0%)?** The 1% band absorbs kernel accounting artifacts on real
+  fleets so the warning only fires on genuinely implausible data.
+- **What it does NOT flag:** requests above allocatable (legitimate overcommit —
+  schedulers allow summed requests to exceed capacity after pod changes), and nodes
+  whose digest lacks a stored allocatable (the fallback estimate is not a capacity
+  fact).
+- **Self-clearing:** node notification codes are recomputed from scratch on every
+  run, so the code disappears once corrected data replaces the over-capacity days in
+  the window — no manual cleanup.
 
 ---
 

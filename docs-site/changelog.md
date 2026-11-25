@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Node usage plausibility gate: notification code 88 ([#890](https://github.com/pgarciaq/ros-ocp-backend/issues/890)):**
+  a node whose summed p95 usage exceeds its allocatable capacity by more than
+  a 1% tolerance now carries `NODE_USAGE_OVER_CAPACITY` (88) — physically
+  impossible for an honest producer, so the data is implausible (double-counted
+  or misattributed pods upstream) and sizing on the node is unreliable until
+  corrected. Usage-only by design: requests above allocatable are legitimate
+  overcommit and not gated; nodes without a stored allocatable are not checked.
+  The code self-clears — node notification codes are recomputed and replaced
+  each run, so it disappears once corrected data replaces the window. The 1%
+  tolerance is derived, not tuned (rationale on the public notification-codes
+  page): the honest noise floor is ~0 (a percentile of values at or below
+  capacity cannot exceed capacity; a real cluster measured 99.6% at worst),
+  and the band exists to absorb kernel/cgroup accounting artifacts while
+  catching the 101–105% double-counting class.
 - **db-mode tag catalog values read the label summaries ([#868](https://github.com/pgarciaq/ros-ocp-backend/issues/868)):**
   `DBTagProvider.GetTagValues` read `reporting_ocptags_values` — the table whose
   arrays are rebuilt per summarization run from that run's report periods only,

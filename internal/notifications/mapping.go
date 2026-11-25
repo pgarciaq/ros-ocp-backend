@@ -106,6 +106,7 @@ var Definitions = map[int16]notifDef{
 	85: {"INFO", "Control-plane node — rightsizing via CPMS rolling update only, never below install minimums; quorum protected by mechanism"},
 	86: {"WARNING", "Container restarted repeatedly in the observation window — possible crash loop; downsize withheld"},
 	87: {"WARNING", "Node pressure conditions observed in window — consolidation withheld, usage baselines untrustworthy"},
+	88: {"WARNING", "Node usage exceeds its allocatable capacity — the reported data is implausible (possible double-counting or misattributed pods upstream); sizing on this node is unreliable until the data is corrected"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible

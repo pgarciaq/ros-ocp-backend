@@ -804,3 +804,120 @@ func makeDigestRowWithInstance(
 	r.InstanceType = instanceType
 	return r
 }
+
+// TestClassifyNode_UsageOverCapacity is #890's plausibility gate: summed p95
+// usage above the node's stored allocatable (beyond the 1% measurement
+// tolerance) is physically impossible for an honest producer, so the node's
+// rec carries code 88 — and only then. The boundary cases pin the tolerance:
+// 100.5% (within) does not fire; 101.5% (beyond) does. Requests above
+// allocatable do NOT fire (legitimate overcommit — #890 D2). A day without
+// stored allocatable does not fire (the requests-derived fallback is an
+// estimate, not a capacity fact).
+func TestClassifyNode_UsageOverCapacity(t *testing.T) {
+	allocCPU := ptr64(16000)
+	allocMem := ptr64(65536)
+	endDate := time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC)
+	cfg := defaultRecConfig()
+	hasCode := func(recs []Rec) bool {
+		for _, r := range recs {
+			for _, c := range r.NotificationCodes {
+				if c == types.NotifNodeUsageOverCapacity {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
+	cases := []struct {
+		name  string
+		days  []DigestRow
+		fire  bool
+		terms []types.TermConfig
+	}{
+		{
+			name: "cpu p95 at 147% of allocatable fires (#890's evidence class)",
+			days: []DigestRow{
+				makeDigestRow("n1", 1, 8000, 23520, 20000, 30000, 8000, 30000, allocCPU, allocMem),
+				makeDigestRow("n2", 2, 8000, 23520, 20000, 30000, 8000, 30000, allocCPU, allocMem),
+				makeDigestRow("n3", 3, 8000, 23520, 20000, 30000, 8000, 30000, allocCPU, allocMem),
+			},
+			fire: true,
+		},
+		{
+			name: "memory p95 above allocatable fires (symmetric)",
+			days: []DigestRow{
+				makeDigestRow("n1", 1, 8000, 10000, 40000, 98304, 8000, 30000, allocCPU, allocMem),
+				makeDigestRow("n2", 2, 8000, 10000, 40000, 98304, 8000, 30000, allocCPU, allocMem),
+				makeDigestRow("n3", 3, 8000, 10000, 40000, 98304, 8000, 30000, allocCPU, allocMem),
+			},
+			fire: true,
+		},
+		{
+			name: "cpu p95 at 100.5% is within the 1% tolerance — no code",
+			days: []DigestRow{
+				makeDigestRow("n1", 1, 15000, 16080, 30000, 40000, 8000, 30000, allocCPU, allocMem),
+				makeDigestRow("n2", 2, 15000, 16080, 30000, 40000, 8000, 30000, allocCPU, allocMem),
+				makeDigestRow("n3", 3, 15000, 16080, 30000, 40000, 8000, 30000, allocCPU, allocMem),
+			},
+			fire: false,
+		},
+		{
+			name: "cpu p95 at 101.5% is beyond the tolerance — fires",
+			days: []DigestRow{
+				makeDigestRow("n1", 1, 15000, 16240, 30000, 40000, 8000, 30000, allocCPU, allocMem),
+				makeDigestRow("n2", 2, 15000, 16240, 30000, 40000, 8000, 30000, allocCPU, allocMem),
+				makeDigestRow("n3", 3, 15000, 16240, 30000, 40000, 8000, 30000, allocCPU, allocMem),
+			},
+			fire: true,
+		},
+		{
+			name: "requests 2.3x allocatable do NOT fire (#890 D2: legitimate overcommit)",
+			days: []DigestRow{
+				makeDigestRow("n1", 1, 8000, 12000, 20000, 30000, 36800, 100000, allocCPU, allocMem),
+				makeDigestRow("n2", 2, 8000, 12000, 20000, 30000, 36800, 100000, allocCPU, allocMem),
+				makeDigestRow("n3", 3, 8000, 12000, 20000, 30000, 36800, 100000, allocCPU, allocMem),
+			},
+			fire: false,
+		},
+		{
+			name: "no stored allocatable — no code (the fallback is an estimate, not a capacity fact)",
+			days: []DigestRow{
+				makeDigestRow("n1", 1, 15000, 50000, 40000, 100000, 8000, 30000, nil, nil),
+				makeDigestRow("n2", 2, 15000, 50000, 40000, 100000, 8000, 30000, nil, nil),
+				makeDigestRow("n3", 3, 15000, 50000, 40000, 100000, 8000, 30000, nil, nil),
+			},
+			fire: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			class := classifyNode("n1", tc.days, cfg, defaultThresholdSettings, 0, endDate)
+			codes := class.NotificationCodes
+			found := false
+			for _, c := range codes {
+				if c == types.NotifNodeUsageOverCapacity {
+					found = true
+				}
+			}
+			assert.Equal(t, tc.fire, found,
+				"#890: usage plausibility code 88 mismatch (codes: %v)", codes)
+		})
+	}
+
+	// The self-clearing leg: the code is part of the per-run recomputation —
+	// a node whose window no longer contains over-capacity days simply does
+	// not get the code (nothing carries it forward; pgrec replaces codes
+	// with EXCLUDED.notification_codes on every upsert).
+	saneClass := classifyNode("n1", []DigestRow{
+		makeDigestRow("n1", 1, 8000, 12000, 20000, 30000, 8000, 30000, allocCPU, allocMem),
+		makeDigestRow("n1", 2, 8000, 12000, 20000, 30000, 8000, 30000, allocCPU, allocMem),
+		makeDigestRow("n1", 3, 8000, 12000, 20000, 30000, 8000, 30000, allocCPU, allocMem),
+	}, cfg, defaultThresholdSettings, 0, endDate)
+	for _, c := range saneClass.NotificationCodes {
+		assert.NotEqual(t, types.NotifNodeUsageOverCapacity, c,
+			"the self-clearing leg: a sane window produces no code 88")
+	}
+	_ = hasCode // shape reserved for the rec-level harness if needed
+}
