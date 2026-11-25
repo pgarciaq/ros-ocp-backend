@@ -174,7 +174,7 @@ jobs:
         run: |
           set -euo pipefail
           expected="$(python3 scripts/docs_pdf_nav.py list --slugs | sort)"
-          actual="$(ls -1 dist/pdf/*.pdf | xargs -n1 basename | sed 's/\.pdf$//' | sort)"
+          actual="$(find dist/pdf -maxdepth 1 -name '*.pdf' -printf '%f\n' | sed 's/\.pdf$//' | sort)"
           if [[ "$expected" != "$actual" ]]; then
             echo "docs-pdf: the built books differ from the mkdocs.yml sections" >&2
             diff <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") >&2 || true
@@ -192,11 +192,12 @@ jobs:
             echo
             echo "| Book | Size |"
             echo "|------|------|"
-            for f in dist/pdf/*.pdf; do
-              slug="$(basename "${f%.pdf}")"
-              printf '| [%s](https://github.com/%s/releases/download/docs-pdf/%s.pdf) | %s |\n' \
-                "$slug" "$GITHUB_REPOSITORY" "$slug" "$(du -h "$f" | cut -f1)"
-            done
+            find dist/pdf -maxdepth 1 -name '*.pdf' -print0 | sort -z |
+              while IFS= read -r -d '' f; do
+                slug="$(basename "${f%.pdf}")"
+                printf '| [%s](https://github.com/%s/releases/download/docs-pdf/%s.pdf) | %s |\n' \
+                  "$slug" "$GITHUB_REPOSITORY" "$slug" "$(du -h "$f" | cut -f1)"
+              done
             echo
             echo "HTML documentation: https://pgarciaq.github.io/ros-ocp-backend/"
           } > "$notes"

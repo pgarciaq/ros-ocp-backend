@@ -1084,6 +1084,9 @@ File bugs and feature requests at:
 - PRs are merged via **rebase** (linear history)
 - Run `go vet ./...` and `go test -race -short ./...` before submitting
 - CI must pass before merge
+- Workflows are linted by `actionlint`, which also runs `shellcheck` when it is
+  on `PATH` (the runner ships it). Without a local `shellcheck`, CI can report
+  findings a clean local `actionlint` run missed — install it to match.
 
 ### Commit Messages
 
