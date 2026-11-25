@@ -265,6 +265,10 @@ docs-pdf-install: docs-install ## Install pinned PDF book dependencies (WeasyPri
 	 command -v chromium >/dev/null 2>&1 || \
 		echo "NOTE: install Chrome/Chromium for mmdc (or set DOCS_PDF_CHROME)"
 
+.PHONY: docs-pdf-nav-check
+docs-pdf-nav-check: ## Verify every mkdocs.yml nav page exists and every section has a PDF slug (#383)
+	python3 scripts/docs_pdf_nav.py verify
+
 .PHONY: docs-generate
 docs-generate: ## Assemble docs-site/contributing.md and changelog.md from their repo-root sources (optional gomarkdoc via DOC_GENERATE_GOMARKDOC=1)
 	./scripts/generate-docs.sh

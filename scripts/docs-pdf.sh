@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# docs-pdf.sh — Generate local per-section PDF books from the MkDocs site.
+# docs-pdf.sh — Generate per-section PDF books from the MkDocs site.
+# Published as assets of the rolling `docs-pdf` release by
+# .github/workflows/docs-pdf.yml; never committed.
 #
 # Mermaid fences are pre-rendered with mmdc (PNG — WeasyPrint-safe), then
 # mkdocs-to-pdf (WeasyPrint) builds the PDF so mkdocs-macros still expand.
@@ -12,16 +14,18 @@
 # Output (gitignored): dist/pdf/<section>.pdf
 #
 # Prerequisites: see CONTRIBUTING.md ("Generate PDF books").
-# Print CSS: scripts/docs-pdf/styles.scss (#381).
+# Print CSS: scripts/docs-pdf/styles.scss (#381, #383).
 # Sections: #380 Features pilot, #381 print CSS, #382 remaining nav books.
+#
+# Book navs are DERIVED from mkdocs.yml by scripts/docs_pdf_nav.py (#383):
+# a book is a top-level nav section, its nav is flat (mkdocs-to-pdf iterates
+# only top-level items), and the slugs are a pinned contract because they name
+# the release assets. `make docs-pdf-nav-check` fails when a nav page is
+# missing or a new section has no slug.
 #
 # Locked defaults (#382):
 #   - Skip standalone Home (index.md); not a section book
-#   - Hardcoded nav mirrors of mkdocs.yml (explicit drift control)
 #   - Full OpenAPI + Plugin Reference (long books OK)
-#   - Slugs: getting-started, features, planned-features, architecture,
-#     testing, plugin-reference, api, operations, security, ui-integration,
-#     historical
 
 set -euo pipefail
 
@@ -31,19 +35,22 @@ PDF_SUPPORT_DIR="$SCRIPT_DIR/docs-pdf"
 WORK_ROOT="$ROOT_DIR/.docs-pdf-work"
 DIST_DIR="$ROOT_DIR/dist/pdf"
 
-ALL_SECTIONS=(
-  getting-started
-  features
-  planned-features
-  architecture
-  testing
-  plugin-reference
-  api
-  operations
-  security
-  ui-integration
-  historical
-)
+NAV_PY="$SCRIPT_DIR/docs_pdf_nav.py"
+SLUG_TABLE=""
+ALL_SECTIONS=()
+
+# Populated once die() exists (below), so a missing PyYAML or an invalid
+# mkdocs.yml reports as a usage error instead of a Python traceback.
+load_sections() {
+  local out
+  if ! out="$(python3 "$NAV_PY" list 2>&1)"; then
+    die "scripts/docs_pdf_nav.py failed — it needs PyYAML (make docs-pdf-install) and a valid mkdocs.yml:
+$out"
+  fi
+  SLUG_TABLE="$out"
+  ALL_SECTIONS=()
+  while IFS= read -r _slug; do ALL_SECTIONS+=("$_slug"); done < <(printf '%s\n' "$out" | awk 'NF {print $1}')
+}
 
 # Prefer google-chrome; allow override for Chromium installs.
 : "${DOCS_PDF_CHROME:=}"
@@ -57,21 +64,11 @@ if [[ -z "$DOCS_PDF_CHROME" ]]; then
 fi
 
 usage() {
-  cat <<'EOF'
+  cat <<EOF
 Usage: ./scripts/docs-pdf.sh <section|all>
 
-Sections (→ dist/pdf/<slug>.pdf):
-  getting-started    Getting Started
-  features           Features
-  planned-features   Features (planned)
-  architecture       Architecture
-  testing            Testing
-  plugin-reference   Plugin Reference
-  api                API Specification
-  operations         Operations
-  security           Security & Compliance
-  ui-integration     UI Integration
-  historical         Historical
+Sections (→ dist/pdf/<slug>.pdf; derived from mkdocs.yml):
+$(printf '%s\n' "$SLUG_TABLE" | sed 's/^/  /')
   all                Build every section above (generate-docs once)
 
 Home (index.md) is not a separate PDF book.
@@ -221,30 +218,6 @@ ${nav_yaml}
 EOF
 }
 
-copy_assets() {
-  local docs="$1"
-  mkdir -p "$docs/assets"
-  if [[ -d "$ROOT_DIR/docs-site/assets" ]]; then
-    cp -a "$ROOT_DIR/docs-site/assets/." "$docs/assets/" 2>/dev/null || true
-  fi
-}
-
-# Copy a relative path from docs-site into the work docs tree (file or directory).
-copy_site_path() {
-  local rel="$1"
-  local src="$ROOT_DIR/docs-site/$rel"
-  local dst="$WORK_DIR/docs/$rel"
-  if [[ -d "$src" ]]; then
-    mkdir -p "$dst"
-    cp -a "$src/." "$dst/"
-  elif [[ -f "$src" ]]; then
-    mkdir -p "$(dirname "$dst")"
-    cp "$src" "$dst"
-  else
-    die "missing docs-site path: $rel (run generate-docs.sh)"
-  fi
-}
-
 init_work_dir() {
   local section="$1"
   WORK_DIR="$WORK_ROOT/$section"
@@ -254,256 +227,46 @@ init_work_dir() {
   write_puppeteer_config "$WORK_DIR/puppeteer.json"
 }
 
-prepare_getting_started() {
-  local docs="$WORK_DIR/docs"
-  local f
-  for f in whats-new.md changelog.md quickstart.md contributing.md development.md testing.md; do
-    copy_site_path "$f"
-  done
-  copy_assets "$docs"
-  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Getting Started" "ROS-OCP Getting Started" "getting-started" "$(
-    cat <<'NAV'
-  - What's New: whats-new.md
-  - Changelog: changelog.md
-  - Quick Start Tutorial: quickstart.md
-  - Contributing: contributing.md
-  - Local Development: development.md
-  - Testing & Quality: testing.md
-NAV
-  )"
-}
-
-prepare_features() {
-  copy_site_path "features"
-  copy_assets "$WORK_DIR/docs"
-  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Features" "ROS-OCP Features" "features" "$(
-    cat <<'NAV'
-  - Overview: features/index.md
-  - Container Right-Sizing: features/container-recommendations.md
-  - Namespace Quota Optimization: features/namespace-recommendations.md
-  - Node Consolidation: features/node-recommendations.md
-  - GPU MIG Profiling: features/gpu-mig.md
-  - GPU Workload Classification: features/gpu-classification.md
-  - GPU Time-Slicing: features/gpu-time-slicing.md
-  - PVC Right-Sizing: features/pvc-rightsizing.md
-  - ResourceQuota Recommendations: features/quota-recommendations.md
-  - ClusterResourceQuota Recommendations: features/cluster-resource-quota.md
-  - Snapshot Staleness: features/snapshot-staleness.md
-  - Business Hours: features/business-hours.md
-  - Configurable Thresholds: features/configurable-thresholds.md
-  - Dual Engine (Cost vs Performance): features/dual-engine.md
-  - Savings Estimations: features/savings-estimations.md
-  - History & Quality: features/history-and-quality.md
-  - Tag Filtering: features/tag-filtering.md
-  - Idle / Zombie Detection: features/idle-detection.md
-  - Usage Percentile-Band Plots: features/percentile-band-plots.md
-  - Visual Insights: features/visual-insights.md
-  - robne CLI: features/robne-cli.md
-  - Virtual Machine Recommendations: features/virtual-machines.md
-NAV
-  )"
-}
-
-prepare_planned_features() {
-  copy_site_path "planned-features"
-  copy_assets "$WORK_DIR/docs"
-  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Features (planned)" "ROS-OCP Features (planned)" "planned-features" "$(
-    cat <<'NAV'
-  - Overview: planned-features/index.md
-  - MachineSet Recommendations: planned-features/machineset-recommendations.md
-  - Autoscaler Optimization: planned-features/autoscaler-optimization.md
-  - Seasonality & Proactive Recs: planned-features/seasonality.md
-  - Java & JVM Optimization: planned-features/java-jvm.md
-  - HPA Recommendations: planned-features/hpa-recommendations.md
-  - VPA Recommendations: planned-features/vpa-recommendations.md
-  - Network Optimization: planned-features/network.md
-  - Cross-Cluster VM Placement: planned-features/cross-cluster-vm-placement.md
-  - Replica Count Optimization: planned-features/replica-count-optimization.md
-  - Local Mode:
-      - planned-features/local-mode.md
-NAV
-  )"
-}
-
-prepare_architecture() {
-  copy_site_path "architecture"
-  copy_assets "$WORK_DIR/docs"
-  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Architecture" "ROS-OCP Architecture" "architecture" "$(
-    cat <<'NAV'
-  - Why the Native Engine: architecture/motivation.md
-  - Architecture Decision Records: architecture/adrs.md
-  - Plugin Architecture: architecture/plugin-architecture.md
-  - Plugin Execution Phases: architecture/plugin-phases.md
-  - Recommendation Engines: architecture/recommendation-engines.md
-  - Understanding Your Recommendations: architecture/understanding-recommendations.md
-  - Decay Weights: architecture/decay-weights.md
-  - Configurability Reference: architecture/configurability.md
-  - Recommendation Math: architecture/recommendation-math.md
-  - Deterministic Recommendation IDs: architecture/recommendation-ids.md
-  - Database Conventions: architecture/database-conventions.md
-  - GPU Classification: architecture/gpu-classification.md
-  - GPU Catalogs: architecture/gpu-catalogs.md
-  - Kafka Schema: architecture/kafka-schema.md
-  - Cost Integration: architecture/cost-integration.md
-  - API Versioning: architecture/api-versioning.md
-  - Notification Codes: architecture/notification-codes.md
-  - Native Migration: architecture/native-migration.md
-  - HPA/VPA Deployment Modes: architecture/hpa-vpa-deployment-modes.md
-NAV
-  )"
-}
-
-prepare_testing() {
-  copy_site_path "testing"
-  copy_assets "$WORK_DIR/docs"
-  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Testing" "ROS-OCP Testing" "testing" "$(
-    cat <<'NAV'
-  - Validating the Native Engine: testing/validating-native-engine.md
-  - Test Data Recipes: testing/test-data-recipes.md
-  - IQE Requirement Registration: testing/iqe-requirements-registration.md
-NAV
-  )"
-}
-
-prepare_plugin_reference() {
-  copy_site_path "plugin-reference"
-  copy_assets "$WORK_DIR/docs"
-  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Plugin Reference" "ROS-OCP Plugin Reference" "plugin-reference" "$(
-    cat <<'NAV'
-  - Overview: plugin-reference/index.md
-  - plugin (interfaces): plugin-reference/plugin.md
-  - container: plugin-reference/container.md
-  - business-hours: plugin-reference/business-hours.md
-  - idle-detection: plugin-reference/idle-detection.md
-  - gpu: plugin-reference/gpu.md
-  - node: plugin-reference/node.md
-  - pvc: plugin-reference/pvc.md
-  - quota: plugin-reference/quota.md
-  - cluster-quota: plugin-reference/cluster-quota.md
-  - namespace: plugin-reference/namespace.md
-  - snapshot: plugin-reference/snapshot.md
-  - vm: plugin-reference/vm.md
-  - kruize: plugin-reference/kruize.md
-  - example (template): plugin-reference/example.md
-  - Query Parameters: plugin-reference/query-parameters.md
-NAV
-  )"
-}
-
-prepare_api() {
-  copy_site_path "openapi.md"
-  copy_site_path "api-reference"
-  copy_assets "$WORK_DIR/docs"
-  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP API Specification" "ROS-OCP API Specification" "api" "$(
-    cat <<'NAV'
-  - OpenAPI: openapi.md
-  - Notification Codes API: api-reference/notification-codes.md
-  - Quota Trend: api-reference/quota-trend.md
-  - OOM Timeline: api-reference/oom-timeline.md
-NAV
-  )"
-}
-
-prepare_operations() {
-  copy_site_path "operations"
-  local root_page
-  for root_page in monitoring.md configuration.md pagination.md query-performance.md known-issues.md; do
-    copy_site_path "$root_page"
-  done
-  copy_assets "$WORK_DIR/docs"
-  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Operations" "ROS-OCP Operations" "operations" "$(
-    cat <<'NAV'
-  - Monitoring: monitoring.md
-  - Performance and Scalability: operations/performance-and-scalability.md
-  - Scale Benchmark Runbook: operations/scale-benchmark-runbook.md
-  - Performance Engineering Guide: operations/performance-engineering-guide.md
-  - Scale Test Plan (Perf/Scale): operations/scale-test-plan-perfscale.md
-  - Deployment Configuration: configuration.md
-  - Configuration Reference (Operations): operations/configuration.md
-  - API Pagination: pagination.md
-  - Query Performance: query-performance.md
-  - Upgrade Runbook: operations/upgrade-runbook.md
-  - Known Issues: known-issues.md
-  - Dual-Write Mode: operations/dual-write-mode.md
-NAV
-  )"
-}
-
-prepare_security() {
-  copy_site_path "security"
-  copy_assets "$WORK_DIR/docs"
-  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Security & Compliance" "ROS-OCP Security & Compliance" "security" "$(
-    cat <<'NAV'
-  - Overview: security/index.md
-  - Compliance Architecture: security/compliance-architecture.md
-  - Hardening Guide: security/hardening-guide.md
-NAV
-  )"
-}
-
-prepare_ui_integration() {
-  copy_site_path "ui-integration-guide.md"
-  copy_assets "$WORK_DIR/docs"
-  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP UI Integration" "ROS-OCP UI Integration" "ui-integration" "$(
-    cat <<'NAV'
-  - Frontend Integration Guide: ui-integration-guide.md
-NAV
-  )"
-}
-
-prepare_historical() {
-  copy_site_path "historical"
-  copy_site_path "operations/adversarial-reviews.md"
-  copy_site_path "operations/performance-reviews.md"
-  copy_site_path "architecture/koku-tdigest-idea.md"
-  copy_site_path "architecture/performance-analysis.md"
-  copy_site_path "architecture/requirements.md"
-  copy_site_path "architecture/test-plan.md"
-  copy_site_path "operations/benchmark-report.md"
-  copy_site_path "operations/scale-benchmark-report.md"
-  copy_assets "$WORK_DIR/docs"
-  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Historical" "ROS-OCP Historical" "historical" "$(
-    cat <<'NAV'
-  - Overview: historical/index.md
-  - Adversarial Reviews: operations/adversarial-reviews.md
-  - Performance Reviews: operations/performance-reviews.md
-  - T-Digest Feasibility Analysis: architecture/koku-tdigest-idea.md
-  - Performance Analysis: architecture/performance-analysis.md
-  - Requirements Document: architecture/requirements.md
-  - TDD Test Plan: architecture/test-plan.md
-  - UXSNO Benchmark Report: operations/benchmark-report.md
-  - Scale Benchmark Report: operations/scale-benchmark-report.md
-NAV
-  )"
-}
-
 prepare_section() {
-  case "$1" in
-    getting-started) prepare_getting_started ;;
-    features) prepare_features ;;
-    planned-features) prepare_planned_features ;;
-    architecture) prepare_architecture ;;
-    testing) prepare_testing ;;
-    plugin-reference) prepare_plugin_reference ;;
-    api) prepare_api ;;
-    operations) prepare_operations ;;
-    security) prepare_security ;;
-    ui-integration) prepare_ui_integration ;;
-    historical) prepare_historical ;;
-    *) die "internal: unknown section $1" ;;
-  esac
+  local section="$1" title rel
+
+  is_known_section "$section" || die "unsupported section '$section'. See --help."
+  title="$(python3 "$NAV_PY" title --section "$section")"
+
+  # The book's pages only, at their docs-site-relative paths, plus every
+  # non-page file (images, chart PNGs, data) so those paths resolve. A full
+  # docs-site copy is wrong here: mkdocs-to-pdf runs on_post_page for EVERY page
+  # it is given and filters to the nav afterwards, so a full copy made the
+  # one-chapter ui-integration book convert 121 articles (223 s vs 17 s).
+  # Links to pages outside the book stay dead inside the PDF (#379).
+  while IFS= read -r rel; do
+    [[ -f "$ROOT_DIR/docs-site/$rel" ]] || die "missing page: docs-site/$rel"
+    mkdir -p "$WORK_DIR/docs/$(dirname "$rel")"
+    cp "$ROOT_DIR/docs-site/$rel" "$WORK_DIR/docs/$rel"
+  done < <(python3 "$NAV_PY" pages --section "$section")
+
+  (cd "$ROOT_DIR/docs-site" && find . -type f ! -name '*.md' -print0) |
+    while IFS= read -r -d '' rel; do
+      mkdir -p "$WORK_DIR/docs/$(dirname "$rel")"
+      cp "$ROOT_DIR/docs-site/$rel" "$WORK_DIR/docs/$rel"
+    done
+
+  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP $title" "ROS-OCP $title" "$section" \
+    "$(python3 "$NAV_PY" nav --section "$section")"
 }
 
 render_all_mermaid() {
-  local require_any="${1:-0}"
-  local count=0
-  local f
-  while IFS= read -r -d '' f; do
-    if has_mermaid "$f"; then
+  local section="$1" require_any="${2:-0}" count=0 rel f
+  # Only the book's own pages: the work tree holds every section's Markdown,
+  # and rendering all of the site's diagrams for each of eleven books would
+  # multiply the cost for output the book never contains.
+  while IFS= read -r rel; do
+    f="$WORK_DIR/docs/$rel"
+    if [[ -f "$f" ]] && has_mermaid "$f"; then
       render_mermaid_file "$f"
       count=$((count + 1))
     fi
-  done < <(find "$WORK_DIR/docs" -type f -name '*.md' -print0 | sort -z)
+  done < <(python3 "$NAV_PY" pages --section "$section")
   echo "Pre-rendered Mermaid in $count Markdown file(s)."
   if [[ "$require_any" == "1" && "$count" -eq 0 ]]; then
     die "expected at least one Mermaid diagram in this section"
@@ -608,13 +371,6 @@ sys.exit(0 if found else 1)
   echo "  truncation guard OK: $section — last heading '$last_heading' present (pages $half-$pages)"
 }
 
-maybe_generate_docs() {
-  if [[ "${SKIP_GENERATE:-0}" != "1" ]]; then
-    echo "Running generate-docs.sh (set SKIP_GENERATE=1 to skip)..."
-    "$ROOT_DIR/scripts/generate-docs.sh"
-  fi
-}
-
 # check_pdf_size SECTION PDF — the #383 size/font guard.
 #
 # The 466 MB book set came from one cause: mkdocs-to-pdf naming 'Noto Sans CJK
@@ -660,9 +416,9 @@ build_section() {
 
   echo "Pre-rendering Mermaid diagrams..."
   if [[ "$section" == "features" ]]; then
-    render_all_mermaid 1
+    render_all_mermaid "$section" 1
   else
-    render_all_mermaid 0
+    render_all_mermaid "$section" 0
   fi
 
   build_pdf "$section"
@@ -708,6 +464,7 @@ is_known_section() {
 
 main() {
   local section="${1:-}"
+  load_sections
   case "$section" in
     -h | --help | "")
       usage

@@ -1,9 +1,11 @@
 name: Docs lint
 
-# Two gates:
+# Three gates:
 #   check-docs-lint.sh       docs-site relative links + Class A stamps (#419)
 #   check-internal-links.sh  docs/** and root guides: relative links and
 #                            GitHub heading anchors (#778)
+#   docs_pdf_nav.py verify   every mkdocs.yml nav page exists and every
+#                            top-level section has a PDF book slug (#383)
 on:
   pull_request:
     paths:
@@ -16,6 +18,8 @@ on:
       - 'scripts/check-internal-links.sh'
       - 'scripts/generate-docs.sh'
       - 'scripts/check-generated-docs.sh'
+      - 'scripts/docs_pdf_nav.py'
+      - 'mkdocs.yml'
       - '.github/workflows/docs-lint.yml'
       - 'Makefile'
   push:
@@ -30,6 +34,8 @@ on:
       - 'scripts/check-internal-links.sh'
       - 'scripts/generate-docs.sh'
       - 'scripts/check-generated-docs.sh'
+      - 'scripts/docs_pdf_nav.py'
+      - 'mkdocs.yml'
       - '.github/workflows/docs-lint.yml'
       - 'Makefile'
   workflow_dispatch:
@@ -48,3 +54,15 @@ jobs:
 
       - name: Internal docs links (strict)
         run: ./scripts/check-internal-links.sh
+
+      - uses: actions/setup-python@v5.4.0
+        with:
+          python-version: '3.12'
+
+      - name: Install PyYAML for the PDF nav gate
+        run: python3 -m pip install --quiet pyyaml==6.0.3
+
+      # mkdocs only WARNS about a nav entry that no longer resolves, so a moved
+      # page silently drops out of its PDF book (#383). This gate is strict.
+      - name: PDF nav coverage (strict)
+        run: python3 scripts/docs_pdf_nav.py verify
