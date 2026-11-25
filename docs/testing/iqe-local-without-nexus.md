@@ -463,3 +463,23 @@ The tests self-skip with a pointer here when the twin or stub is unreachable.
 `deploy.sh` whenever the main ros-api image changes to refresh the twin (the
 tests cannot detect a stale twin: the ros-api exposes no build/commit on any
 served surface).
+
+## HCP advisory tests — the sleep-advisory fixture (validated 2026-11-25, #925)
+
+The #791 visibility leg and the #845 shifted-schedule pin run against the lab's
+sleep-advisory fixture: two HC pairs (aligned + timezone-shifted) refreshed via
+nise payloads and a correlator trigger. The fixture recipe, the cluster UUIDs,
+the shifted schedule seed, and the 24-hour expiry chore live in the lab
+ACCESS.md ("HCP advisory fixture for #925").
+
+Run:
+
+```bash
+podman exec -e ENV_FOR_DYNACONF=local -e IQE_ADDITIONAL_CONF_PATH=/iqe-local-config \
+  -e DYNACONF_IQE_VAULT_LOADER_ENABLED=false iqe-913-runner \
+  /iqe_venv/bin/iqe tests plugin ros_ocp \
+  /iqe_venv/lib64/python3.12/site-packages/iqe_ros_ocp/tests/rest/test_service_account_rbac_scoping.py
+```
+
+The advisory tests self-skip with a pointer here when the fixture is absent or
+expired. The RBAC scoping legs need the 18485 rbac-api port-forward as well.
