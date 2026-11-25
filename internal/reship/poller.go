@@ -2,6 +2,7 @@ package reship
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,6 +23,11 @@ type PollerConfig struct {
 	MaxRetries int
 	MasuURL    string
 	LockTTL    time.Duration
+	// ForwardOnlyFallback transitions an exhausted cluster to forward-only
+	// BH recommendations (clears the pending flag) instead of leaving it
+	// pending. Mirrors ServiceConfig.ForwardOnlyFallback; wired from
+	// ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK.
+	ForwardOnlyFallback bool
 }
 
 // PollerConfigFromApp reads poller settings from application config.
@@ -35,6 +41,11 @@ func PollerConfigFromApp(cfg *config.Config) PollerConfig {
 		MaxRetries: cfg.ReshipMaxRetries,
 		MasuURL:    cfg.KokuMasuURL,
 		LockTTL:    time.Hour,
+		// #936 wiring fix: the poller is the only path with a retry loop, so
+		// the forward-only fallback env var must apply here — previously it
+		// was only read by the API's one-shot path, where exhaustion never
+		// happens, making the documented option dead.
+		ForwardOnlyFallback: cfg.ReshipForwardOnlyFallback,
 	}
 }
 
@@ -44,9 +55,10 @@ func NewPoller(pool *pgxpool.Pool, cfg PollerConfig) *Poller {
 		return nil
 	}
 	svc := NewService(pool, ServiceConfig{
-		MasuURL:    cfg.MasuURL,
-		LockTTL:    cfg.LockTTL,
-		MaxRetries: cfg.MaxRetries,
+		MasuURL:             cfg.MasuURL,
+		LockTTL:             cfg.LockTTL,
+		MaxRetries:          cfg.MaxRetries,
+		ForwardOnlyFallback: cfg.ForwardOnlyFallback,
 	})
 	if svc == nil {
 		return nil
@@ -87,11 +99,20 @@ func (p *Poller) tick(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
+		log := reshipLog.WithFields(map[string]interface{}{
+			"org_id":       pc.OrgID,
+			"cluster_uuid": pc.ClusterUUID.String(),
+		})
 		if err := p.service.RetryPending(ctx, pc.OrgID, pc.ClusterUUID); err != nil {
-			reshipLog.WithFields(map[string]interface{}{
-				"org_id":       pc.OrgID,
-				"cluster_uuid": pc.ClusterUUID.String(),
-			}).Warnf("RetryPending failed: %v", err)
+			if errors.Is(err, ErrRetriesExhausted) {
+				// #936: steady-state, not news. The exhaustion was
+				// ERROR-logged (once, with its metric) at the final real
+				// attempt; the pending flag stays set so an API restart
+				// re-arms the budget (owner decision D2).
+				log.Debugf("RetryPending skipped: %v", err)
+			} else {
+				log.Warnf("RetryPending failed: %v", err)
+			}
 		}
 	}
 }

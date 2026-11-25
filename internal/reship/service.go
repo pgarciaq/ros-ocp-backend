@@ -2,6 +2,7 @@ package reship
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -169,6 +170,14 @@ func (s *Service) doReship(ctx context.Context, orgID string, clusterUUID uuid.U
 	return nil
 }
 
+// ErrRetriesExhausted is returned by RetryPending once the in-memory retry
+// budget for a cluster is spent. The poller demotes it to debug (#936): the
+// exhaustion itself is already ERROR-logged once — with the incReshipFailures
+// metric — at the final real attempt, and the pending flag stays set so an
+// API restart re-arms the budget (owner decision D2: masu outages correlate
+// with restarts; the cost is one bounded exhaustion cycle).
+var ErrRetriesExhausted = errors.New("reship retries exhausted")
+
 // RetryPending attempts reship for a pending cluster (poller path).
 func (s *Service) RetryPending(ctx context.Context, orgID string, clusterUUID uuid.UUID) error {
 	if s == nil {
@@ -178,7 +187,7 @@ func (s *Service) RetryPending(ctx context.Context, orgID string, clusterUUID uu
 	s.retryMu.Lock()
 	if s.retries[key] >= s.maxRetries {
 		s.retryMu.Unlock()
-		return fmt.Errorf("reship max retries exceeded for %s/%s", orgID, clusterUUID)
+		return fmt.Errorf("reship max retries exceeded for %s/%s: %w", orgID, clusterUUID, ErrRetriesExhausted)
 	}
 	attempt := s.retries[key] + 1
 	s.retries[key] = attempt

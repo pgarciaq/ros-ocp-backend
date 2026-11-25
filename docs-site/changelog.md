@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Reship poller: bounded exhaustion instead of an eternal warning loop ([#936](https://github.com/pgarciaq/ros-ocp-backend/issues/936)):**
+  once a pending cluster's retry budget (`ROS_RESHIP_MAX_RETRIES`, default 10)
+  is spent, the poller logs one ERROR at the final attempt (with its metric)
+  and then goes quiet — previously it warned on every poll interval (60s)
+  forever, because the pending flag only cleared on masu success. The flag
+  now deliberately stays set, so a service restart re-arms the budget
+  (masu outages correlate with restarts). Additionally fixes a wiring gap:
+  `ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK` was never applied to the
+  poller — the only path with a retry loop — so the documented option was
+  dead; with it enabled, exhaustion now transitions the cluster to
+  forward-only BH recommendations (clears the flag). The stale "marked as
+  permanently failed" wording in the configuration docs is corrected to the
+  real semantics.
 - **Node usage plausibility gate: notification code 88 ([#890](https://github.com/pgarciaq/ros-ocp-backend/issues/890)):**
   a node whose summed p95 usage exceeds its allocatable capacity by more than
   a 1% tolerance now carries `NODE_USAGE_OVER_CAPACITY` (88) — physically

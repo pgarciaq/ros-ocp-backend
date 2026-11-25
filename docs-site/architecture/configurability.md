@@ -1,6 +1,6 @@
 # Configurability Reference
 
-> **Last verified:** 2026-11-15
+> **Last verified:** 2026-11-25
 
 Complete environment variable reference for ROS-OCP Backend recommendation engines,
 classification thresholds, retention, and platform settings.
@@ -858,7 +858,7 @@ Internal reship poller for business-hours historical data backfill. Admin-only.
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |
 |---------|---------|---------|--------------|------------|----------|
 | Retry interval. <br><em>Expanded: How often (in seconds) the reship poller checks for pending reship requests and retries failed ones. The reship poller manages backfill of historical usage data needed for business-hours analysis. 60 seconds means failed reship attempts are retried every minute until success or max retries.</em> | 60 | `ROS_RESHIP_POLLER_INTERVAL_SECS` | — | — | No |
-| Max failures. <br><em>Expanded: Maximum number of retry attempts for a failed reship request before it is abandoned. After this many failures, the reship request is marked as permanently failed and business-hours recommendations for that time range will use whatever data is available (possibly with reduced confidence). Prevents infinite retry loops against unreachable clusters.</em> | 10 | `ROS_RESHIP_MAX_RETRIES` | — | — | No |
+| Max failures. <br><em>Expanded: Maximum number of retry attempts for a failed reship request before it is abandoned. At exhaustion the poller logs one error (with a metric) and goes quiet — it does not warn on every subsequent poll. The pending flag stays set, so restarting the service re-arms the retry budget (useful when the masu outage and the restart are related); set <code>ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK=true</code> to instead transition the cluster to forward-only business-hours recommendations at exhaustion, which clears the flag.</em> | 10 | `ROS_RESHIP_MAX_RETRIES` | — | — | No |
 
 Prometheus: duplicate reship triggers coalesced while in-flight — `rosocp_reship_coalesced_total` (unlabeled in code; the `{org_id}` suffix previously documented here was wrong). Per-cluster trigger failures — `rosocp_reship_errors_total`. Malformed JSON coerced to empty on keep-going ingest paths — `rosocp_malformed_json_total{site}` (`snapshot_labels`, `vm_gpu_notifications`, `vm_placement_notifications`).
 

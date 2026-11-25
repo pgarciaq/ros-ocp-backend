@@ -132,6 +132,28 @@ func MaxScheduleUpdatedAt(ctx context.Context, pool *pgxpool.Pool, orgID string,
 	return ts.UTC(), nil
 }
 
+// ReshipForwardOnlySince returns when the cluster transitioned to forward-only
+// BH recommendations after reship retries were exhausted (nil when never).
+func ReshipForwardOnlySince(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUID uuid.UUID) (*time.Time, error) {
+	var ts *time.Time
+	err := pool.QueryRow(ctx, `
+		SELECT reship_forward_only_since
+		FROM business_hours_schedules
+		WHERE org_id = $1
+		  AND cluster_uuid = $2::uuid
+		  AND reship_forward_only_since IS NOT NULL
+		LIMIT 1`,
+		orgID, clusterUUID.String(),
+	).Scan(&ts)
+	if err != nil {
+		if errorsIsNoRows(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("reship forward-only since: %w", err)
+	}
+	return ts, nil
+}
+
 // ReshipPendingSince returns whether pending is set for the cluster.
 func ReshipPendingSince(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUID uuid.UUID) (*time.Time, error) {
 	var ts *time.Time
