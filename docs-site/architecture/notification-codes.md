@@ -134,6 +134,9 @@ having no actionable savings.
 | 80 | WARNING | GPU (container detail `gpu.{term}.business_hours` or robne BH sibling) | Business-hours GPU sizing uses the namespace office window | Overnight training and off-hours bursts are excluded; do not merge into list badges |
 | 81 | WARNING | GPU (timeslicing detail `business_hours` or robne BH sibling) | Business-hours GPU time-slicing uses the cluster office window | Overnight training and off-hours bursts are excluded; do not merge into list badges |
 | 82 | WARNING | VM (detail `business_hours` or robne BH sibling) | Business-hours VM sizing uses the namespace office window | Overnight batch and off-hours bursts are excluded; thin nest (vCPU/GiB only); do not merge into the parent VM notifications array |
+| 83 | INFO | Node | Hosted cluster scope — node recommendations cover worker nodes only | Worker MachineSets are the rightsizing surface; hosted control planes size separately (HCP capacity surface) |
+| 84 | INFO | Node | Infrastructure node — apply via the infra MachineSet template | Keep N+1, drain in order; smaller instances, never fewer subscriptions |
+| 85 | INFO | Node | Control-plane node — rightsizing via CPMS rolling update only | Never below install minimums; quorum protected by mechanism |
 | 86 | WARNING | Container | Unstable container (frequent restarts) | Investigate crash loop; cost downsize withheld while churning |
 | 87 | WARNING | Node | Node pressure (kubelet conditions observed) | Investigate Memory/Disk/PID pressure; consolidation withheld while pressured |
 | 88 | WARNING | Node | Usage exceeds allocatable capacity — implausible data ([#890](https://github.com/pgarciaq/ros-ocp-backend/issues/890)) | The reported usage cannot be real; check the producer for double-counting or misattributed pods. Sizing on the node is unreliable until the data is corrected. The code clears by itself once corrected data replaces the window |
