@@ -81,6 +81,7 @@ Options:
 
 Environment:
   DOCS_PDF_CHROME   Path to Chrome/Chromium for mmdc (auto-detected if unset)
+  DOCS_PDF_MAX_MB   Per-book size cap for the #383 guard (default 15)
   SKIP_GENERATE     If 1, skip ./scripts/generate-docs.sh
 EOF
 }
@@ -584,21 +585,54 @@ PY
   # a heredoc would replace the pipe as stdin.)
   if ! pdftotext -f "$half" -l "$pages" -layout "$pdf" - 2>/dev/null | python3 -c '
 import re, sys
-want = sys.argv[1].strip()
+
+def drop_numbering(line):
+    # mkdocs-to-pdf numbers chapters two ways: "7. Title" (top-level) and
+    # "12.8.2 Title" (nested). The older pattern only knew the dotted form, so
+    # a book whose last page is a numbered chapter failed the guard even though
+    # the page rendered (getting-started + downloads.md, #383).
+    return re.sub(r"^[0-9]+(?:\.[0-9]+)*\.?\s+", "", line.strip())
+
+want = drop_numbering(sys.argv[1])
 found = False
 # Drain ALL of stdin before exiting: an early sys.exit closes the pipe and
 # pdftotext dies with SIGPIPE, which set -o pipefail turns into a spurious
 # guard failure (the planned-features Heisenbug).
 for line in sys.stdin:
-    line = line.strip()
-    line = re.sub(r"^[0-9]+(\.[0-9]+)*\s+", "", line)
-    if line == want:
+    if drop_numbering(line) == want:
         found = True
 sys.exit(0 if found else 1)
 ' "$last_heading"; then
     die "PDF truncation guard FAILED for $section: last heading '$last_heading' (of $last_path) not found as a rendered heading line in the second half of the PDF — the #801 class (silent WeasyPrint truncation; see styles.scss and Kozea/WeasyPrint#2798)"
   fi
   echo "  truncation guard OK: $section — last heading '$last_heading' present (pages $half-$pages)"
+}
+
+maybe_generate_docs() {
+  if [[ "${SKIP_GENERATE:-0}" != "1" ]]; then
+    echo "Running generate-docs.sh (set SKIP_GENERATE=1 to skip)..."
+    "$ROOT_DIR/scripts/generate-docs.sh"
+  fi
+}
+
+# check_pdf_size SECTION PDF — the #383 size/font guard.
+#
+# The 466 MB book set came from one cause: mkdocs-to-pdf naming 'Noto Sans CJK
+# JP' in its print font stack, so WeasyPrint embedded the full ~19.5 MB face
+# per weight for a single em dash. Sizes are now sub-10 MB; a book over the cap
+# or carrying a CJK face means that class is back (see styles.scss).
+check_pdf_size() {
+  local section="$1" pdf="$2" bytes limit_mb
+  limit_mb="${DOCS_PDF_MAX_MB:-15}"
+  require_cmd pdffonts
+  bytes="$(wc -c <"$pdf")"
+  if (( bytes > limit_mb * 1024 * 1024 )); then
+    die "PDF size guard FAILED for $section: $((bytes / 1024 / 1024)) MB > ${limit_mb} MB — the Noto Sans CJK embedding is back (scripts/docs-pdf/styles.scss, #383)"
+  fi
+  if pdffonts "$pdf" 2>/dev/null | grep -qi 'CJK'; then
+    die "PDF font guard FAILED for $section: a CJK face is embedded — scripts/docs-pdf/styles.scss lost its Roboto/DejaVu override (#383)"
+  fi
+  echo "  size guard OK: $section — $((bytes / 1024 / 1024)) MB, no CJK face"
 }
 
 maybe_generate_docs() {
@@ -633,6 +667,7 @@ build_section() {
 
   build_pdf "$section"
   verify_pdf_complete "$section" "$DIST_DIR/$section.pdf"
+  check_pdf_size "$section" "$DIST_DIR/$section.pdf"
 }
 
 build_all() {

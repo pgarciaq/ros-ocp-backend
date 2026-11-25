@@ -1,0 +1,15 @@
+# Pinned PDF book toolchain (#383).
+#
+# Consumed by `make docs-pdf-install` and by .github/workflows/docs-pdf.yml.
+# Pins are what the books were verified against on 2026-11-25 (mkdocs-to-pdf's
+# font stack and its WeasyPrint truncation bug are version-sensitive; see
+# scripts/docs-pdf/styles.scss and verify_pdf_complete in scripts/docs-pdf.sh).
+# Bump deliberately: rebuild and re-read both guards before moving any pin.
+mkdocs==1.6.1
+mkdocs-material==9.5.49
+mkdocs-macros-plugin==1.5.0
+mkdocs-to-pdf==0.11.2
+weasyprint==62.3
+pillow==12.3.0
+# Used by scripts/docs_pdf_nav.py (also pulled in by mkdocs, pinned for CI parity).
+pyyaml==6.0.3

@@ -256,10 +256,10 @@ docs-install: ## Install documentation dependencies (gomarkdoc, mkdocs-material,
 		mkdocs-git-revision-date-localized-plugin mkdocs-macros-plugin
 
 .PHONY: docs-pdf-install
-docs-pdf-install: docs-install ## Install PDF book dependencies (WeasyPrint + mkdocs-to-pdf)
-	pip install --quiet mkdocs-to-pdf
+docs-pdf-install: docs-install ## Install pinned PDF book dependencies (WeasyPrint + mkdocs-to-pdf)
+	pip install --quiet -r scripts/docs-pdf/requirements.txt
 	@command -v mmdc >/dev/null 2>&1 || \
-		echo "NOTE: install Mermaid CLI: npm install -g @mermaid-js/mermaid-cli"
+		echo "NOTE: install Mermaid CLI: npm install -g @mermaid-js/mermaid-cli@11.12.0"
 	@command -v google-chrome-stable >/dev/null 2>&1 || \
 	 command -v google-chrome >/dev/null 2>&1 || \
 	 command -v chromium >/dev/null 2>&1 || \

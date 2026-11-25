@@ -95,3 +95,37 @@ article,
 section + section {
   min-height: auto !important;
 }
+
+/* --- #383: keep the print stack off Noto Sans CJK JP ---
+ * mkdocs-to-pdf's _fonts.scss names 'Noto Sans CJK JP' after Roboto. A single
+ * em dash / arrow / >= missing from the bundled Roboto makes WeasyPrint embed
+ * the full ~19.5 MB CJK face PER WEIGHT (39 MB of a 39.5 MB book). DejaVu Sans
+ * covers those glyphs and is subset to a few KB. docs-site carries no CJK text.
+ * NOTE: the guard in docs-pdf.sh treats an embedded CJK face as the bug above.
+ * A future page that genuinely quotes CJK text needs a CJK font added to the
+ * stack (and the guard relaxed); without one it renders as tofu and the guard
+ * stays quiet, because no CJK face gets embedded.
+ * Keep this override until the pinned plugin stops naming a CJK face.
+ */
+@media print {
+  html,
+  body,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  label {
+    font-family: "Roboto", "DejaVu Sans", sans-serif !important;
+  }
+
+  pre,
+  code,
+  var,
+  samp,
+  kbd,
+  tt {
+    font-family: "Roboto Mono", "DejaVu Sans Mono", monospace !important;
+  }
+}
