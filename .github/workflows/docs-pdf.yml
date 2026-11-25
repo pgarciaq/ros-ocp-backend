@@ -1,0 +1,211 @@
+name: Docs PDF books
+
+# Rolling publication for #383. Deliberately separate from docs.yml: a PDF
+# failure must never block the HTML Pages deploy. Books are release assets —
+# never committed, never in a gh-pages branch, downloadable without a login.
+#
+# One book per mkdocs.yml top-level section, derived by scripts/docs_pdf_nav.py
+# (the same list `make docs-pdf-nav-check` gates). Assets land on the rolling
+# `docs-pdf` release, whose tag moves to the commit the books were built from.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'pgarciaq-rosocp-superpowers-*']
+    paths:
+      - 'docs-site/**'
+      - 'mkdocs.yml'
+      - 'macros.py'
+      - 'CONTRIBUTING.md'
+      - 'CHANGELOG.md'
+      - 'scripts/docs-pdf.sh'
+      - 'scripts/docs-pdf/**'
+      - 'scripts/docs_pdf_nav.py'
+      - 'scripts/generate-docs.sh'
+      - '.github/workflows/docs-pdf.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-pdf
+  # Never cancel mid-publish: the publish job deletes and recreates the release.
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      sections: ${{ steps.sections.outputs.json }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      # setup-python rather than the image's interpreter: pip's ability to
+      # install into the system Python is image policy (PEP 668), not a
+      # contract, and ubuntu-latest changes images.
+      - uses: actions/setup-python@v5.4.0
+        with:
+          python-version: '3.12'
+
+      - name: Install PyYAML for the nav generator
+        run: python3 -m pip install --quiet pyyaml==6.0.3
+
+      # Without this, a moved nav page or a slugless section publishes a book
+      # set that is silently incomplete while docs-lint is red on the same
+      # commit: both sides of this workflow read the same slug list, so they
+      # shrink together.
+      - name: PDF nav coverage (strict)
+        run: python3 scripts/docs_pdf_nav.py verify
+
+      - name: Derive the section matrix from mkdocs.yml
+        id: sections
+        run: |
+          set -euo pipefail
+          json="$(python3 scripts/docs_pdf_nav.py list --json |
+            python3 -c 'import json,sys; print(json.dumps([b["slug"] for b in json.load(sys.stdin)]))')"
+          echo "sections: ${json}"
+          echo "json=${json}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    strategy:
+      # One bad book must not hide the state of the other ten.
+      fail-fast: false
+      matrix:
+        section: ${{ fromJson(needs.plan.outputs.sections) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - uses: actions/setup-python@v5.4.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/docs-pdf/requirements.txt
+
+      # WeasyPrint 62 links against pango/harfbuzz (libharfbuzz-subset0 is the
+      # font-subsetting library the #383 guard depends on); poppler-utils is the
+      # truncation + size guards (pdfinfo, pdftotext, pdffonts); DejaVu Sans is
+      # the fallback in scripts/docs-pdf/styles.scss. Chrome's own runtime libs
+      # come with the runner image's Google Chrome, which the script detects.
+      - name: Install WeasyPrint runtime, poppler and DejaVu fonts
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libharfbuzz-subset0 \
+            poppler-utils fonts-dejavu-core
+
+      - name: Install the pinned PDF toolchain
+        run: pip install -r scripts/docs-pdf/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Mermaid CLI
+        env:
+          # The runner image ships Chrome; the build script points mmdc at it,
+          # so skip puppeteer's ~150 MB browser download.
+          PUPPETEER_SKIP_DOWNLOAD: '1'
+        run: npm install -g @mermaid-js/mermaid-cli@11.12.0
+
+      - name: Check Mermaid can find a browser
+        run: |
+          set -euo pipefail
+          if command -v google-chrome-stable >/dev/null || command -v google-chrome >/dev/null; then
+            echo "Chrome present: $( (google-chrome-stable --version || google-chrome --version) 2>/dev/null )"
+          else
+            echo "no system Chrome: mmdc must use puppeteer's own browser" >&2
+          fi
+
+      - name: Refresh generated docs-site pages
+        run: ./scripts/generate-docs.sh
+
+      - name: Build the ${{ matrix.section }} book
+        run: SKIP_GENERATE=1 ./scripts/docs-pdf.sh "${{ matrix.section }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-${{ matrix.section }}
+          path: dist/pdf/${{ matrix.section }}.pdf
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      # setup-python rather than the image's interpreter: pip's ability to
+      # install into the system Python is image policy (PEP 668), not a
+      # contract, and ubuntu-latest changes images.
+      - uses: actions/setup-python@v5.4.0
+        with:
+          python-version: '3.12'
+
+      - name: Install PyYAML for the nav generator
+        run: python3 -m pip install --quiet pyyaml==6.0.3
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pdf-*
+          path: dist/pdf
+          merge-multiple: true
+
+      - name: Every section must have produced exactly its book
+        run: |
+          set -euo pipefail
+          expected="$(python3 scripts/docs_pdf_nav.py list --slugs | sort)"
+          actual="$(ls -1 dist/pdf/*.pdf | xargs -n1 basename | sed 's/\.pdf$//' | sort)"
+          if [[ "$expected" != "$actual" ]]; then
+            echo "docs-pdf: the built books differ from the mkdocs.yml sections" >&2
+            diff <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") >&2 || true
+            exit 1
+          fi
+
+      - name: Publish the rolling docs-pdf release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          notes="$(mktemp)"
+          {
+            echo "Per-section PDF books generated from \`${GITHUB_SHA}\` on \`${GITHUB_REF_NAME}\` at \`$(date -u +%Y-%m-%dT%H:%MZ)\`."
+            echo
+            echo "| Book | Size |"
+            echo "|------|------|"
+            for f in dist/pdf/*.pdf; do
+              slug="$(basename "${f%.pdf}")"
+              printf '| [%s](https://github.com/%s/releases/download/docs-pdf/%s.pdf) | %s |\n' \
+                "$slug" "$GITHUB_REPOSITORY" "$slug" "$(du -h "$f" | cut -f1)"
+            done
+            echo
+            echo "HTML documentation: https://pgarciaq.github.io/ros-ocp-backend/"
+          } > "$notes"
+
+          # Update in place, never delete first: recreating the release would
+          # 404 every link on the Downloads page for the minutes the uploads
+          # take, and permanently if any step failed. Overwriting asset by asset
+          # keeps the whole set reachable throughout.
+          if gh release view docs-pdf >/dev/null 2>&1; then
+            gh release upload docs-pdf dist/pdf/*.pdf --clobber
+            gh release edit docs-pdf --title "Documentation PDF books" --notes-file "$notes"
+          else
+            gh release create docs-pdf \
+              --target "$GITHUB_SHA" \
+              --title "Documentation PDF books" \
+              --notes-file "$notes" \
+              --latest=false
+            gh release upload docs-pdf dist/pdf/*.pdf --clobber
+          fi
+
+          # The tag names the commit the books were built from. Asset URLs are
+          # keyed by the tag NAME, so moving the ref keeps every URL stable.
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/docs-pdf" \
+            -f sha="$GITHUB_SHA" -F force=true >/dev/null

@@ -153,15 +153,23 @@ PY
 write_puppeteer_config() {
   local out="$1"
   local chrome="${DOCS_PDF_CHROME:-}"
-  if [[ -z "$chrome" || ! -x "$chrome" ]]; then
-    die "Chrome/Chromium not found. Install google-chrome or set DOCS_PDF_CHROME=/path/to/chrome"
-  fi
-  cat >"$out" <<EOF
+  if [[ -n "$chrome" && -x "$chrome" ]]; then
+    cat >"$out" <<EOF
 {
   "executablePath": "$chrome",
   "args": ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
 }
 EOF
+  else
+    # No system Chrome: mermaid-cli's own puppeteer supplies the browser it
+    # downloaded (CI installs it with the package). Omitting executablePath is
+    # what lets that path work.
+    cat >"$out" <<'EOF'
+{
+  "args": ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
+}
+EOF
+  fi
 }
 
 write_mkdocs_config() {

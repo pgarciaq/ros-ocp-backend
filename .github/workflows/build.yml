@@ -16,6 +16,14 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # scripts/*_test.go shells out to python3: the generator tests need the
+      # stdlib, and docs_pdf_nav_test.go needs PyYAML (#383).
+      - name: Install Python
+        uses: actions/setup-python@v5.4.0
+        with:
+          python-version: '3.12'
+      - name: Install PyYAML for scripts/docs_pdf_nav.py
+        run: python3 -m pip install --quiet pyyaml==6.0.3
       - name: Lint GitHub Actions workflows (actionlint)
         run: |
           # A workflow can never catch its own syntax error at run time —
