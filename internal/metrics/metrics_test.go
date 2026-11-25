@@ -191,3 +191,45 @@ func TestObservePipelineTotalRecordsStatus(t *testing.T) {
 	assert.True(t, statuses["success"])
 	assert.True(t, statuses["error"])
 }
+
+// TestRecommendationDurationBucketsSpanObservedRange pins #896: the
+// recommendation histogram's buckets must span the range its types actually
+// occupy, so a quantile is computable for every type label. At filing the
+// container phase ran ~15 s per observation (pre-tuning ~112 s) while
+// prometheus.DefBuckets tops out at 10 s — every slow observation landed in
+// +Inf and the histogram could not answer "how slow, and did it get
+// faster?".
+func TestRecommendationDurationBucketsSpanObservedRange(t *testing.T) {
+	t.Parallel()
+
+	RecommendationDuration.WithLabelValues("metric_test_span").Observe(15)
+	RecommendationDuration.WithLabelValues("metric_test_span").Observe(112)
+
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+
+	for _, mf := range mfs {
+		if mf.GetName() != "rosocp_recommendation_duration_seconds" {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			lbl := m.GetLabel()
+			if len(lbl) != 1 || lbl[0].GetValue() != "metric_test_span" {
+				continue
+			}
+			h := m.GetHistogram()
+			require.NotNil(t, h)
+			buckets := h.GetBucket()
+			require.NotEmpty(t, buckets)
+			lastFinite := buckets[len(buckets)-1]
+			// #896: both the observed 15 s and the pre-tuning-era 112 s must
+			// land in a finite bucket — +Inf receives nothing.
+			assert.InDelta(t, lastFinite.GetCumulativeCount(), h.GetSampleCount(), 0,
+				"observations at 15s/112s must land in finite buckets, not +Inf (#896)")
+			assert.GreaterOrEqual(t, lastFinite.GetUpperBound(), 112.0,
+				"the largest finite bucket must cover the pre-tuning-era ~112s mean (#896)")
+		}
+		return
+	}
+	t.Fatal("rosocp_recommendation_duration_seconds not found in gathered metrics")
+}

@@ -32,9 +32,15 @@ var (
 
 	RecommendationDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "rosocp_recommendation_duration_seconds",
-			Help:    "Duration of recommendation computation",
-			Buckets: prometheus.DefBuckets,
+			Name: "rosocp_recommendation_duration_seconds",
+			Help: "Duration of recommendation computation",
+			// #896: the sibling pipeline histograms' ladder. DefBuckets tops
+			// out at 10 s while the container phase ran ~15 s per observation
+			// (~112 s pre-tuning) — every slow observation landed in +Inf and
+			// the histogram could not answer "how slow, and did it get
+			// faster?". The exponential ladder spans 0.01 s to ~1771 s and
+			// keeps every duration metric on the same le-ladder.
+			Buckets: prometheus.ExponentialBuckets(0.01, 3, 12),
 		},
 		[]string{"type"},
 	)

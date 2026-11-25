@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`rosocp_recommendation_duration_seconds` buckets span the observed range ([#896](https://github.com/pgarciaq/ros-ocp-backend/issues/896)):**
+  the recommendation histogram used `prometheus.DefBuckets`, whose largest
+  finite bucket is 10 s — the container phase ran ~15 s per observation
+  (~112 s before the DB tuning), so every slow observation landed in `+Inf`
+  and the histogram could not answer "how slow, and did it get faster?".
+  It now uses the sibling pipeline histograms' exponential ladder
+  (`ExponentialBuckets(0.01, 3, 12)`, finite to ~1771 s), keeping every
+  duration metric on the same `le`-ladder. Queries are unaffected
+  (`histogram_quantile` is bucket-set agnostic; no consumer assumed the old
+  set — checked).
 - **The reship coalescing guard drains the SET of pending clusters, not the latest slot ([#863](https://github.com/pgarciaq/ros-ocp-backend/issues/863)):**
   concurrent business-hours settings edits at different scopes (an org-level edit
   resolving to all org clusters vs. a cluster/namespace-level edit) pass different
