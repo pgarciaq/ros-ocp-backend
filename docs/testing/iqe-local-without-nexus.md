@@ -422,3 +422,44 @@ precomputed `*_variation_*` alias columns used for sorting).
   out of the read-only scope; they ERROR on the un-overridden
   `cost_management_sources` host.
 - Tag-filter tests skip without seeded `resolved_tags`.
+
+## RBAC error-injection tests — the stub and the twin (validated 2026-11-25, #921)
+
+The #532/#543/#546 error-semantics legs run against a **ros-api twin** whose
+`RBACHOST` points at a **stub** impersonating insights-rbac with controllable
+failure modes. The normal path is untouched.
+
+Deploy (on the hypervisor, from a ros-ocp-backend checkout):
+
+```bash
+cd docs/testing/rbacstub && bash deploy.sh
+# wait for both rollouts, then port-forward:
+oc -n cost-onprem port-forward svc/cost-onprem-ros-api-rbacstub 18486:8000 &
+oc -n cost-onprem port-forward svc/cost-onprem-rbacstub 18487:8080 &
+# laptop: ssh -N -L 18486:localhost:18486 -L 18487:localhost:18487 <hypervisor>
+```
+
+- **18486** — the twin (generated from the live ros-api deployment with three
+  deltas: `RBACHOST` → the stub, `ROS_RBAC_CACHE_TTL=300`, an extra
+  `rbacstub-twin=true` label for its Service). The helm labels are kept
+  deliberately: the namespace's NetworkPolicies (`cost-onprem-rbac-api-access`,
+  `cost-onprem-masu-access`) admit pods by component label — relabeling breaks
+  the twin's rbac and masu access.
+- **18487** — the stub's control endpoint (`PUT /__control/mode`, `GET
+  /__control/hits`, `PUT /__control/reset`; modes: normal, error-first-429,
+  error-first-408, error-page2-429, truncated, deny-403).
+
+Run:
+
+```bash
+podman exec -e ENV_FOR_DYNACONF=local -e IQE_ADDITIONAL_CONF_PATH=/iqe-local-config \
+  -e DYNACONF_IQE_VAULT_LOADER_ENABLED=false iqe-913-runner \
+  /iqe_venv/bin/iqe tests plugin ros_ocp \
+  /iqe_venv/lib64/python3.12/site-packages/iqe_ros_ocp/tests/rest/test_rbac_error_semantics.py
+```
+
+The tests self-skip with a pointer here when the twin or stub is unreachable.
+**The drift chore**: the twin is generated from the live deployment — re-run
+`deploy.sh` whenever the main ros-api image changes to refresh the twin (the
+tests cannot detect a stale twin: the ros-api exposes no build/commit on any
+served surface).
