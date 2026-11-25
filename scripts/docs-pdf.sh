@@ -88,6 +88,24 @@ die() {
   exit 1
 }
 
+# Mermaid's parser is not stable across versions: an unquoted '(' in a node
+# label rendered with one 11.x resolution and failed with the next, and the same
+# CLI version can resolve different mermaid builds. A green local build is
+# therefore not the CI build. Say so, and keep labels quoted (CONTRIBUTING).
+PINNED_MERMAID_CLI="11.12.0"
+
+warn_mermaid_version() {
+  local v
+  v="$(mmdc --version 2>/dev/null | head -1 | tr -d '[:space:]')"
+  [[ -n "$v" ]] || return 0
+  if [[ "$v" != "$PINNED_MERMAID_CLI" ]]; then
+    echo "NOTE: mmdc $v differs from the pinned $PINNED_MERMAID_CLI used in CI." >&2
+    echo "      Mermaid's parser changes between versions, so a book that renders" >&2
+    echo "      here can fail in the workflow (and vice versa)." >&2
+    echo "      npm install -g @mermaid-js/mermaid-cli@$PINNED_MERMAID_CLI" >&2
+  fi
+}
+
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
 }
@@ -473,6 +491,7 @@ is_known_section() {
 main() {
   local section="${1:-}"
   load_sections
+  warn_mermaid_version
   case "$section" in
     -h | --help | "")
       usage

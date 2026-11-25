@@ -1326,6 +1326,11 @@ make docs-pdf-install
 # Also need: npm install -g @mermaid-js/mermaid-cli@11.12.0
 # Chrome/Chromium is used if found (or DOCS_PDF_CHROME=/path/to/chrome);
 # otherwise mmdc falls back to the browser puppeteer downloaded with it.
+#
+# Mermaid labels: quote any label containing punctuation —
+#   Node["text (note)"] — because the parser rejects unquoted parentheses in
+#   some 11.x builds. mmdc prints a NOTE when its version differs from the
+#   pin; a green local book is not proof the workflow will render it.
 
 # All nav-section books → dist/pdf/*.pdf (gitignored; ~10–15 min — the
 # Features book dominates because it renders 13 Mermaid diagrams in Chrome)

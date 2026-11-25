@@ -33,7 +33,7 @@ flowchart TD
   KafkaPub --> ROS[ros-ocp processor native plugins]
   ROS --> DB[(PostgreSQL)]
   API[ros-ocp API] --> DB
-  Poller[recommendation-poller<br/>(Kruize legacy only — skip)] -.->|legacy only| DB
+  Poller["recommendation-poller<br/>(Kruize legacy only — skip)"] -.->|legacy only| DB
 ```
 
 ### Path B — Ingress upload (full stack)

@@ -111,6 +111,18 @@ jobs:
           PUPPETEER_SKIP_DOWNLOAD: '1'
         run: npm install -g @mermaid-js/mermaid-cli@11.12.0
 
+      # The CLI pin does not pin mermaid itself (^11), and the parser changed
+      # under us once (#383: an unquoted label). Record what actually ran.
+      - name: Record the resolved Mermaid parser
+        run: |
+          node -e "
+          try {
+            const root = require('child_process').execSync('npm root -g').toString().trim();
+            console.log('mermaid', require(root + '/@mermaid-js/mermaid-cli/node_modules/mermaid/package.json').version);
+          } catch (e) {
+            console.log('mermaid version unresolved:', e.message);
+          }"
+
       - name: Check Mermaid can find a browser
         run: |
           set -euo pipefail
