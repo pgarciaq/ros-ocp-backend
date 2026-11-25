@@ -87,6 +87,23 @@ spec:
 EOF
 
 # --- 2. the twin, generated from the live deployment ------------------------
+# The deployment selector is immutable: delete the previous twin before
+# applying (a selector change — like the component-label fix — cannot apply
+# over an existing deployment).
+oc -n "$NS" delete deploy/cost-onprem-ros-api-rbacstub --ignore-not-found
+
+# NetworkPolicy patches: the twin's distinct component label removes it from
+# the label-based ingress rules that admit component=ros-api pods to rbac
+# and masu — re-admit it by its rbacstub-twin label (idempotent: skipped
+# when already present). Helm-owned policies: re-applied by this script on
+# every run, since a helm upgrade may reset them.
+for NP in cost-onprem-rbac-api-access cost-onprem-masu-access; do
+  if ! oc -n "$NS" get networkpolicy "$NP" -o json | grep -q rbacstub-twin; then
+    oc -n "$NS" patch networkpolicy "$NP" --type=json \
+      -p '[{"op":"add","path":"/spec/ingress/0/from/-","value":{"podSelector":{"matchLabels":{"rbacstub-twin":"true"}}}}]'
+  fi
+done
+
 TWIN_BASE="$(mktemp)"
 trap 'rm -f "$TWIN_BASE"' EXIT
 oc -n "$NS" get deploy cost-onprem-ros-api -o json > "$TWIN_BASE"
@@ -102,11 +119,13 @@ for k in ("resourceVersion", "uid", "generation", "creationTimestamp", "managedF
 meta.pop("annotations", None)
 d.pop("status", None)
 
-# Distinct extra label for the twin's Service selector. The helm labels
-# (component=ros-api etc.) are KEPT: the namespace's NetworkPolicies
-# (cost-onprem-rbac-api-access, cost-onprem-masu-access) admit pods by
-# component label, so the twin must keep the main api's labels to reach
-# rbac/masu like the main api does.
+# Distinct component label: the main cost-onprem-ros-api Service selects on
+# the helm labels — a twin carrying them JOINS ITS ENDPOINTS and splits
+# production traffic (found live 2026-11-25: the UI round-robined between
+# the real API and the twin). The NetworkPolicies that admit rbac/masu
+# access by component label are patched below to also admit the twin.
+for labels in (d["spec"]["selector"]["matchLabels"], d["spec"]["template"]["metadata"]["labels"]):
+    labels["app.kubernetes.io/component"] = "ros-api-rbacstub"
 d["spec"]["template"]["metadata"]["labels"]["rbacstub-twin"] = "true"
 
 env = d["spec"]["template"]["spec"]["containers"][0]["env"]
