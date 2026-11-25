@@ -97,6 +97,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Multi-value tags now match every value Koku reports ([#814](https://github.com/pgarciaq/ros-ocp-backend/issues/814)):**
+  Koku's tag sync builder now emits the full sorted value union per namespace
+  instead of the alphabetically first value, so `api` mode matches every value a
+  namespace carries (`filter[tag:environment]=staging` finds a namespace that also
+  runs `production`) and the tag-values catalog no longer advertises a value that
+  no namespace can match. `db` mode already resolved the union; the two modes now
+  agree. List responses still project one value per key until the response change
+  is tracked in [#940](https://github.com/pgarciaq/ros-ocp-backend/issues/940).
+
 - **Cost data arrives in integer micro-cents, on a scale negotiated per request ([#461](https://github.com/pgarciaq/ros-ocp-backend/issues/461)):**
   `effective_rates` now answers on the money scale the caller asks for, and ROS
   sends `money_scale=microcents` on every request. `configured_rates` and the

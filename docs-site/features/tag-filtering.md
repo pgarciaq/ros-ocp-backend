@@ -1,6 +1,6 @@
 # Tag filtering
 
-> **Last verified:** 2026-11-18
+> **Last verified:** 2026-11-26
 
 !!! info "Quick Facts"
     **Filter syntax:** `filter[tag:key]=value` (bracket notation, preferred) or `?tag=key:value` (legacy flat)  
@@ -115,13 +115,14 @@ tags. Pod-level labels are not individually resolvable — tag filtering operate
 namespace granularity.
 
 **Multi-value tag keys (storage and filtering):** `resolved_tags` stores each
-key's values as a sorted, de-duplicated array (#814). Tag filters match a
-namespace when **any** of the key's stored values matches (`filter[tag:key]=v1,v2`
-is any-of across values). The Koku payload builder still sends one value per key
-(the alphabetically first) until koku's half of #814 (cycle 2) ships; rows pushed
-before the ROS update may hold bare strings, which keep matching (both shapes are
-read). List responses still expose **one** value per key in `tags` (the
-alphabetically first) — the response shape is unchanged for UI compatibility.
+key's values as a sorted, de-duplicated array (#814), and the Koku payload carries
+the full value union per namespace since koku's half of #814 (cycle 2). Tag
+filters match a namespace when **any** of the key's stored values matches
+(`filter[tag:key]=v1,v2` is any-of across values), so `environment=staging` finds
+a namespace that also runs `production`. Rows pushed before the ROS update may
+hold bare strings, which keep matching (both shapes are read). List responses
+still expose **one** value per key in `tags` (the alphabetically first) while the
+response change is tracked in #940 — the shape is unchanged for UI compatibility.
 
 In advanced on-prem mode (`ROS_TAGS_SOURCE=db`), ROS list queries read Koku's tenant
 **label-summary tables** (`reporting_ocpusagepodlabel_summary` and
@@ -131,17 +132,12 @@ sync and the Koku Tags API read, with the same month-snapped report-period
 window, so `db` and `api` mode select the same clusters for the same org data
 (#815). A disabled tag key stops matching **immediately** (query-time check
 against `reporting_enabledtagkeys`, scoped to OCP), not on the next
-summarization. **One known divergence remains (multi-value keys, until koku's
-#814 cycle 2):** when a namespace's window holds several values for one key,
-the push still collapses to the alphabetically first value (the Koku builder's
-current behavior), so `api` mode matches only that value — `db` mode matches
-any value in the summary union. ROS storage and matching are already
-multi-value-ready (#814 cycle 1); the divergence closes when koku emits the
-full value union. The remaining difference from `api`
-mode is timing only: `db` mode reads at query time, `api` mode reads what the
-last push landed. The startup probe checks `reporting_enabledtagkeys`. A
-Koku upgrade that renames tables or changes the summary schema can break tag
-filters without any ROS code change.
+summarization. `api` and `db` mode resolve multi-value keys the same way: both
+match any value in the key's union (#814 cycle 2 closed the last divergence).
+The remaining difference is timing only: `db` mode reads at query time, `api`
+mode reads what the last push landed. The startup probe checks
+`reporting_enabledtagkeys`. A Koku upgrade that renames tables or changes the
+summary schema can break tag filters without any ROS code change.
 
 | Check | Covers | Does not cover |
 |-------|--------|----------------|

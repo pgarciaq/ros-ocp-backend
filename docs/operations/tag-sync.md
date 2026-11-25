@@ -68,18 +68,17 @@ When `ROS_TAGS_SOURCE=db`, these tasks are no-ops.
 
 Each tag value may arrive as a JSON string or an array of strings (#814): ROS
 accepts both shapes and normalizes storage to **sorted, de-duplicated arrays**
-(empty values and empty-only keys are dropped). The current Koku builder still
-sends one value per key (a bare string); emitting the full value union as
-arrays is koku's half of #814 (cycle 2) — ROS is already multi-value-ready,
-so the koku change needs no ROS coordination.
+(empty values and empty-only keys are dropped). Koku's builder emits the full
+sorted value union per namespace as of #814 cycle 2; a bare string is still
+accepted for older koku versions and for rows written before the upgrade.
 
 The payload is built from Koku's per-report-period label summaries
 (`reporting_ocpusagepodlabel_summary` + `reporting_ocpstoragevolumelabel_summary`) for
 report periods in `[last month start, this month end]` — the same sources and window the
 Koku Tags API uses (ADR-0353). A cluster that summarized on an older day is still in the
-payload; that is the point. Values are unioned per namespace and key, then collapsed to the
-alphabetically first value (the Koku builder's current behavior, until #814 cycle 2;
-ROS keeps every value it receives).
+payload; that is the point. Values are unioned per namespace and key, sorted, and
+emitted as an array (koku's #814 cycle 2 behavior); ROS keeps every value it
+receives and matches any of them.
 
 ---
 
