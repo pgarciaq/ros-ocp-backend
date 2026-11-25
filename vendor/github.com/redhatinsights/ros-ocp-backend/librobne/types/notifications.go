@@ -59,6 +59,14 @@ const (
 	// NotifNodePressure is 87 (next free): node-pressure conditions observed
 	// in window — consolidation withheld, usage baselines untrustworthy.
 	NotifNodePressure int16 = 87
+	// NotifNodeUsageOverCapacity is 88 (#890): the node's summed p95 usage
+	// exceeds its stored allocatable capacity by more than the 1% measurement
+	// tolerance — physically impossible for an honest producer, so the data
+	// is implausible (double-counted or misattributed pods upstream). The
+	// code self-clears: node notification codes are recomputed and replaced
+	// each run, so it disappears once sane data replaces the window.
+	// Threshold rationale: docs-site/architecture/notification-codes.md (#890).
+	NotifNodeUsageOverCapacity int16 = 88
 )
 
 // NotificationThresholds holds notification evaluation thresholds derived from sizing settings.

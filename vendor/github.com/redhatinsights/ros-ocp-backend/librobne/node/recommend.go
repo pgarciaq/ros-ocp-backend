@@ -25,6 +25,7 @@ type nodeClassification struct {
 	CPUOvercommitRatio    float32
 	IsUnderutilized       bool
 	IsOvercommitted       bool
+	usageOverCapacity     bool // #890: p95 usage exceeded stored allocatable beyond the 1% tolerance
 	Category              string
 	IdleState             types.IdleState
 	StrandedResource      *string
@@ -300,6 +301,27 @@ func classifyNode(node string, days []DigestRow, cfg RecConfig, nodeSettings Thr
 		if d.MemUsageP95KiB > maxMemUsageP95KiB {
 			maxMemUsageP95KiB = d.MemUsageP95KiB
 		}
+		// #890: the usage plausibility gate. Summed hourly usage above the
+		// node's allocatable capacity is physically impossible for an honest
+		// producer, so exceeding it (beyond the 1% measurement tolerance —
+		// kernel/cgroup accounting artifacts are the only genuine noise
+		// source; a percentile of values at or below capacity cannot exceed
+		// capacity) means the data is implausible: double-counted or
+		// misattributed pods upstream. Checked against the STORED allocatable
+		// only — when the digest lacks it, the requests-derived fallback is
+		// an estimate, and flagging against an estimate would be unfair.
+		// Usage-only by design (#890 D2): summed requests CAN legitimately
+		// exceed allocatable in real clusters, so requests are not gated.
+		// The code self-clears: notification codes are recomputed and
+		// replaced each run (pgrec EXCLUDED.notification_codes).
+		if d.MaxCPUAllocMC != nil && *d.MaxCPUAllocMC > 0 &&
+			d.CPUUsageP95MC > usageOverCapacityLimit(*d.MaxCPUAllocMC) {
+			class.usageOverCapacity = true
+		}
+		if d.MaxMemAllocKiB != nil && *d.MaxMemAllocKiB > 0 &&
+			d.MemUsageP95KiB > usageOverCapacityLimit(*d.MaxMemAllocKiB) {
+			class.usageOverCapacity = true
+		}
 		if d.MaxCPURequestsMC > maxRequests {
 			maxRequests = d.MaxCPURequestsMC
 		}
@@ -338,6 +360,9 @@ func classifyNode(node string, days []DigestRow, cfg RecConfig, nodeSettings Thr
 	}
 	if class.Pressured {
 		class.NotificationCodes = types.AppendUnique(class.NotificationCodes, types.NotifNodePressure)
+	}
+	if class.usageOverCapacity {
+		class.NotificationCodes = types.AppendUnique(class.NotificationCodes, types.NotifNodeUsageOverCapacity)
 	}
 	class.maxCPUUsageP95MC = maxCPUUsageP95MC
 	class.maxMemUsageP95KiB = maxMemUsageP95KiB
@@ -999,4 +1024,20 @@ func LinearRegressionSlope(ys []float64) float64 {
 		return 0
 	}
 	return (n*sumXY - sumX*sumY) / denom
+}
+
+// usageOverCapacityLimit returns the p95-usage value above which the node's
+// data is implausible: allocatable plus the 1% measurement tolerance (#890).
+//
+// The 1% tolerance is derived, not tuned: a percentile of values at or below
+// capacity cannot exceed capacity (no interpolation overshoot); the digest's
+// max-allocatable comparison is conservative under allocatable drift; and
+// millicore rounding is ±0.005% at 64 cores. The only genuine noise source
+// is kernel/cgroup CPU accounting artifacts, bounded around 1%. Empirically,
+// a real KMO-produced cluster's worst p95 ratio measured 0.996 — the honest
+// noise floor is ~0. The 1% band exists to absorb accounting artifacts while
+// still catching the 101–105% class (subtle double-counting bugs); gross
+// breakage (120%+) fires at any tolerance.
+func usageOverCapacityLimit(allocatable int64) int64 {
+	return allocatable + allocatable/100
 }
