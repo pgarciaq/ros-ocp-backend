@@ -11,7 +11,15 @@ import (
 
 const (
 	kokuEnabledTagKeysTable = "reporting_enabledtagkeys"
-	kokuTagValuesTable      = "reporting_ocptags_values"
+	// Legacy values source, deliberately unused (#868):
+	// reporting_ocptags_values' cluster/namespace arrays are rebuilt per
+	// summarization run from that run's report periods only, so for a
+	// key/value shared by two clusters the last-summarized cluster owns
+	// them (#815). GetTagValues reads the label summaries below instead.
+
+	podLabelSummaryTable     = "reporting_ocpusagepodlabel_summary"
+	storageLabelSummaryTable = "reporting_ocpstoragevolumelabel_summary"
+	reportPeriodTable        = "reporting_ocpusagereportperiod"
 )
 
 // DBTagProvider reads tag keys and values directly from Koku tenant tables in the shared PostgreSQL.
@@ -72,13 +80,36 @@ func (p *DBTagProvider) GetTagValues(ctx context.Context, orgID string, key stri
 		return nil, err
 	}
 
-	query := fmt.Sprintf(`
-		SELECT DISTINCT value
-		FROM %s
-		WHERE key = $1
-		ORDER BY value`, pgx.Identifier{schema, kokuTagValuesTable}.Sanitize())
+	// #868: the label summaries are the values source — the same source the
+	// #815 filter predicate reads (ADR-0353), NOT reporting_ocptags_values
+	// (whose arrays hold only the last-summarized cluster for any shared
+	// key/value). The month-snapped window mirrors the api-mode push, so db
+	// mode and api mode report the same catalog.
+	winStart, winEnd := LabelSummaryWindow()
+	podTable := pgx.Identifier{schema, podLabelSummaryTable}.Sanitize()
+	volTable := pgx.Identifier{schema, storageLabelSummaryTable}.Sanitize()
+	periodTable := pgx.Identifier{schema, reportPeriodTable}.Sanitize()
 
-	rows, err := p.pool.Query(ctx, query, key)
+	summaryValues := func(table string) string {
+		return fmt.Sprintf(`
+			SELECT DISTINCT UNNEST(ls.values)
+			FROM %s ls
+			JOIN %s rp ON rp.id = ls.report_period_id
+			WHERE ls.key = $1
+			  AND rp.report_period_start >= $2::date
+			  AND rp.report_period_start < $3::date`, table, periodTable)
+	}
+	query := fmt.Sprintf(`
+		SELECT DISTINCT value FROM (
+			%s
+			UNION
+			%s
+		) AS all_values(value)
+		ORDER BY value`,
+		summaryValues(podTable), summaryValues(volTable))
+
+	rows, err := p.pool.Query(ctx, query,
+		key, winStart.Format("2006-01-02"), winEnd.Format("2006-01-02"))
 	if err != nil {
 		return nil, fmt.Errorf("query tag values for org %q key %q: %w", orgID, key, err)
 	}

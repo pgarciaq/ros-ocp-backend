@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **db-mode tag catalog values read the label summaries ([#868](https://github.com/pgarciaq/ros-ocp-backend/issues/868)):**
+  `DBTagProvider.GetTagValues` read `reporting_ocptags_values` — the table whose
+  arrays are rebuilt per summarization run from that run's report periods only,
+  so for a key/value shared by two clusters the last-summarized cluster owns
+  them (#815's mechanism) and `/internal/tags/status` value lists could be
+  stale or incomplete. It now reads the pod and storage label summaries
+  joined through the report period with the ADR-0353 month-snapped window —
+  the same source and window the #815 filter predicate and the api-mode push
+  use, so db mode and api mode report the same catalog. Keys were already
+  correct (the enabled-tag-keys table); the api-mode provider is unaffected.
+  The month-snapped window helper was relocated to the tags package
+  (`LabelSummaryWindow`) so both consumers share one home.
 - **`rosocp_recommendation_duration_seconds` buckets span the observed range ([#896](https://github.com/pgarciaq/ros-ocp-backend/issues/896)):**
   the recommendation histogram used `prometheus.DefBuckets`, whose largest
   finite bucket is 10 s — the container phase ran ~15 s per observation

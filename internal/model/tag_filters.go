@@ -27,10 +27,10 @@ type TagFilter struct {
 // this_month_end] — the same window the api-mode push reads, so db mode and
 // api mode see the same clusters. Period starts are month-aligned, so the
 // half-open [lastMonthStart, nextMonthStart) is equivalent.
+// Relocated to the tags package (#868): both this predicate and the db-mode
+// tag catalog values consume it, and model imports tags (not the reverse).
 func labelSummaryWindow() (time.Time, time.Time) {
-	now := time.Now().UTC()
-	thisMonthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
-	return thisMonthStart.AddDate(0, -1, 0), thisMonthStart.AddDate(0, 1, 0)
+	return tags.LabelSummaryWindow()
 }
 
 // tagFragmentBuilder builds SQL fragments with their bind arguments in one
