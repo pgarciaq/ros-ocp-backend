@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Reship: clusters without a koku source are terminal, not retried ([#937](https://github.com/pgarciaq/ros-ocp-backend/issues/937)):**
+  a pending cluster whose provider resolution fails permanently (masu
+  `effective_rates` 404 — the org has no koku source for it, so the reship
+  can never succeed and there is nothing to reship) now clears its pending
+  flag on the first attempt with a one-time skip warning, instead of burning
+  the retry budget on a failure that can never change. Transient failures
+  (5xx, timeout) keep the mark-and-retry semantics. The resolution-failure
+  reason `no_cost_model` is renamed `no_provider` — it was a misnomer: a
+  provider without a cost model resolves fine (koku's 200 path handles
+  missing models); the 404 means provider-not-found (or org-unknown), both
+  permanent.
 - **Reship poller: bounded exhaustion instead of an eternal warning loop ([#936](https://github.com/pgarciaq/ros-ocp-backend/issues/936)):**
   once a pending cluster's retry budget (`ROS_RESHIP_MAX_RETRIES`, default 10)
   is spent, the poller logs one ERROR at the final attempt (with its metric)

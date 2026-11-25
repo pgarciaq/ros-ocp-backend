@@ -142,7 +142,7 @@ Threshold recalculation is gated by `ROS_THRESHOLD_RECALCULATION_ENABLED` (defau
 | `ros_reship_files_processed` | Counter | — | ROS files published to Kafka by successful reships |
 | `ros_reship_duration_seconds` | Histogram | — | HTTP duration of masu `reship_ros` calls |
 | `ros_reship_failures_total` | Counter | — | Reship attempts that exhausted the consecutive retry budget |
-| `ros_reship_provider_resolution_failures_total` | Counter | `reason` | Failures resolving `cluster_uuid` → `provider_uuid`. `reason`: `no_cost_model`, `masu_unavailable`, `not_found`, `timeout` |
+| `ros_reship_provider_resolution_failures_total` | Counter | `reason` | Failures resolving `cluster_uuid` → `provider_uuid`. `reason`: `no_provider`, `masu_unavailable`, `not_found`, `timeout` |
 | `ros_reship_fallback_forward_only_total` | Counter | — | Clusters transitioned to forward-only BH recommendations after retry exhaustion |
 
 **Source file:** `internal/reship/metrics.go`

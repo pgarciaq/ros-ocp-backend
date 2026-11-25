@@ -117,6 +117,21 @@ func (s *Service) TriggerReship(ctx context.Context, orgID string, clusterUUID u
 	return lastErr
 }
 
+// ErrNoProvider is returned by the reship path when provider resolution
+// failed permanently (koku effective_rates 404 — the org has no source for
+// the cluster). The pending flag is already cleared and the skip warning
+// logged where it is returned; callers treat it as terminal (#937): nothing
+// to reship, no retry, no budget.
+var ErrNoProvider = errors.New("reship skipped: cluster has no koku provider")
+
+// isPermanentResolutionFailure reports whether the PostReship error is the
+// permanent provider-resolution 404 (see ReasonNoProvider) — terminal for
+// the reship (#937), as opposed to transient masu unavailability.
+func isPermanentResolutionFailure(err error) bool {
+	var resErr *ProviderResolutionError
+	return errors.As(err, &resErr) && resErr.Reason == ReasonNoProvider
+}
+
 func (s *Service) doReship(ctx context.Context, orgID string, clusterUUID uuid.UUID) error {
 	clusterID := clusterUUID.String()
 	start := time.Now().UTC()
@@ -146,6 +161,23 @@ func (s *Service) doReship(ctx context.Context, orgID string, clusterUUID uuid.U
 	result, err := s.client.PostReship(ctx, orgID, clusterUUID)
 	if err != nil {
 		observeReshipEnd(orgID, clusterID, start, 0)
+		if isPermanentResolutionFailure(err) {
+			// #937 (D1): the org has no koku source for this cluster — the
+			// reship can never succeed, and there is nothing to reship (no
+			// source → no S3 data), so clearing the flag is correct, not
+			// lossy. Transient failures (5xx, timeout) keep the mark-and-
+			// retry semantics below.
+			if clearErr := ClearReshipPending(ctx, s.pool, orgID, clusterUUID); clearErr != nil {
+				reshipLog.Errorf("clear reship pending: %v", clearErr)
+			}
+			reshipLog.WithFields(map[string]interface{}{
+				"msg":          "reship skipped: cluster has no koku provider",
+				"org_id":       orgID,
+				"cluster_uuid": clusterID,
+				"reason":       ReasonNoProvider,
+			}).Warn("reship skipped: cluster has no koku provider; pending flag cleared")
+			return ErrNoProvider
+		}
 		if markErr := MarkReshipPending(ctx, s.pool, orgID, clusterUUID); markErr != nil {
 			reshipLog.Errorf("mark reship pending: %v", markErr)
 		}
@@ -195,6 +227,15 @@ func (s *Service) RetryPending(ctx context.Context, orgID string, clusterUUID uu
 
 	err := s.TriggerReship(WithReshipAttempt(ctx, attempt), orgID, clusterUUID)
 	if err != nil {
+		// #937: a permanent resolution failure is terminal — the pending
+		// flag was cleared and the skip warning logged in the service layer.
+		// No budget burn, no tick warning.
+		if errors.Is(err, ErrNoProvider) {
+			s.retryMu.Lock()
+			delete(s.retries, key)
+			s.retryMu.Unlock()
+			return nil
+		}
 		if attempt >= s.maxRetries {
 			incReshipFailures(orgID)
 			reshipLog.WithFields(map[string]interface{}{

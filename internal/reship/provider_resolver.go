@@ -18,7 +18,15 @@ import (
 
 // Provider resolution failure reasons for metrics and logs.
 const (
-	ReasonNoCostModel     = "no_cost_model"
+	// ReasonNoProvider covers both permanent effective_rates 404 variants
+	// (koku's "No provider found for cluster_id" and "Customer does not
+	// exist"): the org has no koku source for the cluster, so the reship can
+	// never succeed — and there is nothing to reship (no source → no S3
+	// data). Notably it is NOT about cost models: a provider without a cost
+	// model resolves fine (koku's 200 path handles missing models), and the
+	// reship flow uses effective_rates purely as a cluster→provider
+	// directory. Formerly misnamed no_cost_model (#937 D3).
+	ReasonNoProvider      = "no_provider"
 	ReasonMasuUnavailable = "masu_unavailable"
 	ReasonNotFound        = "not_found"
 	ReasonTimeout         = "timeout"
@@ -126,7 +134,7 @@ func categorizeEffectiveRatesError(err error) (reason string, statusCode int) {
 			statusCode = code
 			switch {
 			case code == 404:
-				return ReasonNoCostModel, statusCode
+				return ReasonNoProvider, statusCode
 			case code >= 500:
 				return ReasonMasuUnavailable, statusCode
 			default:

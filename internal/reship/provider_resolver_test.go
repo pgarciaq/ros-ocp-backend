@@ -135,7 +135,7 @@ func TestHTTPEffectiveRatesResolver_HTTP404(t *testing.T) {
 	require.Error(t, err)
 	var resErr *ProviderResolutionError
 	require.ErrorAs(t, err, &resErr)
-	assert.Equal(t, ReasonNoCostModel, resErr.Reason)
+	assert.Equal(t, ReasonNoProvider, resErr.Reason)
 	assert.Equal(t, 404, resErr.StatusCode)
 }
 
@@ -193,11 +193,11 @@ func TestPostReship_ResolutionFailureIncrementsMetric(t *testing.T) {
 	}))
 	defer masu.Close()
 
-	before := resolutionFailureCounter(t, ReasonNoCostModel)
+	before := resolutionFailureCounter(t, ReasonNoProvider)
 	client := NewHTTPClient(masu.URL, &http.Client{Timeout: 2 * time.Second})
 	_, err := client.PostReship(WithReshipAttempt(context.Background(), 3), orgID, clusterID)
 	require.Error(t, err)
-	after := resolutionFailureCounter(t, ReasonNoCostModel)
+	after := resolutionFailureCounter(t, ReasonNoProvider)
 	assert.Equal(t, before+1, after)
 }
 
