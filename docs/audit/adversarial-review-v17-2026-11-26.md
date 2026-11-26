@@ -94,6 +94,15 @@ Review method: targeted probes on the new code paths (the currency/FX rewrite, t
 | Maintainability | ★★★★☆ | V17-02's dead float path is the #462 lesson's residue |
 | Governance | ★★★★★ | ADR discipline, changelog, CI gates, and the audit cadence itself all maintained |
 
+## 5.1 Finding trackers
+
+| Finding | Issue |
+|---|---|
+| V17-01 (MinInt64 recursion) | [#945](https://github.com/pgarciaq/ros-ocp-backend/issues/945) |
+| V17-02 (dead float path) | [#946](https://github.com/pgarciaq/ros-ocp-backend/issues/946) |
+| V17-03 (substralias semantics) | [#947](https://github.com/pgarciaq/ros-ocp-backend/issues/947) |
+| V17-04 (doc bound) | [#948](https://github.com/pgarciaq/ros-ocp-backend/issues/948) |
+
 ## 6. Priority remediation order
 
 1. **V17-01** — the MinInt64 guard (S) — the only code change recommended before the phase-17 sign-off.
