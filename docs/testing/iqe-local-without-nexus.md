@@ -306,6 +306,53 @@ assert the API narrows to the granted scope, then delete the group.
 
 The lab state (enforcement on, allow-list, fixture group) is recorded in the cluster's `ACCESS.md`. Reference close-outs: #913, #920; the arm64 insights-rbac build note lives there too (the published image is amd64-only; the arm64 build is a lab artifact).
 
+## DB-direct fixture seeding — the multi-match alias tests (#949)
+
+`test_cluster_alias_multi_match.py` (the #947/#949 union + RBAC-intersection
+pins) needs a **same-prefix cluster pair** with rows in the recommendation
+tables — a fixture no environment has naturally (the #799 parity suite is
+discovery-based and skips multi-match aliases). The test seeds it directly
+into the lab DB; the run needs one more port-forward and one more package:
+
+1. **A DB port-forward** to the lab Postgres:
+   ```bash
+   oc port-forward -n cost-onprem pod/cost-onprem-database-0 15432:5432
+   ```
+   The forwarded connection lands as the pod's loopback, where pg_hba is
+   `trust` — **no password** (off-loopback sources are password-enforced;
+   both probed 2026-11-26). If the local 15432 is taken (the koku test DB
+   convention), forward another port (e.g. 15433) and pass
+   `IQE_ROS_DB_DSN=postgresql://ros_user@127.0.0.1:15433/costonprem_ros`.
+   The runner's host networking reaches the host's forwarded port.
+2. **psycopg2-binary** in the runner (not in the base image):
+   ```bash
+   podman exec -e PIP_INDEX_URL=https://pypi.org/simple <runner> \
+     /iqe_venv/bin/python -m pip install --index-url https://pypi.org/simple psycopg2-binary
+   ```
+3. **Run the test** (with the API, RBAC, and DB port-forwards all up):
+   ```bash
+   podman exec -e ENV_FOR_DYNACONF=local -e IQE_ADDITIONAL_CONF_PATH=/iqe-local-config \
+     -e DYNACONF_IQE_VAULT_LOADER_ENABLED=false \
+     -e RBAC_API_URL=http://127.0.0.1:18485 \
+     -e IQE_ROS_DB_DSN=postgresql://ros_user@127.0.0.1:15433/costonprem_ros \
+     <runner> /iqe_venv/bin/iqe tests plugin ros_ocp \
+     /iqe_venv/lib64/python3.12/site-packages/iqe_ros_ocp/tests/rest/test_cluster_alias_multi_match.py
+   ```
+
+**Skip semantics by design:** an unreachable DB, a missing driver, or a seed
+failure (schema drift after a backend migration) skips the test with a
+pointer here — the seed is fixture infrastructure, while the API assertions
+still fail on product breakage. When a migration touches
+`node_recommendations`, `node_gpu_timeslicing_recommendations`,
+`gpu_mig_recommendation_sets`, or `clusters`, resync the seed SQL in the
+test's `_seed_multi_match_pair`.
+
+The test combines this seeding with the #925 service-account pattern (the
+RBAC-scoped section above) for the intersection leg; its RBAC grant and DB
+rows are per-run unique and torn down on exit (verified: zero residue,
+2026-11-26). Validated live 2026-11-26 against backend tag
+`branch-202611261759`: **1 passed** (five legs).
+
 ## Running cost_management-plugin tests (the koku-api base)
 
 The cost_management plugin's package conftest has session-scoped autouse
