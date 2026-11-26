@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Substring cluster filters are now consistent across all surfaces ([#947](https://github.com/pgarciaq/ros-ocp-backend/issues/947)):**
+  a `filter[cluster]` value matching several clusters by alias substring
+  (e.g. `team-a` matching `team-a-frontend` and `team-a-backend`) now
+  returns every matching cluster's rows on the GPU time-slicing and MIG
+  lists — union semantics, matching koku's alias contract and the main
+  list surfaces. Previously those two surfaces resolved a multi-match
+  alias to its first-matched cluster only. The display-currency resolution
+  for multi-match filters remains first-match (clusters may differ in
+  currency; a union rate would be a fiction). Unknown aliases keep the
+  200 + empty contract.
 - **High-rate FX conversions were silently wrong ([#948](https://github.com/pgarciaq/ros-ocp-backend/issues/948)):**
   the integer FX conversion introduced for #462 overflowed its remainder
   term for exchange rates above ~9.2 (JPY ~150, HUF ~400, IDR ~15000),

@@ -99,30 +99,30 @@ func GetNodeRecommendations(c echo.Context) error {
 	clusterUUIDs = filterClustersByRBAC(clusterUUIDs, userPerms)
 
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
-	// #798: normalize a KNOWN alias filter to its UUID once at entry, so row
-	// scoping (restrictClustersToQueryFilter is exact-UUID-match), the
-	// persisted-table uuid binding, and the currency layer all see the UUID.
-	// An unknown alias stays raw — restrictClustersToQueryFilter then misses,
-	// preserving the #790 unknown-alias contract (200 + empty).
+	// #947: union semantics for substring aliases (koku's contract, matching
+	// the main lists). The multi-match resolver narrows the cluster set for
+	// BOTH downstream paths — the persisted-table filter SQL (whose
+	// clusterFilterPredicate also enforces it) and the triple-SQL digest
+	// path (which filters only by this set). The currency call sites
+	// self-resolve first-match via resolveClusterFilterUUID. An unknown
+	// alias yields an empty set (200 + count 0, the #790 contract).
 	if clusterFilter != "" {
-		if resolved := resolveClusterFilterUUID(ctx, pool, orgIDStr, clusterFilter); resolved != "" {
-			clusterFilter = resolved
+		matched := resolveClusterFilterUUIDs(ctx, pool, orgIDStr, clusterFilter)
+		clusterUUIDs = intersectClusterUUIDs(clusterUUIDs, matched)
+		if len(clusterUUIDs) == 0 {
+			setRecommendationNoStore(c)
+			return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
+				Meta: model.NodeRecommendationMeta{
+					Count:       0,
+					Limit:       opts.Limit,
+					Offset:      opts.Offset,
+					Currency:    resolveListCurrencyFromRequest(c, orgIDStr),
+					MinDataDays: gpuMinDataDays,
+				},
+				Data:  []model.NodeGPURecommendation{},
+				Links: buildNodeLinks(c.Request(), 0, opts.Limit, opts.Offset),
+			})
 		}
-	}
-	clusterUUIDs, clusterFilterMiss := restrictClustersToQueryFilter(clusterUUIDs, clusterFilter)
-	if clusterFilterMiss {
-		setRecommendationNoStore(c)
-		return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
-			Meta: model.NodeRecommendationMeta{
-				Count:       0,
-				Limit:       opts.Limit,
-				Offset:      opts.Offset,
-				Currency:    resolveListCurrencyFromRequest(c, orgIDStr),
-				MinDataDays: gpuMinDataDays,
-			},
-			Data:  []model.NodeGPURecommendation{},
-			Links: buildNodeLinks(c.Request(), 0, opts.Limit, opts.Offset),
-		})
 	}
 
 	nodeNameFilter := queryparams.FirstFilter(c, "node")

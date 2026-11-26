@@ -60,19 +60,20 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	warningScope := staticTagWarningScope(userPerms, fleetSummaryNeedsClusterFilter(userPerms), rbacAllowedClusters)
 
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
-	// #798: normalize a KNOWN alias filter to its UUID once at entry, so row
-	// scoping (restrictClustersToQueryFilter is exact-UUID-match), the
-	// persisted-table uuid binding, and the currency layer all see the UUID.
-	// An unknown alias stays raw — restrictClustersToQueryFilter then misses,
-	// preserving the #790 unknown-alias contract (200 + empty).
+	// #947: a substring alias resolves to EVERY matching cluster (union,
+	// koku's contract, matching the main lists) — the multi-match resolver
+	// intersects the org/RBAC set. An unknown alias yields an empty set
+	// (200 + empty, the #790 contract); a UUID passes through as itself.
+	// The currency layer's first-match resolution is unchanged.
 	if clusterFilter != "" {
-		if resolved := resolveClusterFilterUUID(ctx, pool, orgIDStr, clusterFilter); resolved != "" {
-			clusterFilter = resolved
+		matched := resolveClusterFilterUUIDs(ctx, pool, orgIDStr, clusterFilter)
+		if len(matched) == 0 {
+			return emptyGPUMIGResponse(c, orgIDStr, opts)
 		}
-	}
-	clusterUUIDs, clusterFilterMiss := restrictClustersToQueryFilter(clusterUUIDs, clusterFilter)
-	if clusterFilterMiss {
-		return emptyGPUMIGResponse(c, orgIDStr, opts)
+		clusterUUIDs = intersectClusterUUIDs(clusterUUIDs, matched)
+		if len(clusterUUIDs) == 0 {
+			return emptyGPUMIGResponse(c, orgIDStr, opts)
+		}
 	}
 	// #753: an empty allowed-cluster set (absent-grant identities, or an org
 	// with no clusters) must return empty — the engine's filter builder

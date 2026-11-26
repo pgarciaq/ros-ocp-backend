@@ -49,6 +49,49 @@ func clusterFilterPredicate(orgID, column, value string, argIdx int) (sql string
 		[]any{orgID, "%" + value + "%"}, argIdx + 2, true
 }
 
+// resolveClusterFilterUUIDs resolves a client cluster filter to EVERY
+// org-scoped matching cluster UUID (#947: union semantics for substring
+// aliases). A UUID filter returns itself; an empty/no-match returns nil.
+func resolveClusterFilterUUIDs(ctx context.Context, pool *pgxpool.Pool, orgID, value string) []string {
+	if value == "" {
+		return nil
+	}
+	if _, err := uuid.Parse(value); err == nil {
+		return []string{value}
+	}
+	rows, err := pool.Query(ctx, `
+		SELECT cluster_uuid::text FROM clusters
+		WHERE org_id = $1 AND cluster_alias ILIKE $2`, orgID, "%"+value+"%")
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err == nil {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// intersectClusterUUIDs returns the members of allowed that appear in match,
+// preserving allowed's order. An empty match yields an empty result.
+func intersectClusterUUIDs(allowed, match []string) []string {
+	set := make(map[string]struct{}, len(match))
+	for _, m := range match {
+		set[m] = struct{}{}
+	}
+	out := make([]string, 0, len(allowed))
+	for _, a := range allowed {
+		if _, ok := set[a]; ok {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
 // resolveClusterFilterUUID resolves a client cluster filter to the UUID the
 // currency layer keys on (#790 review: fetchClusterCurrency receives the
 // raw filter value; an alias fails the Koku cluster lookup and silently

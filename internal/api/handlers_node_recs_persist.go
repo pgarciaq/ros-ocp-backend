@@ -240,9 +240,15 @@ func buildNodeGPUTimeslicingFilterSQL(
 		argIdx++
 	}
 	if clusterFilter != "" {
-		filterSQL += " AND t.cluster_uuid = $" + strconv.Itoa(argIdx) + "::uuid"
-		args = append(args, clusterFilter)
-		argIdx++
+		// #947: the org-scoped ILIKE predicate gives union semantics for
+		// substring aliases (koku's contract, matching the main lists); a
+		// UUID binds exact. Replaces #798's single exact-uuid bind, which
+		// forced the entry to normalize a multi-match alias to one cluster.
+		if pred, predArgs, next, ok := clusterFilterPredicate(orgID, "t.cluster_uuid", clusterFilter, argIdx); ok {
+			filterSQL += pred
+			args = append(args, predArgs...)
+			argIdx = next
+		}
 	}
 	if nodeNameFilter != "" {
 		filterSQL += " AND lower(t.node_name) = lower($" + strconv.Itoa(argIdx) + ")"
