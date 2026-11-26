@@ -117,8 +117,8 @@ Public cost-models is **not** the ROS hop (identity/RBAC). Do not fold aggregate
 
 | Side | SoT | CI lock | Tracker |
 |------|-----|---------|---------|
-| **Koku** | `koku/masu/api/effective_rates.py` — `namespace_aggregates` SQL (`Pod`+`GPU`, CPU/mem costs, infra+markup, distributed). **Does not** `SUM(cost_model_gpu_cost)` | `test_effective_rates.py` key set **without** `cost_model_gpu_cost` | [#467](https://github.com/pgarciaq/ros-ocp-backend/issues/467) |
-| **ROS** | `ClusterCostData.Namespaces` / ADR-0229 `ClusterCostDataToRateCard` (Tier B; does **not** copy `ConfiguredRates`) | mapper tests | ok for CPU/mem path; GPU spend column missing on wire |
+| **Koku** | `koku/masu/api/effective_rates.py` — `namespace_aggregates` SQL (`Pod`+`GPU`, CPU/mem costs, infra+markup, distributed). **Sums `cost_model_gpu_cost`** (`:326`, `MONEY_AGGREGATE_FIELDS` `:77`) | `test_effective_rates.py` asserts `cost_model_gpu_cost` | [#467](https://github.com/pgarciaq/ros-ocp-backend/issues/467) — GPU denominator column pending |
+| **ROS** | `ClusterCostData.Namespaces` / ADR-0229 `ClusterCostDataToRateCard` (Tier B; does **not** copy `ConfiguredRates`) | mapper tests | CPU/mem path ok; `cost_model_gpu_cost` decoded nowhere — **deliberate** (#905): it prices the missing GPU rate (#942), never the CPU/memory numerators |
 
 ## Money encoding
 

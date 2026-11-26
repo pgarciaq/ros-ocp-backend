@@ -59,6 +59,16 @@ type RatePair struct {
 
 // NamespaceCosts holds the cost/usage aggregates for a single namespace.
 // Money fields are micro-cents; hour fields are milli-hours.
+//
+// #905: cost_model_gpu_cost is deliberately NOT decoded — GPU money prices
+// the GPU rate, never the CPU/memory rates (the cost model's own attribution
+// semantics: directly-attributable resource costs stay attributed; only
+// unattributable overhead is distributed). The GPU rate is a tracked gap
+// (#942: needs a GPU denominator column from koku, coordinated with koku's
+// upcoming cloud GPU rate support). On OCP-on-cloud clusters, cloud GPU
+// instance spend already reaches savings via InfraCost (the back-populate
+// writes the cloud's amortized instance cost there). Do not "fix" this by
+// adding the field to a CPU/memory numerator — see #905's decision record.
 type NamespaceCosts struct {
 	CostModelCPUCost int64 `json:"cost_model_cpu_cost"`
 	CostModelMemCost int64 `json:"cost_model_memory_cost"`

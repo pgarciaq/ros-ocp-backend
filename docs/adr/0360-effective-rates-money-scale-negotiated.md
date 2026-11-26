@@ -95,6 +95,17 @@ dangerous one, because a float payload decodes into a pliant reader.
 
 ## Consequences
 
+- **`cost_model_gpu_cost` is deliberately not consumed (#905)**: koku sends
+  it (SUM'd, money-scaled), ROS drops it at decode by decision. GPU money
+  prices the GPU rate — which is missing, not misfiled (#942: a Tier-B GPU
+  rate needs a GPU denominator column from koku; until then GPU savings
+  price from configured `gpu_cost_per_month` or report zero). Folding it
+  into the CPU/memory numerators would trade a conservative understatement
+  for an overstatement — rejected. The exclusion follows the cost model's
+  own attribution semantics (direct resource costs stay attributed; only
+  unattributable overhead is distributed), and mirrors koku's resource-
+  specific `wasted_cost` numerators. On OCP-on-cloud, cloud GPU instance
+  spend reaches savings via `infrastructure_raw_cost` regardless.
 - ROS and koku can be released in either order *once Masu-first has happened*;
   after that, a ROS rollback to a pre-#461 build against a microcents-capable
   Masu still works, because the default is unchanged.
