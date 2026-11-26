@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -322,6 +323,21 @@ func TestFilterClustersByRBAC_SpecificClusters(t *testing.T) {
 		perms := map[string][]string{"openshift.cluster": {"c1", "c3"}}
 		result := filterClustersByRBAC(clusters, perms)
 		assert.ElementsMatch(t, []string{"c1", "c3"}, result)
+	})
+}
+
+// #951, third site: the grant strings and the cluster UUIDs are both text, and
+// Go compares them byte-wise. The DB side is canonical lowercase, so a grant
+// that RBAC emitted in any other case must be canonicalized or it hides a
+// cluster the user is entitled to see.
+func TestFilterClustersByRBAC_UppercaseGrantMatchesLowercaseCluster(t *testing.T) {
+	withRBACEnabled(t, func() {
+		const lower = "4c5d2494-f20d-4b4a-9ed7-848954a2b103"
+		clusters := []string{lower, "99999999-9999-9999-9999-999999999999"}
+		perms := map[string][]string{"openshift.cluster": {strings.ToUpper(lower)}}
+		result := filterClustersByRBAC(clusters, perms)
+		assert.Equal(t, []string{lower}, result,
+			"a non-canonical grant must match the canonical DB uuid, not hide the cluster (#951)")
 	})
 }
 

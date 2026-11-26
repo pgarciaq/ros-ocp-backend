@@ -883,6 +883,12 @@ func filterClustersByRBAC(clusterUUIDs []string, userPerms map[string][]string) 
 	}
 	allowed := make(map[string]bool, len(clusterPerms))
 	for _, p := range clusterPerms {
+		// #951: the grants and the cluster set are both text, and Go compares
+		// them byte-wise while the set holds canonical lowercase DB UUIDs.
+		// Canonicalize the grant; a non-UUID permission keeps its meaning.
+		if canon, ok := canonicalClusterUUID(p); ok {
+			p = canon
+		}
 		allowed[p] = true
 	}
 	filtered := make([]string, 0, len(clusterUUIDs))

@@ -49,6 +49,21 @@ func clusterFilterPredicate(orgID, column, value string, argIdx int) (sql string
 		[]any{orgID, containsPattern(value)}, argIdx + 2, true
 }
 
+// canonicalClusterUUID returns the canonical lowercase dashed form of a UUID
+// input and whether it parses as one (#951). Every comparison that compares
+// cluster UUIDs as strings must go through it: Postgres compares uuid values
+// canonically, Go compares strings byte-wise, so an uppercase or undashed
+// input would otherwise match nothing against the lowercase cluster_uuid::text
+// the cluster set is built from. The SQL predicate does not need it — it binds
+// against a uuid column, which Postgres parses case-insensitively.
+func canonicalClusterUUID(value string) (string, bool) {
+	u, err := uuid.Parse(value)
+	if err != nil {
+		return "", false
+	}
+	return u.String(), true
+}
+
 // resolveClusterFilterUUIDs resolves a client cluster filter to EVERY
 // org-scoped matching cluster UUID (#947: union semantics for substring
 // aliases). A UUID filter returns itself; an empty/no-match returns nil.
@@ -56,8 +71,8 @@ func resolveClusterFilterUUIDs(ctx context.Context, pool *pgxpool.Pool, orgID, v
 	if value == "" {
 		return nil
 	}
-	if _, err := uuid.Parse(value); err == nil {
-		return []string{value}
+	if canon, ok := canonicalClusterUUID(value); ok {
+		return []string{canon}
 	}
 	rows, err := pool.Query(ctx, `
 		SELECT cluster_uuid::text FROM clusters
@@ -104,8 +119,8 @@ func resolveClusterFilterUUID(ctx context.Context, pool *pgxpool.Pool, orgID, va
 	if value == "" {
 		return ""
 	}
-	if _, err := uuid.Parse(value); err == nil {
-		return value
+	if canon, ok := canonicalClusterUUID(value); ok {
+		return canon
 	}
 	var resolved string
 	// A substring alias may match several clusters; the first match's
