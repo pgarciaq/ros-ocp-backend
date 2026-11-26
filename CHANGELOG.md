@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **GPU savings survive without configured rates — the Tier-B GPU rate ([#942](https://github.com/pgarciaq/ros-ocp-backend/issues/942)):**
+  when no `gpu_cost_per_month` is configured, GPU time-slicing and MIG
+  recommendations now price their savings from observed spend instead of
+  reporting zero: a cluster-level rate derived as (the namespaces' explicit
+  GPU charges) ÷ (the cluster's GPU inventory in GPU-count-months, from the
+  node digests). The configured rate always wins when present. The rate's
+  numerator is `cost_model_gpu_cost` only — infrastructure spend (which on
+  OCP-on-cloud carries the cloud's GPU instance cost) never enters, so GPU
+  money is counted once; and GPU money still never prices CPU/memory
+  container savings (#905's attribution rule). The usage-based refinement
+  (gpu-hours, when koku sends them) is tracked separately (#943).
 - **Reship: clusters without a koku source are terminal, not retried ([#937](https://github.com/pgarciaq/ros-ocp-backend/issues/937)):**
   a pending cluster whose provider resolution fails permanently (masu
   `effective_rates` 404 — the org has no koku source for it, so the reship

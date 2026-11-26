@@ -102,15 +102,19 @@ func ComputeGPUSavingsCents(rec *GPURec, costData *costdata.ClusterCostData) *in
 }
 
 // GPUMonthlyRate extracts the GPU monthly cost rate (infrastructure +
-// supplementary) from Koku cost data, in micro-cents per month (#461).
-// Returns 0 if unavailable.
+// supplementary micro-cents). Tier A first: the configured
+// gpu_cost_per_month. Fallback (#942): the cluster Tier-B rate derived from
+// observed spend (Σ namespace cost_model_gpu_cost ÷ cluster GPU-count-months,
+// deposited by EnsureTierBGPURate where costData is built).
 func GPUMonthlyRate(costData *costdata.ClusterCostData) int64 {
-	if costData == nil || costData.ConfiguredRates == nil {
+	if costData == nil {
 		return 0
 	}
-	rp, ok := costData.ConfiguredRates["gpu_cost_per_month"]
-	if !ok {
-		return 0
+	if costData.ConfiguredRates != nil {
+		rp, ok := costData.ConfiguredRates["gpu_cost_per_month"]
+		if ok && rp.Infrastructure+rp.Supplementary > 0 {
+			return rp.Infrastructure + rp.Supplementary
+		}
 	}
-	return rp.Infrastructure + rp.Supplementary
+	return costData.TierBGPUMonthlyRateMicroCents
 }

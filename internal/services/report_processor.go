@@ -376,6 +376,12 @@ func runContainerRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) e
 			log.Warnf("native engine: cost data fetch failed (NotifNoCostData applied via ApplySavingsEstimates): %v", costErr)
 			costData = nil
 		}
+		// #942: derive the Tier-B GPU rate from the same window the spend
+		// covers, so GPU savings survive without a configured rate. No-op
+		// without GPU spend or inventory; never overrides the configured rate.
+		if err := engine.EnsureTierBGPURate(ctx, pool, orgID, clusterUUID, start, now, costData); err != nil {
+			log.Warnf("native engine: tier-b gpu rate derivation failed (gpu savings may be unpriced): %v", err)
+		}
 	}
 	card := costdata.ClusterCostDataToRateCard(costData)
 

@@ -95,17 +95,18 @@ dangerous one, because a float payload decodes into a pliant reader.
 
 ## Consequences
 
-- **`cost_model_gpu_cost` is deliberately not consumed (#905)**: koku sends
-  it (SUM'd, money-scaled), ROS drops it at decode by decision. GPU money
-  prices the GPU rate — which is missing, not misfiled (#942: a Tier-B GPU
-  rate needs a GPU denominator column from koku; until then GPU savings
-  price from configured `gpu_cost_per_month` or report zero). Folding it
-  into the CPU/memory numerators would trade a conservative understatement
-  for an overstatement — rejected. The exclusion follows the cost model's
-  own attribution semantics (direct resource costs stay attributed; only
-  unattributable overhead is distributed), and mirrors koku's resource-
-  specific `wasted_cost` numerators. On OCP-on-cloud, cloud GPU instance
-  spend reaches savings via `infrastructure_raw_cost` regardless.
+- **`cost_model_gpu_cost` is consumed only by the Tier-B GPU rate (#905/#942)**:
+  koku sends it (SUM'd, money-scaled); ROS decodes it for exactly one purpose —
+  the cluster Tier-B GPU rate, `(Σ namespace cost_model_gpu_cost) ÷ (cluster
+  GPU-count-months from the node digests)`, applied as the fallback when no
+  `gpu_cost_per_month` is configured, so GPU time-slicing/MIG savings survive
+  without declared rates. It never enters the CPU/memory numerators: GPU money
+  prices the GPU rate (the cost model's own attribution semantics — direct
+  resource costs stay attributed; only unattributable overhead is distributed),
+  mirroring koku's resource-specific `wasted_cost` numerators. On OCP-on-cloud,
+  cloud GPU instance spend reaches savings via `infrastructure_raw_cost`
+  regardless, and the GPU rate's numerator is the explicit charge alone — GPU
+  money is counted once. The usage-based refinement (gpu-hours) is #943.
 - ROS and koku can be released in either order *once Masu-first has happened*;
   after that, a ROS rollback to a pre-#461 build against a microcents-capable
   Masu still works, because the default is unchanged.

@@ -341,6 +341,8 @@ var (
 	ApplyGPUSavings                              = gpu.ApplyGPUSavings
 	ComputeGPUSavingsCents                       = gpu.ComputeGPUSavingsCents
 	GPUMonthlyRate                               = gpu.GPUMonthlyRate
+	ClusterGPUCountMonths                        = gpu.ClusterGPUCountMonths
+	EnsureTierBGPURate                           = gpu.EnsureTierBGPURate
 	ClassifyGPUWorkload                          = gpu.ClassifyGPUWorkload
 	DefaultGPUThresholds                         = gpu.DefaultGPUThresholds
 	MatchGPUModel                                = gpu.MatchGPUModel

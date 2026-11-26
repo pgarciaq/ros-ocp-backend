@@ -47,6 +47,12 @@ type ClusterCostData struct {
 	Currency         string                    `json:"currency"`
 	ConfiguredRates  map[string]RatePair       `json:"configured_rates"`
 	Namespaces       map[string]NamespaceCosts `json:"namespace_aggregates"`
+
+	// TierBGPUMonthlyRateMicroCents is not on the wire: it is the cluster
+	// Tier-B GPU rate derived from observed spend (#942) — Σ namespace
+	// cost_model_gpu_cost ÷ cluster GPU-count-months. GPUMonthlyRate
+	// prefers the configured gpu_cost_per_month and falls back to this.
+	TierBGPUMonthlyRateMicroCents int64 `json:"-"`
 }
 
 // RatePair holds the infrastructure and supplementary rate for a metric.
@@ -60,24 +66,52 @@ type RatePair struct {
 // NamespaceCosts holds the cost/usage aggregates for a single namespace.
 // Money fields are micro-cents; hour fields are milli-hours.
 //
-// #905: cost_model_gpu_cost is deliberately NOT decoded — GPU money prices
-// the GPU rate, never the CPU/memory rates (the cost model's own attribution
+// #905/#942: cost_model_gpu_cost is decoded for the Tier-B GPU rate ONLY —
+// it never enters the CPU/memory numerators (the cost model's own attribution
 // semantics: directly-attributable resource costs stay attributed; only
-// unattributable overhead is distributed). The GPU rate is a tracked gap
-// (#942: needs a GPU denominator column from koku, coordinated with koku's
-// upcoming cloud GPU rate support). On OCP-on-cloud clusters, cloud GPU
-// instance spend already reaches savings via InfraCost (the back-populate
-// writes the cloud's amortized instance cost there). Do not "fix" this by
-// adding the field to a CPU/memory numerator — see #905's decision record.
+// unattributable overhead is distributed). On OCP-on-cloud clusters, cloud
+// GPU instance spend already reaches savings via InfraCost (the back-populate
+// writes the cloud's amortized instance cost there) — the GPU rate's
+// numerator is cost_model_gpu_cost alone, so GPU money is counted once.
+// See #905's decision record and #942 (the Tier-B GPU rate).
 type NamespaceCosts struct {
 	CostModelCPUCost int64 `json:"cost_model_cpu_cost"`
 	CostModelMemCost int64 `json:"cost_model_memory_cost"`
+	// CostModelGPUCost is the namespace's explicit GPU charges (#942: the
+	// Tier-B GPU rate numerator; never a CPU/memory term — see above).
+	CostModelGPUCost int64 `json:"cost_model_gpu_cost"`
 	InfraCost        int64 `json:"infrastructure_cost"`
 	DistributedCost  int64 `json:"distributed_cost"`
 	CPUUsageHours    int64 `json:"cpu_usage_hours"`
 	CPURequestHours  int64 `json:"cpu_request_hours"`
 	MemUsageHours    int64 `json:"mem_usage_hours"`
 	MemRequestHours  int64 `json:"mem_request_hours"`
+}
+
+// DeriveTierBGPURate computes the cluster Tier-B GPU rate (#942):
+// (Σ namespace cost_model_gpu_cost) ÷ gpuCountMonths, deposited on the
+// card's TierBGPUMonthlyRateMicroCents. gpuCountMonths is the cluster's
+// GPU inventory over the window in GPU-months (Σ node_gpu_count across the
+// node digests ÷ 30), derived by the caller from ROS's own data — windows
+// align by construction because ROS fetches effective_rates with the same
+// range. The numerator is cost_model_gpu_cost ONLY: infrastructure spend
+// (which on OCP-on-cloud carries the cloud's GPU instance cost) never
+// enters — GPU money is counted once (#905's no-double-count constraint).
+// No rate when there is no spend or no inventory (current behavior: zero
+// GPU savings). A configured gpu_cost_per_month always wins (Tier A) —
+// GPUMonthlyRate reads this field only as the fallback.
+func (cd *ClusterCostData) DeriveTierBGPURate(gpuCountMonths float64) {
+	if cd == nil {
+		return
+	}
+	var spend int64
+	for _, ns := range cd.Namespaces {
+		spend += ns.CostModelGPUCost
+	}
+	if spend <= 0 || gpuCountMonths <= 0 {
+		return
+	}
+	cd.TierBGPUMonthlyRateMicroCents = int64(float64(spend) / gpuCountMonths)
 }
 
 // CostDataProvider is the interface for fetching cost data from Koku.
