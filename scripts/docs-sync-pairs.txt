@@ -1,0 +1,48 @@
+# docs-sync-pairs.txt — the parallel docs/ ↔ docs-site pair registry (#816).
+#
+# Format: internal|public|flags|notes
+#   flags: '-' for a normal pair; 'stub' marks a public-led stub pair whose
+#   internal side is a pointer/summary by design (public-only edits are
+#   expected and silent; an internal-only edit to the stub is reported).
+#
+# The registry is the checker's coverage: a pair missing from this list is
+# invisible to the one-sided drift signal (the #770 lesson — found again at
+# scale in #816's audit, which registered the 17 previously-unlisted pairs).
+docs/architecture/configurability.md|docs-site/architecture/configurability.md|-|Class A env defaults
+docs/architecture/recommendation-engines.md|docs-site/architecture/recommendation-engines.md|-|Class A engine contracts
+docs/architecture/cost-integration.md|docs-site/architecture/cost-integration.md|-|Class A Koku contracts
+docs/architecture/plugin-architecture.md|docs-site/architecture/plugin-architecture.md|stub|stub pair (pointer; facts live on docs-site — restructured 2026-11-01)
+docs/architecture/native-migration.md|docs-site/architecture/native-migration.md|stub|stub pair (pointer; facts live on docs-site — restructured 2026-11-01)
+docs/architecture/notification-codes.md|docs-site/api-reference/notification-codes.md|-|codes matrix
+docs/architecture/api-versioning.md|docs-site/architecture/api-versioning.md|-|API versioning contract
+docs/architecture/gpu-catalogs.md|docs-site/architecture/gpu-catalogs.md|-|GPU catalog contract
+docs/architecture/kafka-schema.md|docs-site/architecture/kafka-schema.md|-|Kafka payload schema
+docs/architecture/plugin-phases.md|docs-site/architecture/plugin-phases.md|-|plugin phase lifecycle
+docs/architecture/recommendation-ids.md|docs-site/architecture/recommendation-ids.md|-|recommendation ID contract
+docs/architecture/database-conventions.md|docs-site/architecture/database-conventions.md|-|DB conventions
+docs/architecture/gpu-classification.md|docs-site/architecture/gpu-classification.md|-|GPU classification
+docs/architecture/hpa-vpa-deployment-modes.md|docs-site/architecture/hpa-vpa-deployment-modes.md|-|HPA/VPA deployment modes
+docs/architecture/decay-weights.md|docs-site/architecture/decay-weights.md|-|depth differs intentionally
+docs/architecture/recommendation-math.md|docs-site/architecture/recommendation-math.md|-|depth differs intentionally
+docs/ui-integration-guide.md|docs-site/ui-integration-guide.md|-|UI/API contracts
+docs/upgrade-runbook.md|docs-site/operations/upgrade-runbook.md|-|ops upgrade
+docs/operations/configuration.md|docs-site/configuration.md|-|Class A config (depth differs)
+docs/operations/configuration.md|docs-site/operations/configuration.md|-|ops mirror of configuration
+docs/operations/monitoring.md|docs-site/monitoring.md|-|ops monitoring
+docs/operations/query-performance.md|docs-site/query-performance.md|-|ops query perf
+docs/operations/api-query-parameters.md|docs-site/plugin-reference/query-parameters.md|-|query params
+docs/known-issues.md|docs-site/known-issues.md|-|known issues
+docs/testing/validating-native-engine.md|docs-site/testing/validating-native-engine.md|-|testing
+docs/testing/iqe-requirements-registration.md|docs-site/testing/iqe-requirements-registration.md|-|testing
+docs/features/idle-detection.md|docs-site/plugin-reference/idle-detection.md|-|depth differs intentionally
+docs/features-business-hours.md|docs-site/plugin-reference/business-hours.md|-|depth differs intentionally
+docs/features/quota-recommendations.md|docs-site/plugin-reference/quota.md|-|plugin-ref
+docs/features/cluster-resource-quota.md|docs-site/plugin-reference/cluster-quota.md|-|plugin-ref
+docs/features/tag-filtering.md|docs-site/features/tag-filtering.md|stub|stub pair (internal keeps dual-path + db-mode only)
+docs/features/history-and-quality.md|docs-site/features/history-and-quality.md|-|depth differs intentionally
+docs/features/namespace-recommendations.md|docs-site/features/namespace-recommendations.md|-|depth differs intentionally
+docs/features/container-recommendations.md|docs-site/features/container-recommendations.md|-|depth differs intentionally
+docs/features/gpu-mig.md|docs-site/features/gpu-mig.md|-|depth differs intentionally
+docs/features/gpu-time-slicing.md|docs-site/features/gpu-time-slicing.md|-|depth differs intentionally (internal deeper)
+docs/features/node-recommendations.md|docs-site/features/node-recommendations.md|-|depth differs intentionally
+docs/features/savings-estimations.md|docs-site/features/savings-estimations.md|-|depth differs intentionally

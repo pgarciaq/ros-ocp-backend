@@ -8,6 +8,8 @@ on:
       - 'docs/**'
       - 'CONTRIBUTING.md'
       - 'scripts/check-docs-drift.sh'
+      - 'scripts/check-docs-sync.sh'
+      - 'scripts/docs-sync-pairs.txt'
       - '.github/workflows/docs-drift.yml'
   push:
     branches: [main, 'pgarciaq-rosocp-superpowers-*']
@@ -16,6 +18,8 @@ on:
       - 'docs/**'
       - 'CONTRIBUTING.md'
       - 'scripts/check-docs-drift.sh'
+      - 'scripts/check-docs-sync.sh'
+      - 'scripts/docs-sync-pairs.txt'
       - '.github/workflows/docs-drift.yml'
   workflow_dispatch:
 
@@ -26,10 +30,19 @@ jobs:
   drift:
     runs-on: ubuntu-latest
     steps:
+      # Full history: the one-sided drift signal (#816) needs the merge base
+      # with origin/main — the default shallow checkout cannot compute it.
       - uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
 
       - name: Install ripgrep
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
 
       - name: Check docs drift footguns
         run: ./scripts/check-docs-drift.sh
+
+      # Advisory (#816): ONE-SIDED lines name pairs edited on one side only.
+      # Exit 0 by design — blocking only if the signal earns trust.
+      - name: Check docs pair one-sided drift (advisory)
+        run: make docs-sync-check

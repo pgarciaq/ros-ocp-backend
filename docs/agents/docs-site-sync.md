@@ -49,7 +49,18 @@ Expected differences (do **not** “fix” by wholesale copy):
 | `docs/architecture/native-migration.md` | `docs-site/architecture/native-migration.md` (**stub pair**: pointer + internal-only notes; facts live on the docs-site side only — restructured 2026-11-01, docs dedup pass) |
 | `docs/architecture/notification-codes.md` | `docs-site/api-reference/notification-codes.md` |
 
-Inventory / checklist: `make docs-sync-check` (`scripts/check-docs-sync.sh`).
+Inventory / checklist: `make docs-sync-check` (`scripts/check-docs-sync.sh`, registry:
+`scripts/docs-sync-pairs.txt`).
+
+**The ONE-SIDED signal (#816):** the checker reports a pair as `ONE-SIDED` when
+exactly one side of it changed on the branch vs the merge base with the default
+branch — that is the "edited one side and forgot the other" case; DIFF lines are
+expected noise (link style, depth). Stub pairs (`stub` flag in the registry) are
+public-led: a public-only edit is silent by design; an internal-only edit to the
+stub is reported. Runs advisory in the Docs drift checks workflow. Known
+coarseness: on a long-lived branch the signal is cumulative attendance (both
+sides touched at any point since the merge base → silent), so it is strongest at
+PR scale — which is where it runs.
 
 ## When editing any file under `docs/` **or** `docs-site/`
 
