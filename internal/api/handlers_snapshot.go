@@ -11,6 +11,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
@@ -235,10 +236,10 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	defer rows.Close()
 
 	storedCurrency := fetchClusterCurrency(ctx, orgID, resolveClusterFilterUUID(ctx, pool, orgID, clusterFilter))
-	userCurrency := resolveUserCurrency(ctx, orgID)
+	userCurrency := resolveUserCurrency(ctx, orgID, storedCurrency)
 	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 	displayCurrency := userCurrency
-	if rate == 1.0 && storedCurrency != userCurrency {
+	if rate == costdata.PPBIdentity && storedCurrency != userCurrency {
 		displayCurrency = storedCurrency
 	}
 

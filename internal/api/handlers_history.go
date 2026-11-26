@@ -356,14 +356,14 @@ func optBoolStr(v *bool) string {
 // display currency for Meta.Currency.
 func enrichHistoryRowsCurrency(ctx context.Context, orgID string, rows []model.HistoryRow) string {
 	if len(rows) == 0 {
-		return resolveUserCurrency(ctx, orgID)
+		return resolveUserCurrency(ctx, orgID, "")
 	}
 
-	userCurrency := resolveUserCurrency(ctx, orgID)
+	userCurrency := resolveUserCurrency(ctx, orgID, "")
 
 	type clusterRate struct {
 		currency string
-		rate     float64
+		rate     int64
 	}
 	cache := map[string]clusterRate{}
 
@@ -374,7 +374,7 @@ func enrichHistoryRowsCurrency(ctx context.Context, orgID string, rows []model.H
 		sc := fetchClusterCurrency(ctx, orgID, clusterUUID)
 		r := fetchExchangeRate(ctx, orgID, sc, userCurrency)
 		cur := userCurrency
-		if r == 1.0 && sc != userCurrency {
+		if r == costdata.PPBIdentity && sc != userCurrency {
 			cur = sc
 		}
 		cr := clusterRate{currency: cur, rate: r}
@@ -384,8 +384,8 @@ func enrichHistoryRowsCurrency(ctx context.Context, orgID string, rows []model.H
 
 	for i := range rows {
 		cr := resolveForCluster(rows[i].ClusterUUID)
-		if cr.rate != 1.0 && rows[i].EstimatedSavingsCents != nil {
-			*rows[i].EstimatedSavingsCents = costdata.ConvertCents(*rows[i].EstimatedSavingsCents, cr.rate)
+		if cr.rate != costdata.PPBIdentity && rows[i].EstimatedSavingsCents != nil {
+			*rows[i].EstimatedSavingsCents = costdata.ConvertCentsPPB(*rows[i].EstimatedSavingsCents, cr.rate)
 		}
 		rows[i].Currency = cr.currency
 	}

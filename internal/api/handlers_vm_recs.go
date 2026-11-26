@@ -18,6 +18,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -392,7 +393,7 @@ func GetVMRecommendations(c echo.Context) error {
 		data = append(data, vmRecToAPIItem(r))
 	}
 
-	userCurrency := resolveUserCurrency(ctx, orgID)
+	userCurrency := resolveUserCurrency(ctx, orgID, "")
 	for i, r := range recs {
 		rowStoredCurrency := money.DefaultCurrency
 		if r.SavingsCurrency != nil && *r.SavingsCurrency != "" {
@@ -400,7 +401,7 @@ func GetVMRecommendations(c echo.Context) error {
 		}
 		rowRate := fetchExchangeRate(ctx, orgID, rowStoredCurrency, userCurrency)
 		rowDisplayCurrency := userCurrency
-		if rowRate == 1.0 && rowStoredCurrency != userCurrency {
+		if rowRate == costdata.PPBIdentity && rowStoredCurrency != userCurrency {
 			rowDisplayCurrency = rowStoredCurrency
 		}
 		convertAndPatchAmount(data[i].Savings, rowRate, rowDisplayCurrency)
@@ -554,14 +555,14 @@ func GetVMRecommendationDetail(c echo.Context) error {
 		item.BusinessHours = bh
 	}
 
-	detailUserCurrency := resolveUserCurrency(ctx, orgID)
+	detailUserCurrency := resolveUserCurrency(ctx, orgID, "")
 	detailStoredCurrency := money.DefaultCurrency
 	if rec.SavingsCurrency != nil && *rec.SavingsCurrency != "" {
 		detailStoredCurrency = *rec.SavingsCurrency
 	}
 	detailRate := fetchExchangeRate(ctx, orgID, detailStoredCurrency, detailUserCurrency)
 	detailDisplayCurrency := detailUserCurrency
-	if detailRate == 1.0 && detailStoredCurrency != detailUserCurrency {
+	if detailRate == costdata.PPBIdentity && detailStoredCurrency != detailUserCurrency {
 		detailDisplayCurrency = detailStoredCurrency
 	}
 	convertAndPatchAmount(item.Savings, detailRate, detailDisplayCurrency)

@@ -313,10 +313,10 @@ func GetFleetSavingsSummary(c echo.Context) error {
 		})
 	}
 
-	userCurrency := resolveUserCurrency(ctx, orgID)
+	userCurrency := resolveUserCurrency(ctx, orgID, storedCurrency)
 	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 	displayCurrency := userCurrency
-	if rate == 1.0 && storedCurrency != userCurrency {
+	if rate == costdata.PPBIdentity && storedCurrency != userCurrency {
 		displayCurrency = storedCurrency
 	}
 	convertAndPatchAmount(&summary.EstimatedMonthlySavings, rate, displayCurrency)
@@ -345,13 +345,13 @@ func GetFleetSavingsSummary(c echo.Context) error {
 
 // convertBreakdownAmounts converts every amount in a per-plugin savings/
 // additional-cost split to the display currency. Counts are unaffected.
-func convertBreakdownAmounts(split *FleetSavingsBreakdownByPlugin, rate float64, displayCurrency string) {
+func convertBreakdownAmounts(split *FleetSavingsBreakdownByPlugin, ratePPB int64, displayCurrency string) {
 	entries := []*FleetPluginSavingsBreakdown{
 		&split.Container, &split.GPU, &split.Node, &split.PVC, &split.Snapshot, &split.VM,
 	}
 	for _, e := range entries {
-		convertAndPatchAmount(&e.Savings, rate, displayCurrency)
-		convertAndPatchAmount(&e.AdditionalCost, rate, displayCurrency)
+		convertAndPatchAmount(&e.Savings, ratePPB, displayCurrency)
+		convertAndPatchAmount(&e.AdditionalCost, ratePPB, displayCurrency)
 	}
 }
 
@@ -856,10 +856,10 @@ func queryFleetSavingsByIdleState(ctx context.Context, q db.QueryRower, orgID st
 		return resp, err
 	}
 
-	userCurrency := resolveUserCurrency(ctx, orgID)
+	userCurrency := resolveUserCurrency(ctx, orgID, storedCurrency)
 	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 	displayCurrency := userCurrency
-	if rate == 1.0 && storedCurrency != userCurrency {
+	if rate == costdata.PPBIdentity && storedCurrency != userCurrency {
 		displayCurrency = storedCurrency
 	}
 	for i := range resp.Data {

@@ -3,12 +3,13 @@ package api
 import (
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
@@ -175,7 +176,7 @@ func getHCPGroupedRecommendations(c echo.Context, orgID, scope string, userPermi
 	ctx := c.Request().Context()
 	displayCurrency, rate := resolveDisplayCurrency(ctx, orgID, "")
 	for i := range groups {
-		converted := int64(math.Round(float64(groups[i].SavingsCents) * rate))
+		converted := costdata.ConvertCentsPPB(groups[i].SavingsCents, rate)
 		groups[i].EstimatedSavings = money.FormatCentsToAmountPtr(&converted, displayCurrency)
 	}
 	results := CollectionResponse(groups, c.Request(), count, apiListOptions.Limit, apiListOptions.Offset)
@@ -199,7 +200,7 @@ func getHCPNamespaceGroupedRecommendations(c echo.Context, orgID, scope string, 
 	ctx := c.Request().Context()
 	displayCurrency, rate := resolveDisplayCurrency(ctx, orgID, "")
 	for i := range groups {
-		converted := int64(math.Round(float64(groups[i].SavingsCents) * rate))
+		converted := costdata.ConvertCentsPPB(groups[i].SavingsCents, rate)
 		groups[i].EstimatedSavings = money.FormatCentsToAmountPtr(&converted, displayCurrency)
 	}
 	results := CollectionResponse(groups, c.Request(), count, apiListOptions.Limit, apiListOptions.Offset)

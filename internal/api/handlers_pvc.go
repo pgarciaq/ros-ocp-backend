@@ -9,6 +9,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -239,10 +240,10 @@ func GetPVCRecommendations(c echo.Context) error {
 	defer rows.Close()
 
 	storedCurrency := fetchClusterCurrency(ctx, orgID, resolveClusterFilterUUID(ctx, pool, orgID, listFilters.clusterFilter))
-	userCurrency := resolveUserCurrency(ctx, orgID)
+	userCurrency := resolveUserCurrency(ctx, orgID, storedCurrency)
 	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 	displayCurrency := userCurrency
-	if rate == 1.0 && storedCurrency != userCurrency {
+	if rate == costdata.PPBIdentity && storedCurrency != userCurrency {
 		displayCurrency = storedCurrency
 	}
 

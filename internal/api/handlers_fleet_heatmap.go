@@ -247,15 +247,15 @@ func GetFleetHeatmap(c echo.Context) error {
 	// applyNodeScopeToHeatmap on every request (cold and warm).
 
 	storedCurrency := resolveFleetCurrency(ctx, orgID, allowedClusters)
-	userCurrency := resolveUserCurrency(ctx, orgID)
+	userCurrency := resolveUserCurrency(ctx, orgID, storedCurrency)
 	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 	displayCurrency := userCurrency
-	if rate == 1.0 && storedCurrency != userCurrency {
+	if rate == costdata.PPBIdentity && storedCurrency != userCurrency {
 		displayCurrency = storedCurrency
 	}
-	if rate != 1.0 {
+	if rate != costdata.PPBIdentity {
 		for i := range nodes {
-			nodes[i].EstimatedSavingsCents = costdata.ConvertCents(nodes[i].EstimatedSavingsCents, rate)
+			nodes[i].EstimatedSavingsCents = costdata.ConvertCentsPPB(nodes[i].EstimatedSavingsCents, rate)
 		}
 	}
 

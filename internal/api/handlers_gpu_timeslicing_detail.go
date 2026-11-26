@@ -140,7 +140,7 @@ func GetNodeGPUTimeslicingDetail(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "error", "message": "node not found"})
 	}
 
-	userCurrency := resolveUserCurrency(ctx, orgID)
+	userCurrency := resolveUserCurrency(ctx, orgID, "")
 	convertNodeGPURecsToUserCurrency(ctx, orgID, recs, userCurrency)
 
 	if enrichErr := engine.EnrichNodeGPUTimeslicingDetailWithBusinessHours(ctx, pool, orgID, nodeName, recs); enrichErr != nil {

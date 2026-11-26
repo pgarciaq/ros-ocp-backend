@@ -53,11 +53,13 @@ func TestSetActiveProviderForTest(t *testing.T) {
 
 	currency, err := p.GetUserCurrency(context.Background(), "1234567")
 	require.NoError(t, err)
-	assert.Equal(t, "USD", currency)
+	// #462: the provider no longer invents a currency — "" means unset and
+	// the caller resolves the display chain.
+	assert.Equal(t, "", currency)
 
 	rate, err := p.GetExchangeRate(context.Background(), "1234567", "USD", "EUR")
 	require.NoError(t, err)
-	assert.Equal(t, 1.0, rate)
+	assert.Equal(t, int64(1_000_000_000), rate)
 }
 
 func TestSetActiveProviderForTest_Restore(t *testing.T) {
@@ -92,9 +94,9 @@ func TestNilCostDataProvider_ImplementsInterface(t *testing.T) {
 
 	currency, err := p.GetUserCurrency(context.Background(), "org1")
 	require.NoError(t, err)
-	assert.Equal(t, "USD", currency)
+	assert.Equal(t, "", currency) // #462: unset, not invented
 
 	rate, err := p.GetExchangeRate(context.Background(), "org1", "USD", "EUR")
 	require.NoError(t, err)
-	assert.Equal(t, 1.0, rate)
+	assert.Equal(t, int64(1_000_000_000), rate)
 }

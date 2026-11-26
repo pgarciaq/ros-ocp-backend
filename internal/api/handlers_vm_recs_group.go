@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
@@ -112,7 +113,7 @@ func getVMRecsGrouped(
 	}
 	defer rows.Close()
 
-	userCurrency := resolveUserCurrency(ctx, orgID)
+	userCurrency := resolveUserCurrency(ctx, orgID, "")
 
 	var data []vmGroupedRow
 	for rows.Next() {
@@ -141,7 +142,7 @@ func getVMRecsGrouped(
 			}
 			rowRate := fetchExchangeRate(ctx, orgID, rowStoredCurrency, userCurrency)
 			rowDisplayCurrency := userCurrency
-			if rowRate == 1.0 && rowStoredCurrency != userCurrency {
+			if rowRate == costdata.PPBIdentity && rowStoredCurrency != userCurrency {
 				rowDisplayCurrency = rowStoredCurrency
 			}
 			item.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&savingsCents, rowStoredCurrency)

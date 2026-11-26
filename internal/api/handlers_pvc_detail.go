@@ -7,6 +7,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
@@ -116,10 +117,10 @@ func GetPVCRecommendationDetail(c echo.Context) error {
 	summary.ID = model.NativePvcID(id.clusterUUID, id.namespace, id.pvcName)
 
 	storedCurrency := resolveClusterCurrency(ctx, orgID, id.clusterUUID)
-	userCurrency := resolveUserCurrency(ctx, orgID)
+	userCurrency := resolveUserCurrency(ctx, orgID, storedCurrency)
 	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 	displayCurrency := userCurrency
-	if rate == 1.0 && storedCurrency != userCurrency {
+	if rate == costdata.PPBIdentity && storedCurrency != userCurrency {
 		displayCurrency = storedCurrency
 	}
 

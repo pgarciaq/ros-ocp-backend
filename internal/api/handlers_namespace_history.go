@@ -80,7 +80,7 @@ func GetNamespaceRecommendationHistory(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
 
-	currency := resolveUserCurrency(c.Request().Context(), orgID)
+	currency := resolveUserCurrency(c.Request().Context(), orgID, "")
 	result, lookupErr := model.GetNativeNamespaceRecommendationByID(orgID, idStr, userPerms, false, currency)
 	if lookupErr != nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -116,7 +116,7 @@ func GetNamespaceRecommendationHistoryWithFallback(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": limErr.Error()})
 	}
 
-	currency := resolveUserCurrency(c.Request().Context(), orgID)
+	currency := resolveUserCurrency(c.Request().Context(), orgID, "")
 	result, lookupErr := model.GetNativeNamespaceRecommendationByID(orgID, idStr, userPerms, false, currency)
 	if lookupErr != nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{

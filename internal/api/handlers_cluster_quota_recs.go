@@ -13,6 +13,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -281,10 +282,10 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 	defer rows.Close()
 
 	storedCurrency := fetchClusterCurrency(ctx, orgID, resolveClusterFilterUUID(ctx, pool, orgID, clusterFilter))
-	userCurrency := resolveUserCurrency(ctx, orgID)
+	userCurrency := resolveUserCurrency(ctx, orgID, storedCurrency)
 	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 	displayCurrency := userCurrency
-	if rate == 1.0 && storedCurrency != userCurrency {
+	if rate == costdata.PPBIdentity && storedCurrency != userCurrency {
 		displayCurrency = storedCurrency
 	}
 
@@ -411,10 +412,10 @@ func getClusterQuotaRecommendationsGrouped(
 	defer rows.Close()
 
 	storedCurrency := fetchClusterCurrency(ctx, orgID, "")
-	userCurrency := resolveUserCurrency(ctx, orgID)
+	userCurrency := resolveUserCurrency(ctx, orgID, storedCurrency)
 	groupRate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 	groupDisplayCurrency := userCurrency
-	if groupRate == 1.0 && storedCurrency != userCurrency {
+	if groupRate == costdata.PPBIdentity && storedCurrency != userCurrency {
 		groupDisplayCurrency = storedCurrency
 	}
 
@@ -442,7 +443,7 @@ func getClusterQuotaRecommendationsGrouped(
 			rowStoredCurrency := fetchClusterCurrency(ctx, orgID, groupKey)
 			rowRate := fetchExchangeRate(ctx, orgID, rowStoredCurrency, userCurrency)
 			rowDisplayCurrency := userCurrency
-			if rowRate == 1.0 && rowStoredCurrency != userCurrency {
+			if rowRate == costdata.PPBIdentity && rowStoredCurrency != userCurrency {
 				rowDisplayCurrency = rowStoredCurrency
 			}
 			item.EstimatedSavings = money.FormatCentsToAmountPtr(&savingsCents, rowStoredCurrency)

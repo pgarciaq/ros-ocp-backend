@@ -13,6 +13,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -167,7 +168,7 @@ func respondNodeGPURecommendationsFromTable(
 			hasNext = false
 			nextCursor = ""
 		}
-		tagUserCurrency := resolveUserCurrency(ctx, orgIDStr)
+		tagUserCurrency := resolveUserCurrency(ctx, orgIDStr, "")
 		convertNodeGPURecsToUserCurrency(ctx, orgIDStr, paged, tagUserCurrency)
 		nodeCurrency := nodeGPURecsDisplayCurrency(ctx, pool, orgIDStr, clusterFilter, paged, tagUserCurrency)
 		totalSavings := sumNodeGPUSavings(paged, nodeCurrency)
@@ -214,7 +215,7 @@ func respondNodeGPURecommendationsFromTable(
 		nextCursor = ""
 	}
 
-	persistUserCurrency := resolveUserCurrency(ctx, orgIDStr)
+	persistUserCurrency := resolveUserCurrency(ctx, orgIDStr, "")
 	convertNodeGPURecsToUserCurrency(ctx, orgIDStr, paged, persistUserCurrency)
 	nodeCurrency := nodeGPURecsDisplayCurrency(ctx, pool, orgIDStr, clusterFilter, paged, persistUserCurrency)
 	totalSavings := sumNodeGPUSavings(paged, nodeCurrency)
@@ -488,7 +489,7 @@ func nodeGPURecsDisplayCurrency(ctx context.Context, pool *pgxpool.Pool, orgID, 
 	}
 	sc := fetchClusterCurrency(ctx, orgID, refCluster)
 	r := fetchExchangeRate(ctx, orgID, sc, userCurrency)
-	if r == 1.0 && sc != userCurrency {
+	if r == costdata.PPBIdentity && sc != userCurrency {
 		return sc
 	}
 	return userCurrency

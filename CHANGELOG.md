@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **FX conversion is integer arithmetic; the display currency stops inventing USD ([#462](https://github.com/pgarciaq/ros-ocp-backend/issues/462)):**
+  the exchange rate masu sends as a string (to keep Decimal digits) is now
+  parsed to integer parts-per-billion and applied with an overflow-safe
+  integer conversion — no float64 round-trip, and amounts above ~$92M per
+  row (where the naive product would overflow int64) convert exactly. The
+  display-currency chain is now **user preference → cost-model currency →
+  USD**: when the user's preference is unavailable and the cluster's cost
+  model is known (e.g. EUR), savings display in the stored currency instead
+  of a phantom USD conversion. USD remains the final fallback, matching
+  koku's own cost_units Coalesce. (The unset-preference case needs a
+  one-line koku follow-up to be distinguishable from a real USD preference —
+  tracked on #462.)
 - **Tag sync no longer fails the whole org on high-cardinality keys ([#941](https://github.com/pgarciaq/ros-ocp-backend/issues/941)):**
   one enabled tag key with more than 500 distinct values made the entire
   all-or-nothing org tag sync fail validation (HTTP 400) — koku re-raised,

@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"sync"
 	"time"
 
@@ -120,13 +119,17 @@ type CostDataProvider interface {
 		start, end time.Time) (*ClusterCostData, error)
 
 	// GetUserCurrency returns the user's preferred display currency for the
-	// given org_id. Returns DefaultCurrency ("USD") on error or when unset.
+	// given org_id. Returns "" on error or when unset (#462: the caller
+	// resolves the display chain — preference -> stored -> USD — never the
+	// provider inventing a currency).
 	GetUserCurrency(ctx context.Context, orgID string) (string, error)
 
 	// GetExchangeRate returns the exchange rate for converting from one
-	// currency to another. Returns 1.0 when the pair is unavailable or an
-	// error occurs (fallback: no conversion).
-	GetExchangeRate(ctx context.Context, orgID, from, to string) (float64, error)
+	// currency to another, as integer parts-per-billion (#462: the masu
+	// rate is a stringified Decimal; ppb avoids the float64 round-trip).
+	// Returns PPBIdentity when the pair is unavailable or an error occurs
+	// (fallback: no conversion).
+	GetExchangeRate(ctx context.Context, orgID, from, to string) (int64, error)
 }
 
 var (
@@ -342,7 +345,7 @@ const (
 
 var (
 	exchangeRateCacheMu sync.RWMutex
-	exchangeRateCache   *expirable.LRU[string, float64]
+	exchangeRateCache   *expirable.LRU[string, int64]
 )
 
 func exchangeRateCacheKey(orgID, from, to string) string {
@@ -356,7 +359,7 @@ func exchangeRateCacheTTL() time.Duration {
 	return defaultExchangeRateCacheTTL
 }
 
-func currentExchangeRateCache() *expirable.LRU[string, float64] {
+func currentExchangeRateCache() *expirable.LRU[string, int64] {
 	exchangeRateCacheMu.RLock()
 	c := exchangeRateCache
 	exchangeRateCacheMu.RUnlock()
@@ -366,7 +369,7 @@ func currentExchangeRateCache() *expirable.LRU[string, float64] {
 	return initExchangeRateCache()
 }
 
-func initExchangeRateCache() *expirable.LRU[string, float64] {
+func initExchangeRateCache() *expirable.LRU[string, int64] {
 	exchangeRateCacheMu.Lock()
 	defer exchangeRateCacheMu.Unlock()
 	if exchangeRateCache != nil {
@@ -376,9 +379,9 @@ func initExchangeRateCache() *expirable.LRU[string, float64] {
 	if cfg := config.GetConfig(); cfg != nil && cfg.ExchangeRateCacheMaxEntries > 0 {
 		maxEntries = cfg.ExchangeRateCacheMaxEntries
 	}
-	exchangeRateCache = expirable.NewLRU[string, float64](
+	exchangeRateCache = expirable.NewLRU[string, int64](
 		maxEntries,
-		func(_ string, _ float64) { exchangeRateCacheRemovals.Inc() },
+		func(_ string, _ int64) { exchangeRateCacheRemovals.Inc() },
 		exchangeRateCacheTTL(),
 	)
 	exchangeRateCacheSize.Set(0)
@@ -399,7 +402,9 @@ func (p *HTTPCostDataProvider) GetUserCurrency(
 
 	currency, err := p.fetchUserCurrency(ctx, orgID)
 	if err != nil {
-		return DefaultCurrency, err
+		// #462: no invented currency — the caller resolves the chain
+		// (preference -> stored -> USD).
+		return "", err
 	}
 	c.Add(orgID, currency)
 	userCurrencyCacheSize.Set(float64(c.Len()))
@@ -419,35 +424,35 @@ func (p *HTTPCostDataProvider) fetchUserCurrency(
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return DefaultCurrency, fmt.Errorf("build user-currency request: %w", err)
+		return "", fmt.Errorf("build user-currency request: %w", err)
 	}
 
 	resp, err := p.HTTPClient.Do(req)
 	if err != nil {
-		return DefaultCurrency, fmt.Errorf("HTTP user-currency request: %w", err)
+		return "", fmt.Errorf("HTTP user-currency request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return DefaultCurrency, fmt.Errorf("koku user-currency returned %d: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("koku user-currency returned %d: %s", resp.StatusCode, string(body))
 	}
 
 	var data userCurrencyResponse
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return DefaultCurrency, fmt.Errorf("decode user-currency response: %w", err)
+		return "", fmt.Errorf("decode user-currency response: %w", err)
 	}
-	if data.Currency == "" {
-		return DefaultCurrency, nil
-	}
+	// #462: an unset preference returns "" — the caller resolves the chain.
+	// (koku currently defaults unset to "USD" at the endpoint; the one-line
+	// koku follow-up recorded on #462 makes unset distinguishable.)
 	return data.Currency, nil
 }
 
 func (p *HTTPCostDataProvider) GetExchangeRate(
 	ctx context.Context, orgID, from, to string,
-) (float64, error) {
+) (int64, error) {
 	if from == to {
-		return 1.0, nil
+		return PPBIdentity, nil
 	}
 
 	key := exchangeRateCacheKey(orgID, from, to)
@@ -458,7 +463,7 @@ func (p *HTTPCostDataProvider) GetExchangeRate(
 
 	rate, err := p.fetchExchangeRate(ctx, orgID, from, to)
 	if err != nil {
-		return 1.0, err
+		return PPBIdentity, err
 	}
 	c.Add(key, rate)
 	exchangeRateCacheSize.Set(float64(c.Len()))
@@ -473,7 +478,7 @@ type exchangeRateResponse struct {
 
 func (p *HTTPCostDataProvider) fetchExchangeRate(
 	ctx context.Context, orgID, from, to string,
-) (float64, error) {
+) (int64, error) {
 	schema := "org" + orgID
 	params := url.Values{}
 	params.Set("schema", schema)
@@ -483,23 +488,23 @@ func (p *HTTPCostDataProvider) fetchExchangeRate(
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return 1.0, fmt.Errorf("build exchange-rate request: %w", err)
+		return PPBIdentity, fmt.Errorf("build exchange-rate request: %w", err)
 	}
 
 	resp, err := p.HTTPClient.Do(req)
 	if err != nil {
-		return 1.0, fmt.Errorf("HTTP exchange-rate request: %w", err)
+		return PPBIdentity, fmt.Errorf("HTTP exchange-rate request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return 1.0, fmt.Errorf("koku exchange-rate returned %d: %s", resp.StatusCode, string(body))
+		return PPBIdentity, fmt.Errorf("koku exchange-rate returned %d: %s", resp.StatusCode, string(body))
 	}
 
 	var data exchangeRateResponse
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return 1.0, fmt.Errorf("decode exchange-rate response: %w", err)
+		return PPBIdentity, fmt.Errorf("decode exchange-rate response: %w", err)
 	}
 
 	if data.Rate == nil {
@@ -507,13 +512,14 @@ func (p *HTTPCostDataProvider) fetchExchangeRate(
 			"org_id":        orgID,
 			"from_currency": from,
 			"to_currency":   to,
-		}).Warn("exchange rate unavailable, defaulting to 1.0")
-		return 1.0, nil
+		}).Warn("exchange rate unavailable, defaulting to identity")
+		return PPBIdentity, nil
 	}
 
-	rate, err := strconv.ParseFloat(*data.Rate, 64)
+	// #462: keep the string until conversion — integer ppb, no float64.
+	rate, err := ParseRateStringToPPB(*data.Rate)
 	if err != nil {
-		return 1.0, fmt.Errorf("parse exchange rate %q: %w", *data.Rate, err)
+		return PPBIdentity, fmt.Errorf("parse exchange rate %q: %w", *data.Rate, err)
 	}
 	return rate, nil
 }
@@ -537,13 +543,14 @@ func (n *NilCostDataProvider) GetEffectiveRates(
 func (n *NilCostDataProvider) GetUserCurrency(
 	ctx context.Context, orgID string,
 ) (string, error) {
-	return DefaultCurrency, nil
+	// #462: "" — the caller resolves the display chain.
+	return "", nil
 }
 
 func (n *NilCostDataProvider) GetExchangeRate(
 	ctx context.Context, orgID, from, to string,
-) (float64, error) {
-	return 1.0, nil
+) (int64, error) {
+	return PPBIdentity, nil
 }
 
 // SetCostDataCacheTTLForTest recreates the cache with the given TTL, preserving

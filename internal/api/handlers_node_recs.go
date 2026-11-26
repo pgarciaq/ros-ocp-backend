@@ -300,7 +300,7 @@ func respondNodeGPURecommendationsTripleSQL(
 		nextCursor = ""
 	}
 
-	userCurrency := resolveUserCurrency(ctx, orgIDStr)
+	userCurrency := resolveUserCurrency(ctx, orgIDStr, "")
 	convertNodeGPURecsToUserCurrency(ctx, orgIDStr, paged, userCurrency)
 	// #798: resolve the filter (alias → UUID) before the currency layer —
 	// the raw value fails the Koku lookup and silently falls back to USD.
@@ -312,7 +312,7 @@ func respondNodeGPURecommendationsTripleSQL(
 	if refCluster != "" {
 		sc := fetchClusterCurrency(ctx, orgIDStr, refCluster)
 		r := fetchExchangeRate(ctx, orgIDStr, sc, userCurrency)
-		if r == 1.0 && sc != userCurrency {
+		if r == costdata.PPBIdentity && sc != userCurrency {
 			displayCurrency = sc
 		}
 	}

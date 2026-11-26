@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
@@ -129,10 +130,10 @@ func queryFleetSavingsByTag(
 		return resp, err
 	}
 
-	userCurrency := resolveUserCurrency(ctx, params.OrgID)
+	userCurrency := resolveUserCurrency(ctx, params.OrgID, "")
 	rate := fetchExchangeRate(ctx, params.OrgID, storedCurrency, userCurrency)
 	displayCurrency := userCurrency
-	if rate == 1.0 && storedCurrency != userCurrency {
+	if rate == costdata.PPBIdentity && storedCurrency != userCurrency {
 		displayCurrency = storedCurrency
 	}
 	for i := range resp.Data {

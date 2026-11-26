@@ -15,47 +15,63 @@ func fetchClusterCurrency(ctx context.Context, orgID, clusterUUID string) string
 
 // resolveUserCurrency returns the user's preferred display currency via the
 // CostDataProvider, falling back to DefaultCurrency on error.
-func resolveUserCurrency(ctx context.Context, orgID string) string {
+// resolveUserCurrency resolves the display currency chain (#462):
+// user preference -> stored (cost-model) currency -> USD. The provider no
+// longer invents a currency on error or unset; USD as the final fallback
+// mirrors koku's own cost_units Coalesce (D2, recorded on #462). The stored
+// currency comes from the cluster's cost data at the call site.
+func resolveUserCurrency(ctx context.Context, orgID, storedCurrency string) string {
 	provider := costdata.ActiveProvider()
 	if provider == nil {
+		if storedCurrency != "" {
+			return storedCurrency
+		}
 		return costdata.DefaultCurrency
 	}
 	currency, err := provider.GetUserCurrency(ctx, orgID)
 	if err != nil {
 		log.Warnf("failed to resolve user currency for org=%s: %v", orgID, err)
-		return costdata.DefaultCurrency
+		currency = ""
+	}
+	if currency == "" {
+		currency = storedCurrency
+	}
+	if currency == "" {
+		currency = costdata.DefaultCurrency
 	}
 	return currency
 }
 
 // fetchExchangeRate returns the exchange rate to convert from storedCurrency
-// to userCurrency. Returns 1.0 on error (no conversion).
-func fetchExchangeRate(ctx context.Context, orgID, storedCurrency, userCurrency string) float64 {
+// to userCurrency, as integer parts-per-billion (#462). Returns the identity
+// rate on error (no conversion).
+func fetchExchangeRate(ctx context.Context, orgID, storedCurrency, userCurrency string) int64 {
 	if storedCurrency == userCurrency {
-		return 1.0
+		return costdata.PPBIdentity
 	}
 	provider := costdata.ActiveProvider()
 	if provider == nil {
-		return 1.0
+		return costdata.PPBIdentity
 	}
 	rate, err := provider.GetExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 	if err != nil {
 		log.Warnf("exchange rate unavailable for %s->%s (org=%s): %v, returning in stored currency",
 			storedCurrency, userCurrency, orgID, err)
-		return 1.0
+		return costdata.PPBIdentity
 	}
 	return rate
 }
 
 // convertAndPatchAmount converts a MoneyAmount's value from storedCurrency to
-// targetCurrency using the given rate, and updates its Units field.
-func convertAndPatchAmount(m *money.MoneyAmount, rate float64, targetCurrency string) {
+// targetCurrency using the given ppb rate (#462: integer parts-per-billion,
+// overflow-safe), and updates its Units field.
+func convertAndPatchAmount(m *money.MoneyAmount, ratePPB int64, targetCurrency string) {
 	if m == nil {
 		return
 	}
-	if rate != 1.0 {
+	if ratePPB != costdata.PPBIdentity && ratePPB > 0 {
 		cents := money.ParseCentsFromAmount(m)
-		converted := costdata.ConvertCents(cents, rate)
+		converted := costdata.ConvertCentsPPB(cents, ratePPB)
 		money.SetAmountFromCents(m, converted)
 	}
 	money.PatchUnits(m, targetCurrency)
@@ -65,14 +81,13 @@ func enrichContainerCurrency(ctx context.Context, orgID string, results []model.
 	if len(results) == 0 {
 		return
 	}
-	userCurrency := resolveUserCurrency(ctx, orgID)
-
 	sampleCluster := results[0].ClusterUUID
 	storedCurrency := GetCachedCurrency(ctx, orgID, sampleCluster)
+	userCurrency := resolveUserCurrency(ctx, orgID, storedCurrency)
 	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 
 	displayCurrency := userCurrency
-	if rate == 1.0 && storedCurrency != userCurrency {
+	if rate == costdata.PPBIdentity && storedCurrency != userCurrency {
 		displayCurrency = storedCurrency
 	}
 
@@ -84,7 +99,7 @@ func enrichContainerCurrency(ctx context.Context, orgID string, results []model.
 			sc := GetCachedCurrency(ctx, orgID, clusterUUID)
 			r = fetchExchangeRate(ctx, orgID, sc, userCurrency)
 			cur = userCurrency
-			if r == 1.0 && sc != userCurrency {
+			if r == costdata.PPBIdentity && sc != userCurrency {
 				cur = sc
 			}
 		}
@@ -111,14 +126,13 @@ func enrichNamespaceCurrency(ctx context.Context, orgID string, results []model.
 	if len(results) == 0 {
 		return
 	}
-	userCurrency := resolveUserCurrency(ctx, orgID)
-
 	sampleCluster := results[0].ClusterUUID
 	storedCurrency := GetCachedCurrency(ctx, orgID, sampleCluster)
+	userCurrency := resolveUserCurrency(ctx, orgID, storedCurrency)
 	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 
 	displayCurrency := userCurrency
-	if rate == 1.0 && storedCurrency != userCurrency {
+	if rate == costdata.PPBIdentity && storedCurrency != userCurrency {
 		displayCurrency = storedCurrency
 	}
 
@@ -130,7 +144,7 @@ func enrichNamespaceCurrency(ctx context.Context, orgID string, results []model.
 			sc := GetCachedCurrency(ctx, orgID, clusterUUID)
 			r = fetchExchangeRate(ctx, orgID, sc, userCurrency)
 			cur = userCurrency
-			if r == 1.0 && sc != userCurrency {
+			if r == costdata.PPBIdentity && sc != userCurrency {
 				cur = sc
 			}
 		}
@@ -156,37 +170,38 @@ func resolveClusterCurrency(ctx context.Context, orgID, clusterUUID string) stri
 // the cost model's stored currency) when exchange rates are available.
 func resolveListCurrencyFromRequest(c echo.Context, orgID string) string {
 	ctx := c.Request().Context()
-	userCurrency := resolveUserCurrency(ctx, orgID)
-	return userCurrency
+	// No stored currency in scope here (request-time, before data); the
+	// chain's stored leg resolves to USD when no preference is known.
+	return resolveUserCurrency(ctx, orgID, "")
 }
 
 // resolveDisplayCurrency returns the target display currency and the
 // exchange rate for converting to it. When exchange rates are unavailable,
 // it falls back to the stored currency with rate 1.0.
-func resolveDisplayCurrency(ctx context.Context, orgID, clusterUUID string) (displayCurrency string, rate float64) {
+func resolveDisplayCurrency(ctx context.Context, orgID, clusterUUID string) (displayCurrency string, ratePPB int64) {
 	storedCurrency := resolveClusterCurrency(ctx, orgID, clusterUUID)
-	userCurrency := resolveUserCurrency(ctx, orgID)
-	rate = fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
+	userCurrency := resolveUserCurrency(ctx, orgID, storedCurrency)
+	ratePPB = fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 	displayCurrency = userCurrency
-	if rate == 1.0 && storedCurrency != userCurrency {
+	if ratePPB == costdata.PPBIdentity && storedCurrency != userCurrency {
 		displayCurrency = storedCurrency
 	}
-	return displayCurrency, rate
+	return displayCurrency, ratePPB
 }
 
 // convertNodeUtilRecsAmounts converts EstimatedMonthlySavings in all
 // term/engine combinations of node utilization recommendations.
-func convertNodeUtilRecsAmounts(recs []model.NodeUtilizationRec, rate float64, currency string) {
+func convertNodeUtilRecsAmounts(recs []model.NodeUtilizationRec, ratePPB int64, currency string) {
 	for _, rec := range recs {
 		for _, termRec := range rec.RecommendationTerms {
 			if termRec.RecommendationEngines == nil {
 				continue
 			}
 			if termRec.RecommendationEngines.Cost != nil {
-				convertAndPatchAmount(termRec.RecommendationEngines.Cost.EstimatedMonthlySavings, rate, currency)
+				convertAndPatchAmount(termRec.RecommendationEngines.Cost.EstimatedMonthlySavings, ratePPB, currency)
 			}
 			if termRec.RecommendationEngines.Performance != nil {
-				convertAndPatchAmount(termRec.RecommendationEngines.Performance.EstimatedMonthlySavings, rate, currency)
+				convertAndPatchAmount(termRec.RecommendationEngines.Performance.EstimatedMonthlySavings, ratePPB, currency)
 			}
 		}
 	}
@@ -205,7 +220,7 @@ func convertNodeGPURecsToUserCurrency(ctx context.Context, orgID string, recs []
 	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 
 	displayCurrency := userCurrency
-	if rate == 1.0 && storedCurrency != userCurrency {
+	if rate == costdata.PPBIdentity && storedCurrency != userCurrency {
 		displayCurrency = storedCurrency
 	}
 
@@ -216,7 +231,7 @@ func convertNodeGPURecsToUserCurrency(ctx context.Context, orgID string, recs []
 			sc := fetchClusterCurrency(ctx, orgID, recs[i].ClusterUUID)
 			r = fetchExchangeRate(ctx, orgID, sc, userCurrency)
 			cur = userCurrency
-			if r == 1.0 && sc != userCurrency {
+			if r == costdata.PPBIdentity && sc != userCurrency {
 				cur = sc
 			}
 		}

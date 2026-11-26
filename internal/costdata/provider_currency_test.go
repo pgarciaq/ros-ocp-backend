@@ -54,7 +54,7 @@ func TestGetUserCurrency_EmptyCurrency_DefaultsUSD(t *testing.T) {
 	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
 	currency, err := provider.GetUserCurrency(context.Background(), "20002")
 	require.NoError(t, err)
-	assert.Equal(t, "USD", currency)
+	assert.Equal(t, "", currency) // #462: unset, not invented
 }
 
 func TestGetUserCurrency_ServerError_DefaultsUSD(t *testing.T) {
@@ -68,7 +68,7 @@ func TestGetUserCurrency_ServerError_DefaultsUSD(t *testing.T) {
 	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
 	currency, err := provider.GetUserCurrency(context.Background(), "20003")
 	require.Error(t, err)
-	assert.Equal(t, "USD", currency)
+	assert.Equal(t, "", currency) // #462: unset, not invented
 }
 
 func TestGetUserCurrency_Timeout_DefaultsUSD(t *testing.T) {
@@ -83,7 +83,7 @@ func TestGetUserCurrency_Timeout_DefaultsUSD(t *testing.T) {
 	provider := costdata.NewHTTPCostDataProvider(srv.URL, 50*time.Millisecond)
 	currency, err := provider.GetUserCurrency(context.Background(), "20004")
 	require.Error(t, err)
-	assert.Equal(t, "USD", currency)
+	assert.Equal(t, "", currency) // #462: unset, not invented
 }
 
 func TestGetUserCurrency_MalformedJSON_DefaultsUSD(t *testing.T) {
@@ -98,7 +98,7 @@ func TestGetUserCurrency_MalformedJSON_DefaultsUSD(t *testing.T) {
 	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
 	currency, err := provider.GetUserCurrency(context.Background(), "20005")
 	require.Error(t, err)
-	assert.Equal(t, "USD", currency)
+	assert.Equal(t, "", currency) // #462: unset, not invented
 }
 
 func TestGetUserCurrency_Caching(t *testing.T) {
@@ -145,7 +145,7 @@ func TestGetExchangeRate_Success(t *testing.T) {
 	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
 	rate, err := provider.GetExchangeRate(context.Background(), "1234567", "USD", "EUR")
 	require.NoError(t, err)
-	assert.InDelta(t, 0.92, rate, 0.001)
+	assert.Equal(t, int64(920_000_000), rate)
 }
 
 func TestGetExchangeRate_SameCurrency_NoHTTP(t *testing.T) {
@@ -159,7 +159,7 @@ func TestGetExchangeRate_SameCurrency_NoHTTP(t *testing.T) {
 	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
 	rate, err := provider.GetExchangeRate(context.Background(), "1234567", "USD", "USD")
 	require.NoError(t, err)
-	assert.Equal(t, 1.0, rate)
+	assert.Equal(t, int64(1_000_000_000), rate)
 }
 
 func TestGetExchangeRate_NullRate_Returns1(t *testing.T) {
@@ -174,7 +174,7 @@ func TestGetExchangeRate_NullRate_Returns1(t *testing.T) {
 	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
 	rate, err := provider.GetExchangeRate(context.Background(), "1234567", "USD", "JPY")
 	require.NoError(t, err)
-	assert.Equal(t, 1.0, rate)
+	assert.Equal(t, int64(1_000_000_000), rate)
 }
 
 func TestGetExchangeRate_ServerError_Returns1(t *testing.T) {
@@ -188,7 +188,7 @@ func TestGetExchangeRate_ServerError_Returns1(t *testing.T) {
 	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
 	rate, err := provider.GetExchangeRate(context.Background(), "20006", "USD", "EUR")
 	require.Error(t, err)
-	assert.Equal(t, 1.0, rate)
+	assert.Equal(t, int64(1_000_000_000), rate)
 }
 
 func TestGetExchangeRate_InvalidRateString_Returns1(t *testing.T) {
@@ -203,7 +203,7 @@ func TestGetExchangeRate_InvalidRateString_Returns1(t *testing.T) {
 	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
 	rate, err := provider.GetExchangeRate(context.Background(), "20007", "USD", "EUR")
 	require.Error(t, err)
-	assert.Equal(t, 1.0, rate)
+	assert.Equal(t, int64(1_000_000_000), rate)
 }
 
 func TestGetExchangeRate_Caching(t *testing.T) {
@@ -221,11 +221,11 @@ func TestGetExchangeRate_Caching(t *testing.T) {
 
 	r1, err := provider.GetExchangeRate(context.Background(), "org1", "USD", "EUR")
 	require.NoError(t, err)
-	assert.InDelta(t, 0.92, r1, 0.001)
+	assert.Equal(t, int64(920_000_000), r1)
 
 	r2, err := provider.GetExchangeRate(context.Background(), "org1", "USD", "EUR")
 	require.NoError(t, err)
-	assert.InDelta(t, 0.92, r2, 0.001)
+	assert.Equal(t, int64(920_000_000), r2)
 	assert.Equal(t, 1, callCount, "second call should hit cache")
 }
 
@@ -238,7 +238,7 @@ func TestNilProvider_GetUserCurrency(t *testing.T) {
 	p := &costdata.NilCostDataProvider{}
 	currency, err := p.GetUserCurrency(context.Background(), "1234567")
 	require.NoError(t, err)
-	assert.Equal(t, "USD", currency)
+	assert.Equal(t, "", currency) // #462: unset, not invented
 }
 
 func TestNilProvider_GetExchangeRate(t *testing.T) {
@@ -246,5 +246,5 @@ func TestNilProvider_GetExchangeRate(t *testing.T) {
 	p := &costdata.NilCostDataProvider{}
 	rate, err := p.GetExchangeRate(context.Background(), "1234567", "USD", "EUR")
 	require.NoError(t, err)
-	assert.Equal(t, 1.0, rate)
+	assert.Equal(t, int64(1_000_000_000), rate)
 }

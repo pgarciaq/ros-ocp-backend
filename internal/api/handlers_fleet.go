@@ -159,10 +159,10 @@ func GetFleetSummary(c echo.Context) error {
 	}
 	summary.TotalMonthlySavings = money.FormatUSDToAmount(totalSavingsUSD, storedCurrency)
 
-	userCurrency := resolveUserCurrency(ctx, orgID)
+	userCurrency := resolveUserCurrency(ctx, orgID, storedCurrency)
 	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 	displayCurrency := userCurrency
-	if rate == 1.0 && storedCurrency != userCurrency {
+	if rate == costdata.PPBIdentity && storedCurrency != userCurrency {
 		displayCurrency = storedCurrency
 	}
 	convertAndPatchAmount(&summary.TotalMonthlySavings, rate, displayCurrency)
