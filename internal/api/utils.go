@@ -37,6 +37,12 @@ func escapeILIKE(s string) string {
 	return s
 }
 
+// containsPattern is the single construction point for an ILIKE
+// contains-pattern: the value is escaped so user input matches literally
+// (#956). Postgres ILIKE defaults to backslash as the escape character, so
+// callers bind the result without an ESCAPE clause.
+func containsPattern(s string) string { return "%" + escapeILIKE(s) + "%" }
+
 func CollectionResponse[T any](collection []T, req *http.Request, count, limit, offset int) *Collection[T] {
 	var first, previous, next, last string
 	q := req.URL.Query()
@@ -340,7 +346,7 @@ func parseClusterParams(value string, mode string, uuidColumn string, orgID stri
 	}
 	s := value
 	if modeClause.Wrap {
-		s = "%" + escapeILIKE(s) + "%"
+		s = containsPattern(s)
 	}
 	if uuidColumn == "" {
 		return []string{"clusters.cluster_alias" + modeClause.Suffix}, []string{s}, nil
@@ -396,7 +402,7 @@ func buildModeClause(param, column, mode string, vals []string, maxLen int, allo
 				s = strings.ToLower(s)
 			}
 			if modeClause.Wrap {
-				s = "%" + escapeILIKE(s) + "%"
+				s = containsPattern(s)
 			}
 			allParamVals = append(allParamVals, s)
 			allSQLClauses = append(allSQLClauses, workloadTypeSQLColumn(param, column, modeClause.Suffix))
@@ -621,7 +627,7 @@ func parseNativeClusterParams(value string, mode string) ([]string, []string, er
 		return nil, nil, err
 	}
 	if modeClause.Wrap {
-		s = "%" + escapeILIKE(s) + "%"
+		s = containsPattern(s)
 	}
 	return []string{"c.cluster_alias" + modeClause.Suffix}, []string{s}, nil
 }
@@ -660,7 +666,7 @@ func buildNativeModeClause(param, column, mode string, vals []string, maxLen int
 				s = strings.ToLower(s)
 			}
 			if modeClause.Wrap {
-				s = "%" + escapeILIKE(s) + "%"
+				s = containsPattern(s)
 			}
 			allParamVals = append(allParamVals, s)
 			allSQLClauses = append(allSQLClauses, workloadTypeSQLColumn(param, column, modeClause.Suffix))

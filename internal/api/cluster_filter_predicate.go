@@ -46,7 +46,7 @@ func clusterFilterPredicate(orgID, column, value string, argIdx int) (sql string
 	}
 	return " AND " + column + " IN (SELECT cluster_uuid FROM clusters WHERE org_id = $" + strconv.Itoa(argIdx) +
 			" AND cluster_alias ILIKE $" + strconv.Itoa(argIdx+1) + ")",
-		[]any{orgID, "%" + value + "%"}, argIdx + 2, true
+		[]any{orgID, containsPattern(value)}, argIdx + 2, true
 }
 
 // resolveClusterFilterUUIDs resolves a client cluster filter to EVERY
@@ -61,7 +61,7 @@ func resolveClusterFilterUUIDs(ctx context.Context, pool *pgxpool.Pool, orgID, v
 	}
 	rows, err := pool.Query(ctx, `
 		SELECT cluster_uuid::text FROM clusters
-		WHERE org_id = $1 AND cluster_alias ILIKE $2`, orgID, "%"+value+"%")
+		WHERE org_id = $1 AND cluster_alias ILIKE $2`, orgID, containsPattern(value))
 	if err != nil {
 		return nil
 	}
@@ -116,7 +116,7 @@ func resolveClusterFilterUUID(ctx context.Context, pool *pgxpool.Pool, orgID, va
 	err := pool.QueryRow(ctx, `
 		SELECT cluster_uuid::text FROM clusters
 		WHERE org_id = $1 AND cluster_alias ILIKE $2
-		LIMIT 1`, orgID, "%"+value+"%").Scan(&resolved)
+		LIMIT 1`, orgID, containsPattern(value)).Scan(&resolved)
 	if err != nil {
 		return ""
 	}

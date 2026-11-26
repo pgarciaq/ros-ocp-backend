@@ -56,4 +56,24 @@ func TestClusterFilterPredicate(t *testing.T) {
 		assert.Equal(t, []any{"4C5D2494-F20D-4B4A-9ED7-848954A2B103"}, args,
 			"upper-case UUIDs bind exactly (pgx casts case-insensitively)")
 	})
+
+	t.Run("alias metacharacters are matched literally", func(t *testing.T) {
+		sql, args, _, ok := clusterFilterPredicate(orgID, "cluster_uuid", "team_a", 2)
+		require.True(t, ok)
+		assert.Contains(t, sql, "cluster_alias ILIKE $3")
+		assert.Equal(t, []any{orgID, `%team\_a%`}, args,
+			"an underscore is a literal, not ILIKE's single-char wildcard (#956)")
+	})
+
+	t.Run("a percent filter does not become the whole-fleet wildcard", func(t *testing.T) {
+		_, args, _, _ := clusterFilterPredicate(orgID, "cluster_uuid", "%", 2)
+		assert.Equal(t, []any{orgID, `%\%%`}, args,
+			"`filter[cluster]=%` must match a literal percent, not every alias (#956)")
+	})
+
+	t.Run("a literal backslash escapes exactly once", func(t *testing.T) {
+		_, args, _, _ := clusterFilterPredicate(orgID, "cluster_uuid", `a\b`, 2)
+		assert.Equal(t, []any{orgID, `%a\\b%`}, args,
+			"the backslash is escaped once; double-escaping matches a sequence that is not there (#956)")
+	})
 }
