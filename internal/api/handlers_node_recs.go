@@ -107,7 +107,17 @@ func GetNodeRecommendations(c echo.Context) error {
 	// self-resolve first-match via resolveClusterFilterUUID. An unknown
 	// alias yields an empty set (200 + count 0, the #790 contract).
 	if clusterFilter != "" {
-		matched := resolveClusterFilterUUIDs(ctx, pool, orgIDStr, clusterFilter)
+		matched, matchErr := resolveClusterFilterUUIDs(ctx, pool, orgIDStr, clusterFilter)
+		if matchErr != nil {
+			// #953: a failed lookup must not render as "nothing matched" —
+			// that is indistinguishable from a filter that legitimately
+			// matches no cluster (#790's 200 + count 0).
+			hlog.Errorf("GetNodeRecommendations: failed to resolve cluster filter: %v", matchErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
+				"status":  "error",
+				"message": "unable to resolve cluster filter",
+			})
+		}
 		clusterUUIDs = intersectClusterUUIDs(clusterUUIDs, matched)
 		if len(clusterUUIDs) == 0 {
 			setRecommendationNoStore(c)

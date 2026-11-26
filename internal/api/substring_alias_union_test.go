@@ -15,6 +15,8 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api"
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
+	"github.com/redhatinsights/ros-ocp-backend/internal/clustercache"
+	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -137,6 +139,37 @@ func TestClusterFilter_SubstringAliasIsUnionOnAllSurfaces(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &parsed))
 		assert.Equal(t, 0, parsed.Meta.Count,
 			"the unknown-alias contract (#790) holds under the predicate path")
+	})
+
+	// #953: the two union surfaces scope ROWS with the multi-match resolver,
+	// so a lookup failure must be distinguishable from "nothing matched" —
+	// otherwise a database blip renders as a confident empty list. The org
+	// cache is warmed first so getClustersForOrg still succeeds from cache and
+	// the failure lands on the filter resolver, not the earlier clusters 503.
+	t.Run("a failed alias lookup is 503, not an empty 200", func(t *testing.T) {
+		_, err := clustercache.GetClustersForOrg(ctx, orgID)
+		require.NoError(t, err)
+		live := database.GetPool()
+		require.NotNil(t, live)
+		dead, err := pgxpool.New(context.Background(), "postgres://u:p@127.0.0.1:1/db?connect_timeout=2")
+		require.NoError(t, err)
+		t.Cleanup(dead.Close)
+		database.SetForceTestPool(dead)
+		t.Cleanup(func() { database.SetForceTestPool(live) })
+
+		for _, path := range []string{
+			"/recommendations/openshift/gpu/timeslicing",
+			"/recommendations/openshift/gpu",
+		} {
+			req := httptest.NewRequest(http.MethodGet,
+				"/api/cost-management/v1"+path+"?filter[cluster]=team-a", nil)
+			req.Header.Set("X-Rh-Identity", id)
+			rec := httptest.NewRecorder()
+			app.ServeHTTP(rec, req)
+			assert.Equal(t, http.StatusServiceUnavailable, rec.Code,
+				"%s: a failed cluster-filter lookup must not render as an empty list (#953); body: %s",
+				path, rec.Body.String())
+		}
 	})
 }
 

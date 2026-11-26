@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -97,19 +98,37 @@ func TestResolveClusterFilterUUIDs(t *testing.T) {
 	}
 
 	t.Run("uppercase UUID filter returns the canonical uuid", func(t *testing.T) {
-		got := resolveClusterFilterUUIDs(ctx, pool, orgID, strings.ToUpper(clusterC))
+		got, qErr := resolveClusterFilterUUIDs(ctx, pool, orgID, strings.ToUpper(clusterC))
+		require.NoError(t, qErr)
 		assert.Equal(t, []string{clusterC}, got,
 			"an uppercase UUID filter must return the cluster, not no rows (#951)")
 	})
 
 	t.Run("alias substring returns every match", func(t *testing.T) {
-		got := resolveClusterFilterUUIDs(ctx, pool, orgID, "a")
+		got, qErr := resolveClusterFilterUUIDs(ctx, pool, orgID, "a")
+		require.NoError(t, qErr)
 		assert.ElementsMatch(t, []string{testutil.TestClusterUUID, clusterB, clusterC}, got,
 			"union semantics: every matching cluster, not the first (#947)")
 	})
 
 	t.Run("unknown alias resolves to nothing", func(t *testing.T) {
-		got := resolveClusterFilterUUIDs(ctx, pool, orgID, "no-such-cluster")
+		got, qErr := resolveClusterFilterUUIDs(ctx, pool, orgID, "no-such-cluster")
+		require.NoError(t, qErr)
 		assert.Nil(t, got, "no match is not an error — the caller renders 200 + empty (#790)")
 	})
+}
+
+// TestResolveClusterFilterUUIDsReportsLookupFailure: a failed lookup must be
+// reported, not rendered as "nothing matched" (#953). A lazily-connected pool
+// against a dead DSN fails at Query, so this needs no container.
+func TestResolveClusterFilterUUIDsReportsLookupFailure(t *testing.T) {
+	dead, err := pgxpool.New(context.Background(), "postgres://u:p@127.0.0.1:1/db?connect_timeout=2")
+	require.NoError(t, err)
+	defer dead.Close()
+
+	got, qErr := resolveClusterFilterUUIDs(context.Background(), dead, "org-1", "team-a")
+	require.Error(t, qErr, "a failed lookup must not be reported as 'nothing matched' (#953)")
+	assert.Nil(t, got)
+	assert.Contains(t, qErr.Error(), "team-a",
+		"the error names the filter it failed to resolve, so the log identifies the request (#953)")
 }

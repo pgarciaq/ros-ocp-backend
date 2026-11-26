@@ -66,7 +66,15 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	// (200 + empty, the #790 contract); a UUID passes through as itself.
 	// The currency layer's first-match resolution is unchanged.
 	if clusterFilter != "" {
-		matched := resolveClusterFilterUUIDs(ctx, pool, orgIDStr, clusterFilter)
+		matched, matchErr := resolveClusterFilterUUIDs(ctx, pool, orgIDStr, clusterFilter)
+		if matchErr != nil {
+			// #953: row-scope lookup failure is 503, never an empty list.
+			hlog.Errorf("GetGPUMIGRecommendations: failed to resolve cluster filter: %v", matchErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
+				"status":  "error",
+				"message": "unable to resolve cluster filter",
+			})
+		}
 		if len(matched) == 0 {
 			return emptyGPUMIGResponse(c, orgIDStr, opts)
 		}

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -66,29 +67,41 @@ func canonicalClusterUUID(value string) (string, bool) {
 
 // resolveClusterFilterUUIDs resolves a client cluster filter to EVERY
 // org-scoped matching cluster UUID (#947: union semantics for substring
-// aliases). A UUID filter returns itself; an empty/no-match returns nil.
-func resolveClusterFilterUUIDs(ctx context.Context, pool *pgxpool.Pool, orgID, value string) []string {
+// aliases), canonicalized (#951). A UUID filter returns itself; an empty or
+// no-match filter returns nil with a nil error — the #790 contract, where "no
+// match" is 200 + empty at the caller.
+//
+// A lookup FAILURE is returned as an error (#953): both callers scope rows
+// with this set, and "I could not look" must never render as "nothing
+// matched". resolveClusterFilterUUID, which only labels the display currency,
+// deliberately keeps the best-effort contract instead — the two resolvers are
+// different contracts, not one contract in two arities.
+func resolveClusterFilterUUIDs(ctx context.Context, pool *pgxpool.Pool, orgID, value string) ([]string, error) {
 	if value == "" {
-		return nil
+		return nil, nil
 	}
 	if canon, ok := canonicalClusterUUID(value); ok {
-		return []string{canon}
+		return []string{canon}, nil
 	}
 	rows, err := pool.Query(ctx, `
 		SELECT cluster_uuid::text FROM clusters
 		WHERE org_id = $1 AND cluster_alias ILIKE $2`, orgID, containsPattern(value))
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("resolve cluster filter %q: %w", value, err)
 	}
 	defer rows.Close()
 	var out []string
 	for rows.Next() {
 		var id string
-		if err := rows.Scan(&id); err == nil {
-			out = append(out, id)
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan cluster uuid for filter %q: %w", value, err)
 		}
+		out = append(out, id)
 	}
-	return out
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate cluster matches for filter %q: %w", value, err)
+	}
+	return out, nil
 }
 
 // intersectClusterUUIDs returns the members of allowed that appear in match,
