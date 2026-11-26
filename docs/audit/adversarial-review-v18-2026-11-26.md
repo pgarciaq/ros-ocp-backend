@@ -256,9 +256,10 @@ Recommendation: remove the two stale worktrees and delete the local branches (th
 | Item | Decision | State |
 |---|---|---|
 | Public-contract change for V18-04(b) | Acceptable — internal consumers only (owner, 2026-11-26) | **decided** |
-| V18-03 failure shape | Row scope: 503 on lookup failure (2 call sites). Currency: stays best-effort with a warn log (10 call sites). In-repo fault-injection test; the IQE limitation is recorded | **recommended, pending** |
+| V18-03 failure shape | Row scope: 503 on lookup failure (2 call sites). Currency: stays best-effort with a warn log (10 call sites). In-repo fault-injection test; the IQE limitation is recorded | **decided 2026-11-27** (recorded on [#953](https://github.com/pgarciaq/ros-ocp-backend/issues/953#issuecomment-7205737242)) |
+| V18-04(b) remedy | Warn and exclude: sum only page-currency rows by `.Units`, name exclusions in the existing `warnings[]`. Drop-the-field and move-to-GPU-TS rejected with reasons | **decided 2026-11-27** (recorded on [#954](https://github.com/pgarciaq/ros-ocp-backend/issues/954#issuecomment-7205737517)) |
 | V18-06 wildcard escaping | Escaping the ILIKE metacharacters in the same patch as V18-01/V18-03 | **filed as [#956](https://github.com/pgarciaq/ros-ocp-backend/issues/956)** |
-| Remediation batching | A: V18-01+03+04a (+#956) · B: V18-05 (IQE, parallel) · C: #950 → V18-02 · D: V18-04b; no #944 dependency | **recommended, pending** |
+| Remediation batching | A: V18-01+03+04a (+#956) · B: V18-05 (IQE, parallel) · C: #950 → V18-02 · D: V18-04b; no #944 dependency | **A approved to plan 2026-11-27**; B–D queued |
 | #950 unify-vs-document | Options note posted on the issue 2026-11-27 (unify all five recommended; the detail is list-shaped, so no ambiguity rule is needed) | **owner decision pending** |
 | #944 resolutions | Keep `go 1.26.9`; decide `limit=-1` explicitly; adopt the CVE/`.env`/hermetic commits | **notes for #944 — not in flight** |
 | KMO stale worktrees/branches | Removed / deleted; tips verified on `pgarciaq/` and in the phase branch | **done 2026-11-26** |
