@@ -60,6 +60,16 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	warningScope := staticTagWarningScope(userPerms, fleetSummaryNeedsClusterFilter(userPerms), rbacAllowedClusters)
 
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
+	// #798: normalize a KNOWN alias filter to its UUID once at entry, so row
+	// scoping (restrictClustersToQueryFilter is exact-UUID-match), the
+	// persisted-table uuid binding, and the currency layer all see the UUID.
+	// An unknown alias stays raw — restrictClustersToQueryFilter then misses,
+	// preserving the #790 unknown-alias contract (200 + empty).
+	if clusterFilter != "" {
+		if resolved := resolveClusterFilterUUID(ctx, pool, orgIDStr, clusterFilter); resolved != "" {
+			clusterFilter = resolved
+		}
+	}
 	clusterUUIDs, clusterFilterMiss := restrictClustersToQueryFilter(clusterUUIDs, clusterFilter)
 	if clusterFilterMiss {
 		return emptyGPUMIGResponse(c, orgIDStr, opts)

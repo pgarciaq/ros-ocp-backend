@@ -99,6 +99,16 @@ func GetNodeRecommendations(c echo.Context) error {
 	clusterUUIDs = filterClustersByRBAC(clusterUUIDs, userPerms)
 
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
+	// #798: normalize a KNOWN alias filter to its UUID once at entry, so row
+	// scoping (restrictClustersToQueryFilter is exact-UUID-match), the
+	// persisted-table uuid binding, and the currency layer all see the UUID.
+	// An unknown alias stays raw — restrictClustersToQueryFilter then misses,
+	// preserving the #790 unknown-alias contract (200 + empty).
+	if clusterFilter != "" {
+		if resolved := resolveClusterFilterUUID(ctx, pool, orgIDStr, clusterFilter); resolved != "" {
+			clusterFilter = resolved
+		}
+	}
 	clusterUUIDs, clusterFilterMiss := restrictClustersToQueryFilter(clusterUUIDs, clusterFilter)
 	if clusterFilterMiss {
 		setRecommendationNoStore(c)
@@ -292,7 +302,9 @@ func respondNodeGPURecommendationsTripleSQL(
 
 	userCurrency := resolveUserCurrency(ctx, orgIDStr)
 	convertNodeGPURecsToUserCurrency(ctx, orgIDStr, paged, userCurrency)
-	refCluster := clusterFilter
+	// #798: resolve the filter (alias → UUID) before the currency layer —
+	// the raw value fails the Koku lookup and silently falls back to USD.
+	refCluster := resolveClusterFilterUUID(ctx, pool, orgIDStr, clusterFilter)
 	if refCluster == "" {
 		refCluster = firstTripleCluster
 	}

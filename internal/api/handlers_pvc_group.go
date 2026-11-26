@@ -86,7 +86,7 @@ func getPVCRecommendationsGrouped(
 	}
 	defer rows.Close()
 
-	storedCurrency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+	storedCurrency := fetchClusterCurrency(ctx, orgID, resolveClusterFilterUUID(ctx, pool, orgID, clusterFilter))
 	userCurrency := resolveUserCurrency(ctx, orgID)
 	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 	displayCurrency := userCurrency
