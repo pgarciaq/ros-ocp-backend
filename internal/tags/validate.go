@@ -11,7 +11,18 @@ const (
 	maxTagValueLen          = 1024
 	maxTagKeysPerSync       = 500
 	maxNamespaceTagsPerSync = 50_000
-	maxTagValuesPerKey      = 500
+	// #941: koku sends the org-wide union of distinct values per enabled
+	// key; the old 500-per-key cap 400'd the whole all-or-nothing org sync
+	// when one enabled high-cardinality key crossed it, leaving stale tags
+	// indefinitely. 10,000 gives that key 20x headroom.
+	maxTagValuesPerKey = 10_000
+	// maxTotalTagValuesPerSync is the total-values budget across the whole
+	// tag_keys catalog (#941): the worst-case payload stays exactly today's
+	// — koku bounds enabled keys at 200 (ENABLED_TAG_LIMIT), so the real
+	// ceiling was 200 x 500 = 100,000. The budget is the bound that does
+	// not depend on the producer's key count: an operator raising koku's
+	// ENABLED_TAG_LIMIT still meets the same total.
+	maxTotalTagValuesPerSync = 100_000
 )
 
 // ValidateSyncRequest checks the inbound tag sync payload before database work.
@@ -31,6 +42,7 @@ func ValidateSyncRequest(req SyncRequest) error {
 	if len(req.TagKeys) > maxTagKeysPerSync {
 		return fmt.Errorf("tag_keys exceeds maximum of %d entries", maxTagKeysPerSync)
 	}
+	totalTagValues := 0
 	for i, entry := range req.TagKeys {
 		key := strings.TrimSpace(entry.Key)
 		if key == "" {
@@ -42,11 +54,15 @@ func ValidateSyncRequest(req SyncRequest) error {
 		if len(entry.Values) > maxTagValuesPerKey {
 			return fmt.Errorf("tag_keys[%d]: values exceeds maximum of %d entries", i, maxTagValuesPerKey)
 		}
+		totalTagValues += len(entry.Values)
 		for j, value := range entry.Values {
 			if err := validateTagValue(value); err != nil {
 				return fmt.Errorf("tag_keys[%d].values[%d]: %w", i, j, err)
 			}
 		}
+	}
+	if totalTagValues > maxTotalTagValuesPerSync {
+		return fmt.Errorf("tag_keys: total values across keys exceeds maximum of %d entries", maxTotalTagValuesPerSync)
 	}
 
 	if len(req.NamespaceTags) > maxNamespaceTagsPerSync {

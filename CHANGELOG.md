@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Tag sync no longer fails the whole org on high-cardinality keys ([#941](https://github.com/pgarciaq/ros-ocp-backend/issues/941)):**
+  one enabled tag key with more than 500 distinct values made the entire
+  all-or-nothing org tag sync fail validation (HTTP 400) — koku re-raised,
+  the org kept stale tags indefinitely, and the failure repeated every sync
+  with nothing visible in ROS. The per-key cap is now 10,000 (20× headroom
+  for a high-cardinality key) with a new total budget of 100,000 values
+  across the catalog — the worst-case payload stays exactly what it was
+  (koku bounds enabled keys at 200, so 200 × 500 was the real ceiling).
+  The budget is the bound that does not depend on the producer's key count.
 - **GPU savings survive without configured rates — the Tier-B GPU rate ([#942](https://github.com/pgarciaq/ros-ocp-backend/issues/942)):**
   when no `gpu_cost_per_month` is configured, GPU time-slicing and MIG
   recommendations now price their savings from observed spend instead of
