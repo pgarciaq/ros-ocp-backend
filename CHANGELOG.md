@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **High-rate FX conversions were silently wrong ([#948](https://github.com/pgarciaq/ros-ocp-backend/issues/948)):**
+  the integer FX conversion introduced for #462 overflowed its remainder
+  term for exchange rates above ~9.2 (JPY ~150, HUF ~400, IDR ~15000),
+  producing wrong converted amounts above roughly $600K in those pairs.
+  The term now computes in 128-bit arithmetic (math/bits) — verified
+  against an arbitrary-precision big.Int oracle across the previously
+  broken region. The same fix guards a pathological `math.MinInt64`
+  cents value that previously caused infinite recursion (a process
+  crash, [#945](https://github.com/pgarciaq/ros-ocp-backend/issues/945)),
+  and removes the dead float-rate conversion helper #462 had replaced
+  ([#946](https://github.com/pgarciaq/ros-ocp-backend/issues/946)).
 - **FX conversion is integer arithmetic; the display currency stops inventing USD ([#462](https://github.com/pgarciaq/ros-ocp-backend/issues/462)):**
   the exchange rate masu sends as a string (to keep Decimal digits) is now
   parsed to integer parts-per-billion and applied with an overflow-safe

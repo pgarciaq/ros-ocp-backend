@@ -114,17 +114,6 @@ func SetAmountFromCents(m *MoneyAmount, cents int64) {
 	m.Cents = cents
 }
 
-// ConvertAmount converts a MoneyAmount in-place by multiplying its cents value
-// by rate and rounding to the nearest cent.
-func ConvertAmount(m *MoneyAmount, rate float64) {
-	if m == nil || rate == 1.0 {
-		return
-	}
-	cents := ParseCentsFromAmount(m)
-	converted := int64(math.Floor(float64(cents)*rate + 0.5))
-	SetAmountFromCents(m, converted)
-}
-
 // SplitDollarsAndCents is a helper for parsing "$12.34" → 12, 34.
 func SplitDollarsAndCents(value string) (dollars int64, remainder int64) {
 	value = strings.TrimSpace(value)

@@ -128,13 +128,6 @@ func TestSetAmountFromCents_updatesCentsField(t *testing.T) {
 	assert.Equal(t, int64(999), m.Cents)
 }
 
-func TestConvertAmount_updatesCentsField(t *testing.T) {
-	m := FormatCentsToAmount(10000, "USD")
-	ConvertAmount(&m, 0.92)
-	assert.Equal(t, "92.00", m.Value)
-	assert.Equal(t, int64(9200), m.Cents)
-}
-
 func TestSetAmountFromCents(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -158,33 +151,6 @@ func TestSetAmountFromCents(t *testing.T) {
 
 func TestSetAmountFromCents_Nil(t *testing.T) {
 	SetAmountFromCents(nil, 100)
-}
-
-func TestConvertAmount(t *testing.T) {
-	tests := []struct {
-		name     string
-		value    string
-		rate     float64
-		expected string
-	}{
-		{"identity rate", "100.00", 1.0, "100.00"},
-		{"USD to EUR approx", "100.00", 0.92, "92.00"},
-		{"USD to GBP", "250.50", 0.79, "197.90"},
-		{"small amount", "0.01", 1.5, "0.02"},
-		{"negative", "-10.00", 2.0, "-20.00"},
-		{"round half up", "1.00", 0.005, "0.01"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			m := &MoneyAmount{Value: tc.value, Units: "USD"}
-			ConvertAmount(m, tc.rate)
-			assert.Equal(t, tc.expected, m.Value)
-		})
-	}
-}
-
-func TestConvertAmount_Nil(t *testing.T) {
-	ConvertAmount(nil, 1.5)
 }
 
 func BenchmarkParseCentsFromAmount_cached(b *testing.B) {

@@ -3,6 +3,7 @@ package costdata
 import (
 	"fmt"
 	"math"
+	"math/bits"
 	"strconv"
 	"strings"
 )
@@ -66,29 +67,42 @@ func isAllDigits(s string) bool {
 }
 
 // ConvertCentsPPB converts cents by an integer parts-per-billion rate with
-// round-half-up, using a decomposition that cannot overflow int64 (#462).
-//
-// The naive (cents*ppb + 5e8)/1e9 overflows int64 above ~$92M per amount
-// (9.2e9 hundredth-cents x 1e9 ppb ~ int64 max) — fleet savings totals reach
-// that class. The safe form:
+// round-half-up (#462), using a decomposition that cannot overflow int64
+// where the true result fits (#948).
 //
 //	cents = a*1e9 + b   (a = cents/1e9, b < 1e9)
 //	out   = a*ppb + (b*ppb + 5e8)/1e9
 //
-// b*ppb < 1e9*1e9 = 1e18 always fits; a*ppb overflows only past ~1e28
-// cents-by-rate — unreachable. A rate is a ratio, never money: ppb is
+// The b*ppb term is computed in 128 bits (math/bits): b < 1e9 and
+// ppb = rate*1e9, so the product reaches 1e18 only for rates below 1 —
+// high-rate FX pairs (JPY ~150, HUF ~400, IDR ~15000) overflow int64 and,
+// before #948's fix, silently wrapped. The a*ppb term and the final sum
+// overflow only when the true converted amount itself exceeds int64 —
+// never where the result fits. A rate is a ratio, never money: ppb is
 // parts-per-billion of the rate, NOT micro-cents (#462's separation from
 // #461). Negative cents round half-away-from-zero (the float path's
 // floor(x+0.5) differed by one cent at the exact -.5 edge — recorded).
+// math.MinInt64 cents pass through unconverted: the negation below would
+// overflow back to itself and recurse forever (#945).
 func ConvertCentsPPB(cents int64, ppb int64) int64 {
 	if ppb <= 0 {
+		return cents
+	}
+	if cents == math.MinInt64 {
 		return cents
 	}
 	if cents < 0 {
 		return -ConvertCentsPPB(-cents, ppb)
 	}
 	a, b := cents/1_000_000_000, cents%1_000_000_000
-	return a*ppb + (b*ppb+500_000_000)/1_000_000_000
+	hi, lo := bits.Mul64(uint64(b), uint64(ppb))
+	lo, carry := bits.Add64(lo, 500_000_000, 0)
+	hi += carry
+	q, _ := bits.Div64(hi, lo, 1_000_000_000)
+	//nolint:gosec // G115: q = b*ppb/1e9 <= b*rate; b < 1e9 and realistic FX
+	// rates bound q far below int64 max — the guard chain above handles the
+	// pathological inputs.
+	return a*ppb + int64(q)
 }
 
 // PPBIdentity is the identity rate (1.0) in parts-per-billion.
