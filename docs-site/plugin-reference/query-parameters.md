@@ -128,8 +128,10 @@ surfaces — every other row-carrying surface — keep the union above.
 
 **`filter[exact:cluster]` and `exclude[cluster]`, and repeated values.** The
 container and namespace lists and `/history` and `/quality/*` honour all three:
-`exact` binds the alias literally, `exclude` negates the membership, and a
-repeated `filter[cluster]` is OR'd.
+`exact` binds the alias literally, `exclude` removes a cluster whose alias
+matches the value **exactly and case-insensitively** (no substring:
+`exclude[cluster]=prod` removes only a cluster aliased `prod`, never
+`prod-east`), and a repeated `filter[cluster]` is OR'd.
 
 The raw readers read the plain single-value form and ignore the other three,
 and they split in two by what an absent plain form does. `/nodes`, `/pvcs`,

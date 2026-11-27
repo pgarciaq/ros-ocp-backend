@@ -580,3 +580,48 @@ func TestClusterAliasFilter_ContainerKeysExactAliasBindsLiterally(t *testing.T) 
 	assert.Empty(t, get(t, "filter%5Bexact%3Acluster%5D=alpha"),
 		"a partial alias is not a literal match; rows here mean the exact clause was dropped")
 }
+
+// TestClusterAliasFilter_CompatExcludeIsCaseInsensitive is #973's end-to-end
+// pin on the two parseClusterParams branches: the compat container list
+// (alias resolved through the clusters subquery) and the namespace compat
+// list (the direct `clusters.cluster_alias` branch). Pre-fix the comparison
+// was byte-exact, so an alias in another case excluded nothing and the page
+// came back whole — indistinguishable from "the cluster has no rows".
+func TestClusterAliasFilter_CompatExcludeIsCaseInsensitive(t *testing.T) {
+	setupAliasFilterTest(t)
+	ctx := context.Background()
+	seedAliasFilterOrg(t, ctx)
+	seedAliasFilterCompatRows(t, ctx)
+	app := aliasFilterCompatApp()
+
+	get := func(path, query string) []map[string]interface{} {
+		t.Helper()
+		target := path
+		if query != "" {
+			target += "?" + query
+		}
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+		return dataRows(t, rec.Body.String())
+	}
+
+	for name, path := range map[string]string{
+		"container compat (subquery branch)": "/api/cost-management/v1/recommendations/openshift/container",
+		"namespace compat (direct branch)":   "/api/cost-management/v1/recommendations/openshift/namespace",
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.Len(t, get(path, ""), 2, "baseline: one row per cluster before filtering")
+
+			rows := get(path, "exclude%5Bcluster%5D="+strings.ToUpper(aliasFilterAliasB))
+			require.Len(t, rows, 1, "excluding an alias in another case must remove that cluster")
+			assert.Equal(t, testutil.TestClusterUUID, fmt.Sprint(rows[0]["cluster_uuid"]),
+				"the surviving row is the other cluster's")
+
+			assert.Len(t, get(path, "exclude%5Bcluster%5D=beta"), 2,
+				"exclude stays an exact alias, not a substring: a partial alias removes nothing")
+		})
+	}
+}

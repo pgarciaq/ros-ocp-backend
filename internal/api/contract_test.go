@@ -748,6 +748,9 @@ func TestContractCompatClusterAliasFilter(t *testing.T) {
 		"mixed":    {"filter[cluster]=" + testutil.TestClusterUUID + "&filter[cluster]=contract-cluster", "rows"},
 		"mixed-or": {"filter[cluster]=contract-cluster&filter[cluster]=no-such-alias", "rows"},
 		"exclude":  {"exclude[cluster]=contract-cluster", "empty"},
+		// #973: exclude matches the alias case-insensitively, so a copied
+		// alias in another case removes the same cluster instead of nothing.
+		"exclude-uppercase": {"exclude[cluster]=CONTRACT-CLUSTER", "empty"},
 	} {
 		code, resp := contractGET(t, app, identityHeader, base+"&"+tc.filter)
 		require.Equal(t, http.StatusOK, code, "%s must serve 200", name)

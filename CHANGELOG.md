@@ -20,6 +20,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   forms: a UUID binds its cluster, a single-cluster alias resolves, an
   ambiguous alias is the `400` with the match count, and an unknown alias stays
   `404 node not found`. The flat forms are unchanged.
+- **`exclude[cluster]` matches the alias case-insensitively
+  ([#973](https://github.com/pgarciaq/ros-ocp-backend/issues/973)):** exclude
+  compared the value to `cluster_alias` byte-for-byte, while the include form
+  is a case-insensitive substring. An alias copied in another case therefore
+  excluded **nothing** — the page came back whole, which reads as "the cluster
+  has no rows" — and `exclude[cluster]=demo` removed nothing even though
+  `filter[cluster]=demo` selected rows on the same route. Exclude is still an
+  exact alias match (no substring, so it cannot hide more clusters than the
+  caller named); only the case comparison changed. The collision check follows:
+  `filter[cluster]=X&exclude[cluster]=x` is now the existing `400` on the
+  cluster parameter instead of a silently empty page. Other parameters keep
+  their exact, case-sensitive comparison.
+
 - **`filter[cluster]` works on the snapshot summary
   ([#963](https://github.com/pgarciaq/ros-ocp-backend/issues/963)):** the
   filter was bound straight to the `cluster_uuid` column, so every non-UUID

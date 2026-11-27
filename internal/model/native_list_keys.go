@@ -11,7 +11,7 @@ var nativeRecKeysFilterAtoms = map[string]string{
 	"c.cluster_uuid != ?":                   "ock.cluster_uuid != ?",
 	"c.cluster_alias ILIKE ? ESCAPE '\\'":   "c.cluster_alias ILIKE ? ESCAPE '\\'",
 	"c.cluster_alias = ?":                   "c.cluster_alias = ?",
-	"c.cluster_alias != ?":                  "c.cluster_alias != ?",
+	"LOWER(c.cluster_alias) != LOWER(?)":    "LOWER(c.cluster_alias) != LOWER(?)",
 	"rs.namespace ILIKE ? ESCAPE '\\'":      "ock.namespace ILIKE ? ESCAPE '\\'",
 	"rs.namespace = ?":                      "ock.namespace = ?",
 	"rs.namespace != ?":                     "ock.namespace != ?",

@@ -389,7 +389,16 @@ func TestClusterAliasBatch2_UnionLists(t *testing.T) {
 	t.Run("history, exclude by substring is not a substring match", func(t *testing.T) {
 		code, body := getJSON(t, app, fx.orgID, clusterAliasBatch2Base+"/history", url.Values{"exclude[cluster]": {"prod"}})
 		require.Equal(t, http.StatusOK, code, metaMessage(body))
-		assert.Equal(t, 3, metaCount(body), "exclude negates the exact alias membership; it is not an ILIKE")
+		assert.Equal(t, 3, metaCount(body), "exclude negates the exact alias; it is not an ILIKE")
+	})
+
+	// #973: exclude matches the alias case-insensitively. A copied alias in a
+	// different case used to be a silent no-op — the page came back whole, which
+	// reads as "the cluster has no rows".
+	t.Run("history, exclude by alias in another case", func(t *testing.T) {
+		code, body := getJSON(t, app, fx.orgID, clusterAliasBatch2Base+"/history", url.Values{"exclude[cluster]": {"ALIAS-PROD-EAST"}})
+		require.Equal(t, http.StatusOK, code, metaMessage(body))
+		assert.Equal(t, 2, metaCount(body), "an exclude in a different case must remove the same cluster as the lowercase alias")
 	})
 }
 
@@ -452,10 +461,17 @@ func TestClusterAliasBatch2_QualityFamiliesNeedOnlyTheMapping(t *testing.T) {
 			assert.Equal(t, []string{"11111111-2222-3333-4444-555555555555"}, params["c.cluster_uuid != ?"])
 		})
 
-		t.Run(m.name+", exclude by alias negates the alias", func(t *testing.T) {
+		t.Run(m.name+", exclude by alias negates the alias, case-insensitively", func(t *testing.T) {
 			params := mapped(t, m.fn, "exclude[cluster]=prod-east")
-			require.Contains(t, params, "c.cluster_alias != ?")
-			assert.Equal(t, []string{"prod-east"}, params["c.cluster_alias != ?"])
+			require.Contains(t, params, "LOWER(c.cluster_alias) != LOWER(?)")
+			assert.Equal(t, []string{"prod-east"}, params["LOWER(c.cluster_alias) != LOWER(?)"])
+
+			// #973: the comparison is case-insensitive, so an alias copied in a
+			// different case excludes the same cluster instead of silently
+			// excluding nothing.
+			params = mapped(t, m.fn, "exclude[cluster]=PROD-EAST")
+			require.Contains(t, params, "LOWER(c.cluster_alias) != LOWER(?)")
+			assert.Equal(t, []string{"PROD-EAST"}, params["LOWER(c.cluster_alias) != LOWER(?)"])
 		})
 
 		t.Run(m.name+", exact binds the alias literally", func(t *testing.T) {

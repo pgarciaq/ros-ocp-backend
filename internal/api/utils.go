@@ -10,7 +10,6 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -362,13 +361,22 @@ func parseClusterParams(value string, mode string, uuidColumn string, orgID stri
 		s = containsPattern(s)
 	}
 	if uuidColumn == "" {
+		// #973: exclude is the exact alias, case-insensitively. An alias is a
+		// display string the UI hands back, and the include form is already
+		// case-insensitive, so a copied alias in another case used to be a
+		// silent no-op — indistinguishable from "the cluster has no rows". It
+		// stays exact (no substring): excluding by substring would hide more
+		// clusters than the caller named.
+		if mode == FilterModeExclude {
+			return []string{"LOWER(clusters.cluster_alias) != LOWER(?)"}, []string{value}, nil
+		}
 		return []string{"clusters.cluster_alias" + modeClause.Suffix}, []string{s}, nil
 	}
 	// Alias resolves via the populated clusters table — no workload linkage
 	// needed (uuids are globally unique; the outer query stays org-scoped).
-	// Exclude negates the whole membership (NOT IN with the positive
-	// condition): pushing != inside would keep uuids carrying any other
-	// alias, voiding the exclusion on multi-alias clusters.
+	// Exclude negates the membership (NOT IN with the positive condition):
+	// pushing != inside would keep uuids carrying any other alias, voiding the
+	// exclusion on multi-alias clusters.
 	// #797: the subquery is org-scoped — an unscoped alias resolution
 	// crosses tenant boundaries when the same cluster_uuid is registered
 	// under two tenants (the #552 colliding-UUID shape), revealing the
@@ -376,7 +384,9 @@ func parseClusterParams(value string, mode string, uuidColumn string, orgID stri
 	// this org's own aliases; an empty orgID (identity-less unit-test
 	// contexts) fails closed — no rows.
 	if mode == FilterModeExclude {
-		return []string{uuidCol + " NOT IN (SELECT cluster_uuid FROM clusters WHERE org_id = ? AND cluster_alias = ?)"},
+		// #973: the alias comparison is case-insensitive; it stays an exact
+		// match (no substring). See the uuidColumn == "" branch above.
+		return []string{uuidCol + " NOT IN (SELECT cluster_uuid FROM clusters WHERE org_id = ? AND LOWER(cluster_alias) = LOWER(?))"},
 			[]string{orgID, value}, nil
 	}
 	return []string{uuidCol + " IN (SELECT cluster_uuid FROM clusters WHERE org_id = ? AND cluster_alias" + modeClause.Suffix + ")"},
@@ -435,6 +445,27 @@ func workloadTypeSQLColumn(param, column, suffix string) string {
 	return column + suffix
 }
 
+// filterValuesCollide reports whether an exclude value names the same value as
+// one of vals. The comparison is case-insensitive for `cluster` only: exclude
+// matches the alias case-insensitively (#973), so "DEMO" and "demo" name the
+// same cluster and excluding one the other selected would empty the page with
+// no explanation. Other parameters keep the exact comparison their matching
+// uses.
+func filterValuesCollide(param string, vals []string, value string) bool {
+	for _, v := range vals {
+		if param == "cluster" {
+			if strings.EqualFold(v, value) {
+				return true
+			}
+			continue
+		}
+		if v == value {
+			return true
+		}
+	}
+	return false
+}
+
 // parsing of string params based on mode -> include, exclude, exact.
 func buildSQLClauseWithFilterType(
 	param string,
@@ -459,10 +490,10 @@ func buildSQLClauseWithFilterType(
 
 	if hasExclude {
 		for _, ev := range excludeVals {
-			if slices.Contains(exactVals, ev) {
+			if filterValuesCollide(param, exactVals, ev) {
 				return nil, namespaceAPIErrf(EnableUserAPIErr, "exclude and exact cannot share values for %s", param)
 			}
-			if slices.Contains(includeVals, ev) {
+			if filterValuesCollide(param, includeVals, ev) {
 				return nil, namespaceAPIErrf(EnableUserAPIErr, "exclude and include cannot share values for %s", param)
 			}
 		}
@@ -639,6 +670,10 @@ func parseNativeClusterParams(value string, mode string) ([]string, []string, er
 	if err != nil {
 		return nil, nil, err
 	}
+	if mode == FilterModeExclude {
+		// #973: exact, case-insensitive alias — see parseClusterParams.
+		return []string{"LOWER(c.cluster_alias) != LOWER(?)"}, []string{s}, nil
+	}
 	if modeClause.Wrap {
 		s = containsPattern(s)
 	}
@@ -759,10 +794,10 @@ func buildNativeSQLClauseWithFilterType(param string, includeVals, exactVals, ex
 
 	if hasExclude {
 		for _, ev := range excludeVals {
-			if slices.Contains(exactVals, ev) {
+			if filterValuesCollide(param, exactVals, ev) {
 				return nil, namespaceAPIErrf(true, "exclude and exact cannot share values for %s", param)
 			}
-			if slices.Contains(includeVals, ev) {
+			if filterValuesCollide(param, includeVals, ev) {
 				return nil, namespaceAPIErrf(true, "exclude and include cannot share values for %s", param)
 			}
 		}

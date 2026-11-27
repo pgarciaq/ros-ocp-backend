@@ -606,8 +606,8 @@ func TestBuildSQLClauseWithFilterType(t *testing.T) {
 			column:      "",
 			checkClause: func(t *testing.T, clause map[string]any) {
 				assert.Len(t, clause, 1)
-				assert.Contains(t, clause, "clusters.cluster_alias != ?")
-				assert.Equal(t, []string{"foo-cluster"}, clause["clusters.cluster_alias != ?"])
+				assert.Contains(t, clause, "LOWER(clusters.cluster_alias) != LOWER(?)")
+				assert.Equal(t, []string{"foo-cluster"}, clause["LOWER(clusters.cluster_alias) != LOWER(?)"], "the raw value binds; the comparison is case-insensitive in SQL")
 			},
 		},
 	}
@@ -658,7 +658,7 @@ func TestParseClusterParams_OuterColumn(t *testing.T) {
 
 	clauses, vals, err = parseClusterParams("some-alias", FilterModeExclude, outer, org)
 	require.NoError(t, err)
-	assert.Equal(t, []string{outer + " NOT IN (SELECT cluster_uuid FROM clusters WHERE org_id = ? AND cluster_alias = ?)"}, clauses)
+	assert.Equal(t, []string{outer + " NOT IN (SELECT cluster_uuid FROM clusters WHERE org_id = ? AND LOWER(cluster_alias) = LOWER(?))"}, clauses)
 	assert.Equal(t, []string{org, "some-alias"}, vals)
 
 	// The empty org (identity-less unit-test contexts) fails closed: the
@@ -701,12 +701,37 @@ func TestBuildSQLClauseWithFilterTypeConflict(t *testing.T) {
 			column:      "",
 			errContains: "exclude and exact cannot share values",
 		},
+		{
+			// #973: exclude matches the alias case-insensitively, so a value
+			// that differs only in case is the same cluster and would empty the
+			// page if both were applied.
+			name:        "cluster exclude and include differ only in case - error",
+			param:       "cluster",
+			includeVals: []string{"PROD-CLUSTER"},
+			excludeVals: []string{"prod-cluster"},
+			column:      "",
+			errContains: "exclude and include cannot share values",
+		},
+		{
+			// Other parameters keep the exact comparison their matching uses:
+			// `filter[namespace]` is case-sensitive, so Foo and foo are two
+			// different namespaces and the request is not self-contradictory.
+			name:        "namespace exclude and include differ only in case - allowed",
+			param:       "project",
+			includeVals: []string{"Foo"},
+			excludeVals: []string{"foo"},
+			column:      projectCol,
+		},
 	}
 
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := buildClauseForParam(tt.param, tt.includeVals, tt.exactVals, tt.excludeVals, tt.column)
+			if tt.errContains == "" {
+				assert.NoError(t, err, "only the cluster parameter compares case-insensitively")
+				return
+			}
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.errContains)
 		})
@@ -792,7 +817,7 @@ func TestBuildSQLClauseWithFilterTypeMultipleParams(t *testing.T) {
 			column:      "",
 			checkClause: func(t *testing.T, clause map[string]any) {
 				assert.Len(t, clause, 3)
-				assert.Equal(t, []string{"staging"}, clause["clusters.cluster_alias != ?"])
+				assert.Equal(t, []string{"staging"}, clause["LOWER(clusters.cluster_alias) != LOWER(?)"])
 				assert.Equal(t, []string{"dev"}, clause["clusters.cluster_alias = ?"])
 				assert.Equal(t, []string{"%prod%"}, clause["clusters.cluster_alias ILIKE ? ESCAPE '\\'"])
 			},
@@ -884,7 +909,7 @@ func TestBuildSQLClauseWithFilterTypeMultipleParams(t *testing.T) {
 			excludeVals: []string{"prod", "dev"},
 			column:      "",
 			checkClause: func(t *testing.T, clause map[string]any) {
-				key := "clusters.cluster_alias != ? AND clusters.cluster_alias != ?"
+				key := "LOWER(clusters.cluster_alias) != LOWER(?) AND LOWER(clusters.cluster_alias) != LOWER(?)"
 				assert.Contains(t, clause, key)
 				assert.Equal(t, []string{"prod", "dev"}, clause[key])
 			},
