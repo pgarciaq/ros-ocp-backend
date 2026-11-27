@@ -268,7 +268,7 @@ Container and namespace recommendations work with **stock upstream `main`** on k
 | **koku-ui** | `~/dev/koku/koku-ui` | **`main`** | React UI (optional for API-only QE; required for Optimizations smoke) |
 | **nise** | `~/dev/koku/nise` | **`pgarciaq-rosocp-superpowers-phase17`** | Synthetic OCP/ROS CSVs (`--ros-ocp-info`, `--write-monthly`) |
 | **cost-onprem-chart** | `~/dev/koku/cost-onprem-chart` | **`pgarciaq-rosocp-superpowers-phase17`** | Helm deploy on OpenShift + **pytest** E2E (`scripts/run-pytest.sh`); deprecated upstream — migration to koku-service-operator tracked in [#682](https://github.com/pgarciaq/ros-ocp-backend/issues/682) |
-| **costmgmt-api-cheatsheet** | `~/dev/koku/costmgmt-api-cheatsheet` | **`main`** | Bruno collections under `bruno/Optimizations/` |
+| **costmgmt-api-cheatsheet** | `~/dev/koku/costmgmt-api-cheatsheet` | **`pgarciaq-rosocp-superpowers-phase17`** | Bruno collections under `bruno/Optimizations/` |
 
 On a real OpenShift cluster, the operator may come from the downstream stable OLM channel instead of a local `main` checkout — that is fine for container/namespace Kruize comparison as long as you are not testing phase17-only CSV columns.
 

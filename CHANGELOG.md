@@ -39,10 +39,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   keeps the `404`, a lookup failure is a `503`, and the whole check runs inside
   the caller's RBAC grant. `/vms/{vm}/history` moves to the union contract: its
   rows carry the cluster, so a substring returns every matching cluster's
-  history. The same ambiguity rule now covers `/nodes/{node}` — shipped in
-  #950 on the union contract, it silently merged two clusters' term/engine
-  variants under one `cluster_uuid`; it answers `400` when an alias names
-  several readable clusters.
+  history.
+- **Node detail refuses an ambiguous alias instead of merging two clusters
+  ([#969](https://github.com/pgarciaq/ros-ocp-backend/issues/969)):**
+  `/nodes/{node}` shipped in #950 on the union contract, but its response
+  carries a single `cluster_uuid` while its `daily_digests` were concatenated
+  from every matched cluster. With an alias covering two clusters that both
+  report the same node name, the payload mixed one cluster's sizing numbers
+  with both clusters' days, labelled as one cluster. It now answers the shared
+  `400` when the filter resolves to several readable clusters; a filter naming
+  exactly one keeps working, one that resolves to nothing stays `404 node not
+  found`, and a lookup failure is `503`.
 - **`/history` and the quality endpoints accept a UUID and an alias
   ([#968](https://github.com/pgarciaq/ros-ocp-backend/issues/968)):** these
   six mappers emitted `cluster_alias IN (…)`, comparing the client value to

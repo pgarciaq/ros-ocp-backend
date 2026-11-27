@@ -134,6 +134,7 @@ When the task matches, **read the file before acting**.
 
 | When you… | Read |
 |-----------|------|
+| Recon a shared parameter, response shape, or error class across surfaces | [docs/agents/api-contract-recon.md](docs/agents/api-contract-recon.md) |
 | Ingest / `INSERT … ON CONFLICT` | [docs/agents/db-upsert-safety.md](docs/agents/db-upsert-safety.md) |
 | Writing regression tests | [docs/agents/adversarial-fixtures.md](docs/agents/adversarial-fixtures.md) |
 | Implementing features/fixes (completion report) | [docs/agents/cross-repo-contracts.md](docs/agents/cross-repo-contracts.md) |
