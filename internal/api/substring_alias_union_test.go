@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -40,8 +41,13 @@ func TestClusterFilter_SubstringAliasIsUnionOnAllSurfaces(t *testing.T) {
 	ensureUnionAccountCluster(t, pool, orgID, clusterA, "team-a-frontend")
 	ensureUnionAccountCluster(t, pool, orgID, clusterB, "team-a-backend")
 
-	// Node recs on both clusters (the main-list control surface).
-	for _, c := range []string{clusterA, clusterB} {
+	// #956: an alias whose only resemblance to `team_a` is the `_` wildcard —
+	// team + '_' matching 'X' + a. It must NOT be returned by filter=team_a.
+	clusterC := "aaaa0000-0000-4000-8000-00000000a003"
+	ensureUnionAccountCluster(t, pool, orgID, clusterC, "teamXa-frontend")
+
+	// Node recs on every cluster (the main-list control surface).
+	for _, c := range []string{clusterA, clusterB, clusterC} {
 		_, err := pool.Exec(ctx, `
 			INSERT INTO node_recommendations (
 				org_id, cluster_uuid, node, term, engine, notification_codes, estimated_savings_cents, updated_at
@@ -50,8 +56,8 @@ func TestClusterFilter_SubstringAliasIsUnionOnAllSurfaces(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Persisted GPU TS recs on both clusters.
-	for _, c := range []string{clusterA, clusterB} {
+	// Persisted GPU TS recs on every cluster.
+	for _, c := range []string{clusterA, clusterB, clusterC} {
 		_, err := pool.Exec(ctx, `
 			INSERT INTO node_gpu_timeslicing_recommendations (
 				org_id, cluster_uuid, node_name, gpu_model, term,
@@ -74,9 +80,9 @@ func TestClusterFilter_SubstringAliasIsUnionOnAllSurfaces(t *testing.T) {
 	v1.GET("/recommendations/openshift/gpu", api.GetGPUMIGRecommendations)
 
 	id := unionIdentity(orgID)
-	getClusters := func(path string) map[string]int {
+	getClusters := func(path, filter string) map[string]int {
 		req := httptest.NewRequest(http.MethodGet,
-			"/api/cost-management/v1"+path+"?filter[cluster]=team-a", nil)
+			"/api/cost-management/v1"+path+"?filter[cluster]="+filter, nil)
 		req.Header.Set("X-Rh-Identity", id)
 		rec := httptest.NewRecorder()
 		app.ServeHTTP(rec, req)
@@ -95,13 +101,13 @@ func TestClusterFilter_SubstringAliasIsUnionOnAllSurfaces(t *testing.T) {
 	}
 
 	t.Run("nodes list (the control — already union)", func(t *testing.T) {
-		clusters := getClusters("/recommendations/openshift/nodes")
+		clusters := getClusters("/recommendations/openshift/nodes", "team-a")
 		assert.Equal(t, map[string]int{clusterA: 1, clusterB: 1}, clusters,
 			"the main list returns every matching cluster's rows")
 	})
 
 	t.Run("gpu timeslicing list (the #947 fix target)", func(t *testing.T) {
-		clusters := getClusters("/recommendations/openshift/gpu/timeslicing")
+		clusters := getClusters("/recommendations/openshift/gpu/timeslicing", "team-a")
 		assert.Equal(t, map[string]int{clusterA: 1, clusterB: 1}, clusters,
 			"a multi-match substring alias must return every matching cluster's rows (#947)")
 	})
@@ -116,7 +122,7 @@ func TestClusterFilter_SubstringAliasIsUnionOnAllSurfaces(t *testing.T) {
 	}
 
 	t.Run("gpu mig list (the #947 fix target)", func(t *testing.T) {
-		clusters := getClusters("/recommendations/openshift/gpu")
+		clusters := getClusters("/recommendations/openshift/gpu", "team-a")
 		// The MIG list groups by node/model; assert both clusters appear.
 		assert.Contains(t, clusters, clusterA,
 			"cluster A's rows must appear under a multi-match alias (#947)")
@@ -139,6 +145,39 @@ func TestClusterFilter_SubstringAliasIsUnionOnAllSurfaces(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &parsed))
 		assert.Equal(t, 0, parsed.Meta.Count,
 			"the unknown-alias contract (#790) holds under the predicate path")
+	})
+
+	// #956: the filter value is an alias CONTAINS match, never an ILIKE
+	// pattern. Both surface classes are exercised: /nodes goes through
+	// clusterFilterPredicate (a uuid-column subquery) and GPU TS through the
+	// row-scope resolver.
+	t.Run("#956: wildcards in the filter are literal", func(t *testing.T) {
+		for _, path := range []string{
+			"/recommendations/openshift/nodes",
+			"/recommendations/openshift/gpu/timeslicing",
+		} {
+			assert.Empty(t, getClusters(path, "team_a"),
+				"%s: '_' matches a literal underscore, so team_a must not return teamXa-frontend (#956)", path)
+			// '%25' is the URL encoding of '%': no alias contains a literal percent.
+			assert.Empty(t, getClusters(path, "%25"),
+				"%s: '%%' must not act as the whole-fleet wildcard (#956)", path)
+		}
+	})
+
+	// #951: a UUID filter is case-insensitive on all three surfaces. The
+	// resolvers compare Go strings against the canonical lowercase DB text,
+	// so an uppercase UUID used to empty the two GPU lists.
+	t.Run("#951: uppercase UUID filter returns the same rows", func(t *testing.T) {
+		for _, path := range []string{
+			"/recommendations/openshift/nodes",
+			"/recommendations/openshift/gpu/timeslicing",
+			"/recommendations/openshift/gpu",
+		} {
+			lower := getClusters(path, clusterA)
+			assert.NotEmpty(t, lower, "%s: the fixture must return rows for the lowercase UUID", path)
+			assert.Equal(t, lower, getClusters(path, strings.ToUpper(clusterA)),
+				"%s: an uppercase UUID filter must return the same rows as the lowercase form (#951)", path)
+		}
 	})
 
 	// #953: the two union surfaces scope ROWS with the multi-match resolver,
