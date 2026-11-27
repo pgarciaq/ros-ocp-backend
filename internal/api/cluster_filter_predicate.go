@@ -128,6 +128,11 @@ func intersectClusterUUIDs(allowed, match []string) []string {
 // same semantics as clusterFilterPredicate); no match or an empty filter
 // resolves to "" (org-level default — the same behavior as an absent
 // filter, since a filter that matches nothing has no rows to price).
+//
+// This resolver is best-effort on purpose: it only LABELS the display
+// currency, so a lookup failure degrades to the org default with a warning
+// rather than failing the request. Contrast resolveClusterFilterUUIDs, which
+// scopes rows and therefore must report failure (#953).
 func resolveClusterFilterUUID(ctx context.Context, pool *pgxpool.Pool, orgID, value string) string {
 	if value == "" {
 		return ""
@@ -140,10 +145,14 @@ func resolveClusterFilterUUID(ctx context.Context, pool *pgxpool.Pool, orgID, va
 	// currency is used (single-cluster semantics, matching the UUID form's
 	// behavior for one cluster; multi-match filters span clusters whose
 	// currencies may differ — org-level default would lose information for
-	// the common single-match case).
+	// the common single-match case). "First" is the lowest canonical cluster
+	// UUID, not heap order, so the label is stable across calls and replicas
+	// (#954a). Preferring an exact alias over a substring match is a separate
+	// question, out of scope here.
 	err := pool.QueryRow(ctx, `
 		SELECT cluster_uuid::text FROM clusters
 		WHERE org_id = $1 AND cluster_alias ILIKE $2
+		ORDER BY cluster_uuid
 		LIMIT 1`, orgID, containsPattern(value)).Scan(&resolved)
 	if err != nil {
 		return ""

@@ -132,3 +132,36 @@ func TestResolveClusterFilterUUIDsReportsLookupFailure(t *testing.T) {
 	assert.Contains(t, qErr.Error(), "team-a",
 		"the error names the filter it failed to resolve, so the log identifies the request (#953)")
 }
+
+// TestResolveClusterFilterUUIDFirstMatchIsDeterministic: a substring alias can
+// match several clusters, and the currency label keys on the first one. With no
+// ORDER BY that is heap order — the same request can be priced in different
+// currencies across calls and replicas (#954a). The first match is pinned to
+// the lowest canonical cluster UUID.
+func TestResolveClusterFilterUUIDFirstMatchIsDeterministic(t *testing.T) {
+	t.Setenv("RBAC_ENABLE", "false")
+	config.ResetForTest()
+	t.Cleanup(config.ResetForTest)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	const orgID = "org-resolver-order"
+	const small = "11111111-1111-4111-8111-111111111111"
+	const large = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	// The LARGER uuid is inserted first and carries the alphabetically earlier
+	// alias: both plausible plans (heap order, alias-ordered index) return it,
+	// so the assertion fails pre-fix on this fixture instead of by luck.
+	for _, cl := range []struct{ uuid, alias string }{
+		{large, "cur-first"},
+		{small, "cur-second"},
+	} {
+		_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, org_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+			VALUES (1, $2, $1, $3, 'src-r', now()) ON CONFLICT DO NOTHING`, cl.uuid, orgID, cl.alias)
+		require.NoError(t, err)
+	}
+
+	assert.Equal(t, small, resolveClusterFilterUUID(ctx, pool, orgID, "cur-"),
+		"first match is the lowest canonical UUID, not heap order (#954a)")
+}
