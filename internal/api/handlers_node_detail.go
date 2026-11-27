@@ -79,17 +79,23 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 		clusterFilter = strings.TrimSpace(c.QueryParam("cluster"))
 	}
 	if clusterFilter != "" {
-		found := false
-		for _, id := range allowedClusters {
-			if id == clusterFilter {
-				found = true
-				break
-			}
+		// #950: the same union alias contract as the /nodes list (#790) and
+		// the GPU time-slicing detail — a substring alias scopes the node
+		// lookup to every matching cluster instead of 404-ing on a value the
+		// list accepts. A filter that resolves to no readable cluster stays
+		// an unknown node here, not an empty page.
+		scoped, scopeErr := resolveClusterAliasScope(ctx, pool, orgID, allowedClusters, false, clusterFilter)
+		if scopeErr != nil {
+			hlog.Errorf("GetNodeUtilizationDetail: resolve cluster filter: %v", scopeErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
+				"status":  "error",
+				"message": "unable to resolve clusters for organization",
+			})
 		}
-		if !found {
+		if len(scoped) == 0 {
 			return c.JSON(http.StatusNotFound, echo.Map{"status": "error", "message": "node not found"})
 		}
-		allowedClusters = []string{clusterFilter}
+		allowedClusters = scoped
 	}
 
 	baseFrom := `

@@ -166,7 +166,19 @@ func GetFleetHeatmap(c echo.Context) error {
 		}
 		allowedClusters = filterClustersByRBAC(allClusters, userPerms)
 		if clusterFilter != "" {
-			allowedClusters, _ = restrictClustersToQueryFilter(allowedClusters, clusterFilter)
+			// #950: union alias resolution, the #947 list contract. A filter
+			// matching nothing leaves the set empty, which the caller renders
+			// as 200 + empty — the behaviour this surface already had, now
+			// also for a value that matches.
+			scoped, scopeErr := resolveClusterAliasScope(ctx, pool, orgID, allowedClusters, false, clusterFilter)
+			if scopeErr != nil {
+				hlog.Errorf("fleet heatmap: resolve cluster filter: %v", scopeErr)
+				return c.JSON(http.StatusServiceUnavailable, echo.Map{
+					"status":  "error",
+					"message": "unable to resolve clusters for organization",
+				})
+			}
+			allowedClusters = scoped
 		}
 		if len(allowedClusters) == 0 {
 			resp := FleetHeatmapResponse{

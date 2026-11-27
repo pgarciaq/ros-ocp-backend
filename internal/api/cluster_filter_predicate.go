@@ -124,6 +124,34 @@ func intersectClusterUUIDs(allowed, match []string) []string {
 	return out
 }
 
+// resolveClusterAliasScope resolves filter[cluster] to the clusters a request
+// may read: every org-scoped cluster matching the value (a UUID binds exactly,
+// anything else is a case-insensitive substring over cluster_alias — the
+// #790/#947 union contract), intersected with allowed.
+//
+// unrestricted says the caller holds no granted set at all (an org admin), in
+// which case the resolved matches are the scope. A restricted caller with an
+// EMPTY allowed set gets an empty result: an absent grant is not unrestricted
+// access (#753), so emptiness is never inferred as "all clusters".
+//
+// A lookup failure is returned, never flattened into "no match" (#953): the
+// result scopes rows, so "I could not look" must not render as an empty page.
+// No match returns an empty slice with a nil error — the caller renders its
+// surface's empty outcome (#790).
+func resolveClusterAliasScope(ctx context.Context, pool *pgxpool.Pool, orgID string, allowed []string, unrestricted bool, filter string) ([]string, error) {
+	if filter == "" {
+		return allowed, nil
+	}
+	match, err := resolveClusterFilterUUIDs(ctx, pool, orgID, filter)
+	if err != nil {
+		return nil, err
+	}
+	if unrestricted {
+		return match, nil
+	}
+	return intersectClusterUUIDs(allowed, match), nil
+}
+
 // resolveClusterFilterUUID resolves a client cluster filter to the UUID the
 // currency layer keys on (#790 review: fetchClusterCurrency receives the
 // raw filter value; an alias fails the Koku cluster lookup and silently

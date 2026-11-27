@@ -226,25 +226,26 @@ func GetFleetSavingsSummary(c echo.Context) error {
 	}
 
 	if queryparams.GroupByIdleState(c) {
-		clusterQueryFilter := queryparams.FirstFilter(c, "cluster")
-		if clusterQueryFilter != "" {
-			if len(clusterUUIDs) > 0 {
-				allowed := false
-				for _, cu := range clusterUUIDs {
-					if cu == clusterQueryFilter {
-						allowed = true
-						break
-					}
-				}
-				if !allowed {
-					setRecommendationNoStore(c)
-					return c.JSON(http.StatusOK, FleetSavingsByIdleStateResponse{
-						Data: []FleetIdleStateSavingsRow{},
-						Meta: FleetSavingsByIdleMeta{Count: 0},
-					})
-				}
+		if clusterQueryFilter := queryparams.FirstFilter(c, "cluster"); clusterQueryFilter != "" {
+			// #950: union alias resolution, the #947 list contract. The set
+			// this produces is what the grouped query scopes on, so an alias
+			// never reaches the uuid bind.
+			scoped, scopeErr := resolveClusterAliasScope(ctx, pool, orgID, clusterUUIDs, !rbacScoped, clusterQueryFilter)
+			if scopeErr != nil {
+				hlog.Errorf("fleet savings by idle_state: resolve cluster filter: %v", scopeErr)
+				return c.JSON(http.StatusServiceUnavailable, echo.Map{
+					"status":  "error",
+					"message": "unable to fetch fleet savings summary",
+				})
 			}
-			clusterUUIDs = []string{clusterQueryFilter}
+			if len(scoped) == 0 {
+				setRecommendationNoStore(c)
+				return c.JSON(http.StatusOK, FleetSavingsByIdleStateResponse{
+					Data: []FleetIdleStateSavingsRow{},
+					Meta: FleetSavingsByIdleMeta{Count: 0},
+				})
+			}
+			clusterUUIDs = scoped
 		}
 		byIdle, qerr := runHeavyFleetSavingsQuery(ctx, pool, func(ctx context.Context, q db.QueryRower) (FleetSavingsByIdleStateResponse, error) {
 			return queryFleetSavingsByIdleState(ctx, q, orgID, clusterUUIDs, engineProfile, termProfile)
@@ -262,25 +263,24 @@ func GetFleetSavingsSummary(c echo.Context) error {
 
 	groupByTagKey := queryparams.GroupByTagKey(c)
 	if groupByTagKey != "" && config.TagsFeatureEnabled() {
-		clusterQueryFilter := queryparams.FirstFilter(c, "cluster")
-		if clusterQueryFilter != "" {
-			if len(clusterUUIDs) > 0 {
-				allowed := false
-				for _, cu := range clusterUUIDs {
-					if cu == clusterQueryFilter {
-						allowed = true
-						break
-					}
-				}
-				if !allowed {
-					setRecommendationNoStore(c)
-					return c.JSON(http.StatusOK, FleetSavingsByTagResponse{
-						Data: []FleetTagSavingsRow{},
-						Meta: FleetSavingsByTagMeta{Count: 0},
-					})
-				}
+		if clusterQueryFilter := queryparams.FirstFilter(c, "cluster"); clusterQueryFilter != "" {
+			// #950: same union alias resolution as the idle-state grouping.
+			scoped, scopeErr := resolveClusterAliasScope(ctx, pool, orgID, clusterUUIDs, !rbacScoped, clusterQueryFilter)
+			if scopeErr != nil {
+				hlog.Errorf("fleet savings by tag: resolve cluster filter: %v", scopeErr)
+				return c.JSON(http.StatusServiceUnavailable, echo.Map{
+					"status":  "error",
+					"message": "unable to fetch fleet savings summary",
+				})
 			}
-			clusterUUIDs = []string{clusterQueryFilter}
+			if len(scoped) == 0 {
+				setRecommendationNoStore(c)
+				return c.JSON(http.StatusOK, FleetSavingsByTagResponse{
+					Data: []FleetTagSavingsRow{},
+					Meta: FleetSavingsByTagMeta{Count: 0},
+				})
+			}
+			clusterUUIDs = scoped
 		}
 		namespaceFilter := queryparams.FirstFilter(c, "project")
 		byTag, qerr := runHeavyFleetSavingsQuery(ctx, pool, func(ctx context.Context, q db.QueryRower) (FleetSavingsByTagResponse, error) {

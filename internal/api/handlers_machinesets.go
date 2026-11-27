@@ -116,14 +116,19 @@ func GetMachineSetRecommendations(c echo.Context) error {
 		clusterFilter = strings.TrimSpace(c.QueryParam("cluster_uuid"))
 	}
 	if clusterFilter != "" {
-		found := false
-		for _, id := range allowedClusters {
-			if id == clusterFilter {
-				found = true
-				break
-			}
+		// #950: union alias resolution, the #947 list contract. The SQL below
+		// scopes on this set alone: binding the raw value as a UUID would fail
+		// the Postgres cast for an alias, and for a UUID filter the resolved
+		// set is already exactly that cluster.
+		scoped, scopeErr := resolveClusterAliasScope(ctx, pool, orgID, allowedClusters, false, clusterFilter)
+		if scopeErr != nil {
+			hlog.Errorf("GetMachineSetRecommendations: resolve cluster filter: %v", scopeErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
+				"status":  "error",
+				"message": "unable to resolve clusters for organization",
+			})
 		}
-		if !found {
+		if len(scoped) == 0 {
 			setRecommendationNoStore(c)
 			return c.JSON(http.StatusOK, model.MachineSetRecommendationListResponse{
 				Meta:  model.MachineSetRecommendationMeta{Count: 0, Limit: limit, Offset: offset, Currency: resolveListCurrencyFromRequest(c, orgID)},
@@ -131,7 +136,7 @@ func GetMachineSetRecommendations(c echo.Context) error {
 				Links: buildMachineSetLinks(c.Request(), 0, limit, offset),
 			})
 		}
-		allowedClusters = []string{clusterFilter}
+		allowedClusters = scoped
 	}
 
 	machinesetFilter := queryparams.FirstFilter(c, "machineset_name")
@@ -154,12 +159,6 @@ func GetMachineSetRecommendations(c echo.Context) error {
 
 	args := []interface{}{orgID, allowedClusters, term}
 	argIdx := 4
-
-	if clusterFilter != "" {
-		baseFrom += " AND nr.cluster_uuid = $" + strconv.Itoa(argIdx)
-		args = append(args, clusterFilter)
-		argIdx++
-	}
 
 	msClause, msArg, nextIdx := machinesetNameFilterClause(machinesetFilter, argIdx)
 	if msClause != "" {

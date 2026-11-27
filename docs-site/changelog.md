@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`filter[cluster]` returns every matching cluster on the surfaces that still
+  compared the value to a UUID ([#950](https://github.com/pgarciaq/ros-ocp-backend/issues/950)):**
+  the GPU time-slicing **detail** route, the node-utilization **detail** route
+  (`/nodes/{node}`), the fleet **heatmap**, `/vm`, `/machinesets` and the
+  savings-summary grouped paths (by `idle_state` and by tag)
+  compared `filter[cluster]` to cluster UUIDs literally, so an alias that
+  the GPU time-slicing and MIG lists accept returned `404 node not found` (the
+  detail routes) or a silent `200` with an empty page (the rest). All six now
+  share one helper with the #947 lists: a UUID binds exactly, anything else is
+  an org-scoped, case-insensitive substring over the cluster alias, and the
+  result is the union of matches intersected with the RBAC grant. The
+  intersection is explicit — an alias resolving only to ungranted clusters
+  returns nothing, and a restricted caller with an empty grant no longer gets
+  the union. A lookup failure answers `503`, never an empty `200` (#953's rule,
+  now applied here too). The detail routes keep their `404`: they are node
+  lookups, and a filter resolving to no readable cluster is an unknown node
+  there.
 - **Every filter value now matches literally — the ILIKE escaping invariant
   holds repo-wide ([#957](https://github.com/pgarciaq/ros-ocp-backend/issues/957)):**
   `filter[cluster]` was escaped in #956, but four ad-hoc constructions
@@ -71,7 +88,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   with a message; the display-currency lookup on the nodes list stays
   best-effort by design, since it only labels currency and degrades to the
   org default with a warning.
-- **Substring cluster filters are now consistent across all surfaces ([#947](https://github.com/pgarciaq/ros-ocp-backend/issues/947)):**
+- **Substring cluster filters now return the union of matches on the GPU time-slicing and MIG lists ([#947](https://github.com/pgarciaq/ros-ocp-backend/issues/947)):**
   a `filter[cluster]` value matching several clusters by alias substring
   (e.g. `team-a` matching `team-a-frontend` and `team-a-backend`) now
   returns every matching cluster's rows on the GPU time-slicing and MIG
@@ -81,7 +98,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   for multi-match filters remains first-match, in a deterministic order
   (the lowest matching cluster UUID) (clusters may differ in
   currency; a union rate would be a fiction). Unknown aliases keep the
-  200 + empty contract.
+  200 + empty contract. Other cluster surfaces are covered by
+  [#950](https://github.com/pgarciaq/ros-ocp-backend/issues/950).
 - **High-rate FX conversions were silently wrong ([#948](https://github.com/pgarciaq/ros-ocp-backend/issues/948)):**
   the integer FX conversion introduced for #462 overflowed its remainder
   term for exchange rates above ~9.2 (JPY ~150, HUF ~400, IDR ~15000),

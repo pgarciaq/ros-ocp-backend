@@ -319,21 +319,24 @@ func GetVMRecommendations(c echo.Context) error {
 
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
 	if clusterFilter != "" {
-		allowed := false
-		for _, u := range allowedClusters {
-			if u == clusterFilter {
-				allowed = true
-				break
-			}
+		// #950: a substring alias scopes the list to every matching cluster
+		// (the #947 union contract) instead of answering 200 + empty.
+		scoped, scopeErr := resolveClusterAliasScope(ctx, pool, orgID, allowedClusters, false, clusterFilter)
+		if scopeErr != nil {
+			hlog.Errorf("GetVMRecommendations: resolve cluster filter: %v", scopeErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
+				"status":  "error",
+				"message": "unable to resolve clusters for organization",
+			})
 		}
-		if !allowed {
+		if len(scoped) == 0 {
 			setRecommendationNoStore(c)
 			return c.JSON(http.StatusOK, VMRecommendationListResponse{
 				Meta: Metadata{Count: 0, Limit: limit, Offset: offset, Currency: resolveListCurrencyFromRequest(c, orgID)},
 				Data: []VMRecommendationItem{},
 			})
 		}
-		allowedClusters = []string{clusterFilter}
+		allowedClusters = scoped
 	}
 
 	vmGroupByField, vmGroupByErr := parseVMListGroupBy(c)

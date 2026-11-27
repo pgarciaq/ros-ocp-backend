@@ -108,7 +108,7 @@ func GetNodeRecommendations(c echo.Context) error {
 	// self-resolve first-match via resolveClusterFilterUUID. An unknown
 	// alias yields an empty set (200 + count 0, the #790 contract).
 	if clusterFilter != "" {
-		matched, matchErr := resolveClusterFilterUUIDs(ctx, pool, orgIDStr, clusterFilter)
+		matched, matchErr := resolveClusterAliasScope(ctx, pool, orgIDStr, clusterUUIDs, false, clusterFilter)
 		if matchErr != nil {
 			// #953: a failed lookup must not render as "nothing matched" —
 			// that is indistinguishable from a filter that legitimately
@@ -119,7 +119,7 @@ func GetNodeRecommendations(c echo.Context) error {
 				"message": "unable to resolve cluster filter",
 			})
 		}
-		clusterUUIDs = intersectClusterUUIDs(clusterUUIDs, matched)
+		clusterUUIDs = matched
 		if len(clusterUUIDs) == 0 {
 			setRecommendationNoStore(c)
 			return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
@@ -184,21 +184,6 @@ func GetNodeRecommendations(c echo.Context) error {
 		c, ctx, pool, orgIDStr, userPerms, opts, terms, clusterUUIDs, start, now,
 		clusterFilter, nodeNameFilter, gpuModelFilter, termFilter,
 	)
-}
-
-// restrictClustersToQueryFilter narrows clusterUUIDs when filter[cluster] or the
-// cluster_uuid flat alias is set. The second return value is true when the
-// requested cluster is not in the allowed (RBAC-filtered) set.
-func restrictClustersToQueryFilter(clusterUUIDs []string, clusterFilter string) ([]string, bool) {
-	if clusterFilter == "" {
-		return clusterUUIDs, false
-	}
-	for _, u := range clusterUUIDs {
-		if u == clusterFilter {
-			return []string{clusterFilter}, false
-		}
-	}
-	return nil, true
 }
 
 func respondNodeGPURecommendationsTripleSQL(

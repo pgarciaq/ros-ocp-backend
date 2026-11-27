@@ -81,17 +81,23 @@ func GetNodeGPUTimeslicingDetail(c echo.Context) error {
 		clusterFilter = queryparams.FirstFilter(c, "cluster")
 	}
 	if clusterFilter != "" {
-		found := false
-		for _, id := range allowedClusters {
-			if id == clusterFilter {
-				found = true
-				break
-			}
+		// #950: the same union alias contract as the GPU TS list (#947) — a
+		// substring alias scopes the node lookup to every matching cluster
+		// instead of 404-ing on a value the list accepts. The detail route
+		// keeps its 404: a filter that matches nothing, or only clusters the
+		// caller may not read, is an unknown node here, not an empty page.
+		scoped, scopeErr := resolveClusterAliasScope(ctx, pool, orgID, allowedClusters, false, clusterFilter)
+		if scopeErr != nil {
+			hlog.Errorf("GetNodeGPUTimeslicingDetail: resolve cluster filter: %v", scopeErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
+				"status":  "error",
+				"message": "unable to resolve clusters for organization",
+			})
 		}
-		if !found {
+		if len(scoped) == 0 {
 			return c.JSON(http.StatusNotFound, echo.Map{"status": "error", "message": "node not found"})
 		}
-		allowedClusters = []string{clusterFilter}
+		allowedClusters = scoped
 	}
 
 	termFilterRaw := queryparams.FirstFilter(c, "term")

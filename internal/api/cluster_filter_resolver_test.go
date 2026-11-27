@@ -147,6 +147,81 @@ func TestResolveClusterFilterUUIDs(t *testing.T) {
 	})
 }
 
+// TestResolveClusterAliasScopeGrantSemantics pins the difference between an
+// unrestricted caller and a restricted one with an EMPTY grant (#950/#753).
+// Handlers that early-return on an empty grant never reach the helper, so this
+// is the only place the distinction is exercised: emptiness must never be read
+// as "all clusters", while an unrestricted caller (org admin, no granted set)
+// still gets the union of matches.
+func TestResolveClusterAliasScopeGrantSemantics(t *testing.T) {
+	t.Setenv("RBAC_ENABLE", "false")
+	config.ResetForTest()
+	t.Cleanup(config.ResetForTest)
+	pool := testutil.SetupTestDB(t)
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() {
+		database.DB = nil
+		database.Pool = nil
+	})
+	ctx := context.Background()
+
+	orgID := "org-alias-scope-" + strings.ReplaceAll(t.Name(), "/", "-")
+	const clusterB = "99999999-9999-9999-9999-999999999999"
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	for _, cl := range []struct{ uuid, alias string }{
+		{testutil.TestClusterUUID, "scope-team-a"},
+		{clusterB, "scope-team-b"},
+	} {
+		_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, org_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+			VALUES (1, $2, $1, $3, 'src-scope', now()) ON CONFLICT DO NOTHING`, cl.uuid, orgID, cl.alias)
+		require.NoError(t, err)
+	}
+
+	t.Run("no filter returns the allowed set unchanged", func(t *testing.T) {
+		got, gErr := resolveClusterAliasScope(ctx, pool, orgID, []string{testutil.TestClusterUUID}, false, "")
+		require.NoError(t, gErr)
+		assert.Equal(t, []string{testutil.TestClusterUUID}, got)
+	})
+
+	t.Run("unrestricted caller gets the union of matches", func(t *testing.T) {
+		got, gErr := resolveClusterAliasScope(ctx, pool, orgID, nil, true, "scope-team")
+		require.NoError(t, gErr)
+		assert.ElementsMatch(t, []string{testutil.TestClusterUUID, clusterB}, got)
+	})
+
+	t.Run("restricted caller gets the intersection", func(t *testing.T) {
+		got, gErr := resolveClusterAliasScope(ctx, pool, orgID, []string{clusterB}, false, "scope-team")
+		require.NoError(t, gErr)
+		assert.Equal(t, []string{clusterB}, got)
+	})
+
+	t.Run("restricted caller with an empty grant gets nothing", func(t *testing.T) {
+		got, gErr := resolveClusterAliasScope(ctx, pool, orgID, nil, false, "scope-team")
+		require.NoError(t, gErr)
+		assert.Empty(t, got, "an absent grant is not unrestricted access (#753)")
+	})
+
+	t.Run("no match is an empty result, not an error", func(t *testing.T) {
+		got, gErr := resolveClusterAliasScope(ctx, pool, orgID, nil, true, "no-such-cluster")
+		require.NoError(t, gErr)
+		assert.Empty(t, got)
+	})
+}
+
+// TestResolveClusterAliasScopeReportsLookupFailure: the helper must surface a
+// failed lookup so its callers answer 503 instead of an empty page (#953).
+func TestResolveClusterAliasScopeReportsLookupFailure(t *testing.T) {
+	dead, err := pgxpool.New(context.Background(), "postgres://u:p@127.0.0.1:1/db?connect_timeout=2")
+	require.NoError(t, err)
+	defer dead.Close()
+
+	got, gErr := resolveClusterAliasScope(context.Background(), dead, "org-1", nil, true, "team-a")
+	require.Error(t, gErr, "a failed lookup must not be reported as 'nothing matched' (#953)")
+	assert.Nil(t, got)
+}
+
 // TestResolveClusterFilterUUIDsReportsLookupFailure: a failed lookup must be
 // reported, not rendered as "nothing matched" (#953). A lazily-connected pool
 // against a dead DSN fails at Query, so this needs no container.

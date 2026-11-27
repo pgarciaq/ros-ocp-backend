@@ -284,8 +284,8 @@ func TestTagWarningClusterScope_BranchCoverage(t *testing.T) {
 	})
 
 	t.Run("gpu-mig-client-filter-miss", func(t *testing.T) {
-		// A-only filtering FOR cluster B: restrictClustersToQueryFilter
-		// misses → emptyGPUMIGResponse. The warning scope is still the
+		// A-only filtering FOR cluster B: the client cluster filter
+		// resolves to B and the intersection misses → emptyGPUMIGResponse. The warning scope is still the
 		// caller's A-only RBAC set (the client filter composes with, never
 		// replaces, the server scope) — both keys must warn as unknown.
 		app := permsApp(readerClusterAPerms(), v16Routes)
