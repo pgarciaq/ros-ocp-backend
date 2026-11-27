@@ -171,23 +171,27 @@ PY
 write_puppeteer_config() {
   local out="$1"
   local chrome="${DOCS_PDF_CHROME:-}"
-  if [[ -n "$chrome" && -x "$chrome" ]]; then
-    cat >"$out" <<EOF
-{
-  "executablePath": "$chrome",
-  "args": ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
-}
-EOF
-  else
-    # No system Chrome: mermaid-cli's own puppeteer supplies the browser it
-    # downloaded (CI installs it with the package). Omitting executablePath is
-    # what lets that path work.
-    cat >"$out" <<'EOF'
-{
-  "args": ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
-}
-EOF
-  fi
+  [[ -n "$chrome" && -x "$chrome" ]] || chrome=""
+  # One generation, so the two branches cannot drift apart again. The config is
+  # handed to puppeteer by mmdc (-p), and puppeteer's default 180 s
+  # protocolTimeout is not enough for the largest pages on a loaded runner: a
+  # Mermaid screenshot timed out after 189 s in 3 of 10 CI runs (#960).
+  # executablePath stays conditional — with no system Chrome, omitting it is
+  # what lets mermaid-cli's own puppeteer use the browser it downloaded.
+  python3 - "$out" "$chrome" <<'PY'
+import json
+import sys
+
+out, chrome = sys.argv[1], sys.argv[2]
+config = {"args": ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+          "protocolTimeout": 600000}
+if chrome:
+    config["executablePath"] = chrome
+
+with open(out, "w") as fh:
+    json.dump(config, fh, indent=2)
+    fh.write("\n")
+PY
 }
 
 write_mkdocs_config() {
