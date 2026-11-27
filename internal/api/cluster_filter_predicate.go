@@ -2,11 +2,15 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 // clusterFilterPredicate builds the client cluster-filter predicate for the
@@ -155,6 +159,15 @@ func resolveClusterFilterUUID(ctx context.Context, pool *pgxpool.Pool, orgID, va
 		ORDER BY cluster_uuid
 		LIMIT 1`, orgID, containsPattern(value)).Scan(&resolved)
 	if err != nil {
+		// No match is not a failure — an unknown alias legitimately has no
+		// rows to price. Anything else is: it degrades the label to the org
+		// default, and an unlogged degradation is indistinguishable from "no
+		// filter" the next time someone debugs a wrong currency (#953).
+		if !errors.Is(err, pgx.ErrNoRows) {
+			logging.ForOrgOnly(orgID).Warnf(
+				"cluster filter %q did not resolve for the display currency: %v (using the cluster-set default)",
+				value, err)
+		}
 		return ""
 	}
 	return resolved

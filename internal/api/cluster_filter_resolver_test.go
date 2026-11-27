@@ -1,7 +1,9 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -11,6 +13,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -164,4 +167,27 @@ func TestResolveClusterFilterUUIDFirstMatchIsDeterministic(t *testing.T) {
 
 	assert.Equal(t, small, resolveClusterFilterUUID(ctx, pool, orgID, "cur-"),
 		"first match is the lowest canonical UUID, not heap order (#954a)")
+}
+
+// TestResolveClusterFilterUUIDDegradesOnLookupFailure pins the deliberate
+// asymmetry with resolveClusterFilterUUIDs (#953): the display-currency label
+// is best-effort — it never fails the request — but the degradation must be
+// VISIBLE, because an unlogged "" is indistinguishable from "no filter" when
+// someone debugs a wrong currency.
+func TestResolveClusterFilterUUIDDegradesOnLookupFailure(t *testing.T) {
+	var buf bytes.Buffer
+	logging.SetOutput(&buf)
+	t.Cleanup(func() { logging.SetOutput(os.Stdout) })
+
+	dead, err := pgxpool.New(context.Background(), "postgres://u:p@127.0.0.1:1/db?connect_timeout=2")
+	require.NoError(t, err)
+	defer dead.Close()
+
+	assert.Equal(t, "", resolveClusterFilterUUID(context.Background(), dead, "org-1", "team-a"),
+		"the currency label degrades to the org default; it does not fail the request (#953)")
+	out := buf.String()
+	assert.Contains(t, out, "team-a",
+		"the warning names the filter value that could not be resolved")
+	assert.Contains(t, out, "currency",
+		"the warning says what degraded, so the log does not read as a cluster-scope failure (#953)")
 }
