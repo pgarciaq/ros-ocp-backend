@@ -223,7 +223,7 @@ endpoints.
 
 | Parameter | Example | Description |
 |-----------|---------|-------------|
-| `filter[cluster]` | UUID (exact) or alias (partial) | Limit to one cluster |
+| `filter[cluster]` | UUID (exact) or alias (partial) | Cluster UUID (exact) or alias (case-insensitive substring; every matching cluster's rows are returned) |
 | `filter[project]` | `production` | Limit to one namespace |
 | `filter[quota_name]` | `team-alpha-budget` | ResourceQuota object name (exact match) |
 | `filter[resource_quota_name]` | `team-alpha-budget` | Alias for `filter[quota_name]` |

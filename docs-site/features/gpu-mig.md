@@ -137,7 +137,7 @@ GET /api/cost-management/v1/recommendations/openshift/gpu/mig
 
 | Filter | Alias | Description |
 |--------|-------|-------------|
-| `filter[cluster]` | `cluster`, `cluster_uuid` | Cluster UUID; empty list if unknown or not RBAC-visible |
+| `filter[cluster]` | `cluster`, `cluster_uuid` | Cluster UUID (exact) or alias (case-insensitive substring, union of matches — see [query parameters](../plugin-reference/query-parameters.md#cluster-filter)); empty list if unknown or not RBAC-visible |
 | `filter[project]` | `namespace`, `filter[namespace]` | Namespace; comma-separated values are OR'd |
 | `filter[gpu_idle_state]` | — | `active`, `idle`, `zombie` (comma-separated OR) |
 | `filter[tag:<key>]` | `tag=key:value` | Tag filter when `ROS_TAGS_ENABLED=true` |

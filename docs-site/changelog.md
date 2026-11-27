@@ -230,6 +230,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   outcome. The container (processor-path) reasons were already day-gated
   and are unchanged.
 
+### Documentation
+
+- **The cluster-filter contract is stated once, and the pages that
+  contradicted it are corrected
+  ([#952](https://github.com/pgarciaq/ros-ocp-backend/issues/952)):**
+  [`query-parameters.md`](plugin-reference/query-parameters.md)
+  now carries the matching rule every surface implements — UUID exact,
+  otherwise an org-scoped case-insensitive alias substring returning the
+  union of matches, intersected with RBAC, with a failed lookup as a `5xx`
+  rather than an empty page. `gpu-mig.md`, `quota-recommendations.md` and
+  `cluster-resource-quota.md` stop describing the filter as UUID-only or
+  "limit to one cluster", and the [#947](https://github.com/pgarciaq/ros-ocp-backend/issues/947)
+  entry above is narrowed to the two lists it actually changed.
+
 ### Changed
 
 - **Multi-value tags now match every value Koku reports ([#814](https://github.com/pgarciaq/ros-ocp-backend/issues/814)):**

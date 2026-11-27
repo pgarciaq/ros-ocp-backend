@@ -71,7 +71,7 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 | Parameter | Flat (ROS) | Bracket (Koku) | Description |
 |-----------|------------|----------------|-------------|
 | Project | `project`, `namespace` | `filter[project]` | Namespace (comma-separated OR); undocumented alias `filter[namespace]` |
-| Cluster | `cluster`, `cluster_uuid` | `filter[cluster]` | Cluster UUID or alias |
+| Cluster | `cluster`, `cluster_uuid` | `filter[cluster]` | Cluster UUID (exact) or alias (case-insensitive substring; every matching cluster is returned — see [cluster filter](#cluster-filter)) |
 | Workload | `workload` | `filter[workload]` | Workload name |
 | Workload type | `workload_type` | `filter[workload_type]` | Kubernetes workload kind |
 | Container | `container` | `filter[container]` | Container name |
@@ -94,6 +94,25 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 | Date range | `start_date` / `end_date` | `start_date` / `end_date` | Monitoring window (`YYYY-MM-DD`) |
 
 Exact and exclude filters are **bracket-only** (no flat equivalent).
+
+### Cluster filter
+
+`filter[cluster]` (and its flat forms `cluster` and `cluster_uuid`) means one
+thing on every surface that accepts it:
+
+- A value that parses as a UUID binds exactly — that cluster's rows only.
+- Any other value is an **org-scoped, case-insensitive substring of the cluster
+  alias**, and the result is the **union** of every matching cluster's rows.
+  `filter[cluster]=team-a` therefore returns `team-a-frontend` and
+  `team-a-backend` together, not the first match.
+- The union is always intersected with the caller's RBAC grant. A substring
+  that also matches an ungranted cluster returns only the granted rows; one
+  that matches nothing the caller may read returns the surface's empty
+  outcome (an empty `data` array, except the GPU time-slicing detail route,
+  which answers `404` — a node lookup with no readable cluster is an unknown
+  node there).
+- A lookup failure is a `5xx`, never an empty `200`: "could not resolve" and
+  "matched nothing" stay distinguishable.
 
 **Matching semantics.** `filter[node]` is an exact, case-sensitive identifier on
 every surface, list and detail alike. `filter[gpu_model]` is a literal,
