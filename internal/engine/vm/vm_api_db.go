@@ -13,6 +13,7 @@ import (
 
 	rootengine "github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/sqlutil"
 )
 
 // VMRecommendationFilters holds list query filters for VM recommendations.
@@ -416,8 +417,10 @@ func buildVMRecWhere(orgID string, filters VMRecommendationFilters) (string, []a
 			if p == "" {
 				continue
 			}
-			guestClauses = append(guestClauses, "guest_os ILIKE $"+strconv.Itoa(argIdx))
-			args = append(args, "%"+p+"%")
+			// #957: escape the value so % and _ match literally; without
+			// this, filter[guest_os]=% returns every VM row.
+			guestClauses = append(guestClauses, "guest_os ILIKE $"+strconv.Itoa(argIdx)+" ESCAPE '\\'")
+			args = append(args, sqlutil.ContainsPattern(p))
 			argIdx++
 		}
 		if len(guestClauses) > 0 {

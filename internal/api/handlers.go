@@ -371,7 +371,7 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 		for _, m := range models {
 			if m != "" {
 				clauses = append(clauses, "rs.gpu_model_name ILIKE ? ESCAPE '\\'")
-				vals = append(vals, "%"+escapeILIKE(m)+"%")
+				vals = append(vals, containsPattern(m))
 			}
 		}
 		if len(clauses) > 0 {

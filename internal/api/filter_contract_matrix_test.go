@@ -253,3 +253,67 @@ func TestFilterNodeCase_OneRuleEverywhere(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, code, "a case variant must 404 on the detail route too")
 	})
 }
+
+// TestFilterILIKE_MetacharactersMatchLiterally pins #957: % and _ are literal
+// in every user-supplied ILIKE value, and the `*` wildcard is the only way to
+// ask for a substring on the Koku-style parameters.
+func TestFilterILIKE_MetacharactersMatchLiterally(t *testing.T) {
+	fx := seedFilterMatrixFixture(t)
+	app := filterMatrixEcho()
+
+	t.Run("gpu_model wildcard", func(t *testing.T) {
+		code, body := getJSON(t, app, fx.orgID, filterMatrixBase+"/gpu/timeslicing", url.Values{"filter[gpu_model]": {"%"}})
+		require.Equal(t, http.StatusOK, code, metaMessage(body))
+		assert.Equal(t, 0, metaCount(body), "%% must match literally, not every row")
+
+		code, body = getJSON(t, app, fx.orgID, filterMatrixBase+"/gpu/timeslicing", url.Values{"filter[gpu_model]": {"Tesla"}})
+		require.Equal(t, http.StatusOK, code, metaMessage(body))
+		assert.Equal(t, 3, metaCount(body), "substring matching must still work")
+	})
+
+	t.Run("guest_os wildcard", func(t *testing.T) {
+		code, body := getJSON(t, app, fx.orgID, filterMatrixBase+"/vm", url.Values{"filter[guest_os]": {"%"}})
+		require.Equal(t, http.StatusOK, code, metaMessage(body))
+		assert.Equal(t, 0, metaCount(body), "%% must match literally on /vm too")
+
+		code, body = getJSON(t, app, fx.orgID, filterMatrixBase+"/vm", url.Values{"filter[guest_os]": {"RHEL"}})
+		require.Equal(t, http.StatusOK, code, metaMessage(body))
+		assert.Equal(t, 2, metaCount(body), "substring matching must still work")
+	})
+
+	t.Run("machineset star translation", func(t *testing.T) {
+		code, body := getJSON(t, app, fx.orgID, filterMatrixBase+"/machinesets", url.Values{"filter[machineset_name]": {"*_*"}})
+		require.Equal(t, http.StatusOK, code, metaMessage(body))
+		assert.Equal(t, 1, metaCount(body), "*_* must match only the literal underscore, not every name")
+
+		code, body = getJSON(t, app, fx.orgID, filterMatrixBase+"/machinesets", url.Values{"filter[machineset_name]": {"*"}})
+		require.Equal(t, http.StatusOK, code, metaMessage(body))
+		assert.Equal(t, 2, metaCount(body), "* alone still means all rows")
+	})
+
+	t.Run("snapshot project star translation", func(t *testing.T) {
+		code, body := getJSON(t, app, fx.orgID, filterMatrixBase+"/snapshots/summary", url.Values{"filter[project]": {"*_*"}})
+		require.Equal(t, http.StatusOK, code, metaMessage(body))
+		assert.Equal(t, 1, metaCount(body), "*_* must match only apps_prod")
+
+		code, body = getJSON(t, app, fx.orgID, filterMatrixBase+"/snapshots/summary", url.Values{"filter[project]": {"*"}})
+		require.Equal(t, http.StatusOK, code, metaMessage(body))
+		assert.Equal(t, 2, metaCount(body), "* alone still means all rows")
+	})
+
+	t.Run("gpu_model history is substring too", func(t *testing.T) {
+		params := url.Values{
+			"cluster_uuid":      {fx.clusterID},
+			"node_name":         {"node-ros-A"},
+			"filter[gpu_model]": {"Tesla"},
+		}
+		code, body := getJSON(t, app, fx.orgID, filterMatrixBase+"/gpu/timeslicing/history", params)
+		require.Equal(t, http.StatusOK, code, metaMessage(body))
+		assert.Equal(t, 1, metaCount(body), "a partial model name must match on history as it does on the list")
+
+		params.Set("filter[gpu_model]", "%")
+		code, body = getJSON(t, app, fx.orgID, filterMatrixBase+"/gpu/timeslicing/history", params)
+		require.Equal(t, http.StatusOK, code, metaMessage(body))
+		assert.Equal(t, 0, metaCount(body), "%% must not match history rows either")
+	})
+}

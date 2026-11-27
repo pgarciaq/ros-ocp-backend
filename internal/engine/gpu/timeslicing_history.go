@@ -6,6 +6,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model/types"
+	"github.com/redhatinsights/ros-ocp-backend/internal/sqlutil"
 )
 
 // NodeGPUTimeslicingHistoryOrderBy maps API order_by keys to SQL column names.
@@ -48,8 +49,12 @@ func ListNodeGPUTimeslicingRecommendationHistory(
 	argIdx := 4
 
 	if gpuModel != "" {
-		baseWhere += fmt.Sprintf(" AND gpu_model = $%d", argIdx)
-		args = append(args, gpuModel)
+		// #957: the same substring rule as the summary/list surfaces, so a
+		// partial model name ("T4") does not silently return nothing here
+		// while matching rows there. org_id/cluster_uuid/node_name are bound
+		// first, so the ILIKE still runs against one node's rows.
+		baseWhere += fmt.Sprintf(" AND gpu_model ILIKE $%d ESCAPE '\\'", argIdx)
+		args = append(args, sqlutil.ContainsPattern(gpuModel))
 		argIdx++
 	}
 	if term != "" {

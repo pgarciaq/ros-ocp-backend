@@ -10,6 +10,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/sqlutil"
 )
 
 const (
@@ -329,14 +330,15 @@ func snapshotSummaryGroupBySQL(groupBy string) (groupByClause, selectNamespace s
 
 // snapshotNamespaceFilterClause builds an exact or ILIKE filter for namespace (project).
 // Wildcard: * in the value is translated to SQL % (Koku-style substring match).
+// Everything that is not a * is literal (#957): % and _ in the value match
+// themselves instead of acting as SQL wildcards.
 func snapshotNamespaceFilterClause(filter string, argIdx int) (clause string, arg interface{}, nextIdx int) {
 	filter = strings.TrimSpace(filter)
 	if filter == "" {
 		return "", nil, argIdx
 	}
 	if strings.Contains(filter, "*") {
-		pattern := strings.ReplaceAll(filter, "*", "%")
-		return " AND namespace ILIKE $" + strconv.Itoa(argIdx), pattern, argIdx + 1
+		return " AND namespace ILIKE $" + strconv.Itoa(argIdx) + " ESCAPE '\\'", sqlutil.StarPattern(filter), argIdx + 1
 	}
 	return " AND namespace = $" + strconv.Itoa(argIdx), filter, argIdx + 1
 }

@@ -15,6 +15,7 @@ import (
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
+	"github.com/redhatinsights/ros-ocp-backend/internal/sqlutil"
 )
 
 const defaultMachineSetLimit = 10
@@ -334,14 +335,15 @@ func resolveMachineSetTerm(c echo.Context) (string, error) {
 
 // machinesetNameFilterClause builds an exact or ILIKE filter for machineset_name.
 // Wildcard: * in the value is translated to SQL % (Koku-style substring match).
+// Everything that is not a * is literal: % and _ in the value match themselves
+// (#957), so filter[machineset_name]=*_ no longer matches every name.
 func machinesetNameFilterClause(filter string, argIdx int) (clause string, arg interface{}, nextIdx int) {
 	filter = strings.TrimSpace(filter)
 	if filter == "" {
 		return "", nil, argIdx
 	}
 	if strings.Contains(filter, "*") {
-		pattern := strings.ReplaceAll(filter, "*", "%")
-		return " AND nr.machineset_name ILIKE $" + strconv.Itoa(argIdx), pattern, argIdx + 1
+		return " AND nr.machineset_name ILIKE $" + strconv.Itoa(argIdx) + " ESCAPE '\\'", sqlutil.StarPattern(filter), argIdx + 1
 	}
 	return " AND nr.machineset_name = $" + strconv.Itoa(argIdx), filter, argIdx + 1
 }

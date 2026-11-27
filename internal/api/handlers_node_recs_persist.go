@@ -261,8 +261,11 @@ func buildNodeGPUTimeslicingFilterSQL(
 		argIdx++
 	}
 	if gpuModelFilter != "" {
-		filterSQL += " AND t.gpu_model ILIKE $" + strconv.Itoa(argIdx)
-		args = append(args, "%"+gpuModelFilter+"%")
+		// #957: the value is user input, so route it through the canonical
+		// contains-pattern constructor — otherwise % and _ act as wildcards
+		// and filter[gpu_model]=% returns every row.
+		filterSQL += " AND t.gpu_model ILIKE $" + strconv.Itoa(argIdx) + " ESCAPE '\\'"
+		args = append(args, containsPattern(gpuModelFilter))
 		argIdx++
 	}
 	if termFilter != "" {

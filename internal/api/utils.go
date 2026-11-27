@@ -26,22 +26,21 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	kruizeplugin "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
+	"github.com/redhatinsights/ros-ocp-backend/internal/sqlutil"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types/kruizePayload"
 )
 
-// escapeILIKE escapes ILIKE wildcard characters so user input is matched literally.
-func escapeILIKE(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `%`, `\%`)
-	s = strings.ReplaceAll(s, `_`, `\_`)
-	return s
-}
+// escapeILIKE escapes ILIKE wildcard characters so user input is matched
+// literally. The implementation lives in sqlutil so the engine packages share
+// the same construction point (#957).
+func escapeILIKE(s string) string { return sqlutil.EscapeILIKE(s) }
 
 // containsPattern is the single construction point for an ILIKE
 // contains-pattern: the value is escaped so user input matches literally
 // (#956). Postgres ILIKE defaults to backslash as the escape character, so
-// callers bind the result without an ESCAPE clause.
-func containsPattern(s string) string { return "%" + escapeILIKE(s) + "%" }
+// callers bind the result without an ESCAPE clause. The implementation lives
+// in sqlutil so the engine packages share it (#957).
+func containsPattern(s string) string { return sqlutil.ContainsPattern(s) }
 
 func CollectionResponse[T any](collection []T, req *http.Request, count, limit, offset int) *Collection[T] {
 	var first, previous, next, last string

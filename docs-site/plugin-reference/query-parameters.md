@@ -80,7 +80,7 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 | Term | `term` | `filter[term]` | Recommendation term (`short_term`, `medium_term`, `long_term`) |
 | Engine | `engine` | `filter[engine]` | Recommendation engine (`cost`, `performance`) |
 | GPU presence | `has_gpu` | `filter[has_gpu]` | GPU presence (`true` / `false`) |
-| GPU model | `gpu_model` | `filter[gpu_model]` | GPU model substring match |
+| GPU model | `gpu_model` | `filter[gpu_model]` | GPU model substring match — literal (`%` and `_` are not wildcards), same rule on the summary, list, grouped, detail and history surfaces |
 | GPU classification | `gpu_classification` | `filter[gpu_classification]` | GPU classification exact match |
 | Staleness | `stale` | `filter[stale]` | Container and namespace lists: `false` (default) excludes stale rows, `only` returns only stale rows, `true` disables the filter. A row becomes stale when its cluster stops reporting (14 days by default, `ROS_CLUSTER_LIVENESS_HOURS`) or when a cycle stops refreshing it (`ROS_STALENESS_THRESHOLD_HOURS`, default 48h) |
 | Category | `category` | `filter[category]` | Unified node classification filter ([details](#node-utilization-filters)). Values: `idle`, `overcommitted`, `stranded_cpu`, `stranded_memory`, `underutilized`, `optimized` |
@@ -94,6 +94,15 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 | Date range | `start_date` / `end_date` | `start_date` / `end_date` | Monitoring window (`YYYY-MM-DD`) |
 
 Exact and exclude filters are **bracket-only** (no flat equivalent).
+
+**Matching semantics.** `filter[node]` is an exact, case-sensitive identifier on
+every surface, list and detail alike. `filter[gpu_model]` is a literal,
+case-insensitive substring match everywhere it is accepted — the GPU summary,
+the time-slicing list/grouped/detail surfaces and time-slicing history — and
+`filter[guest_os]` on `/vm` follows the same rule. On the parameters that accept
+a `*` wildcard (the machineset aggregation list's `filter[machineset_name]` and
+the snapshot summary's `filter[project]`), `*` is the only wildcard: `%` and `_`
+in the value match themselves.
 
 **Backward compatibility:** `filter[namespace]` and flat `namespace` still work on every list
 endpoint that filters by OpenShift namespace. They are aliases for `filter[project]` and are
@@ -113,7 +122,7 @@ These filters apply to **`GET /api/cost-management/v1/recommendations/openshift/
 | Category | `category` | `filter[category]` | Unified classification filter. Comma-separated values (OR): `idle`, `overcommitted`, `stranded_cpu`, `stranded_memory`, `underutilized`, `optimized`. |
 | Instance type | `instance_type` | `filter[instance_type]` | Exact match on operator-reported instance type. |
 | MachineSet (node list) | `machineset_name` | `filter[machineset_name]` | Exact match on MachineSet name when present in ROS CSV. |
-| MachineSet (aggregation list) | `machineset_name` | `filter[machineset_name]` | On `GET .../machinesets` only: exact match or `*` wildcard (`worker*` → `worker%`). |
+| MachineSet (aggregation list) | `machineset_name` | `filter[machineset_name]` | On `GET .../machinesets` only: exact match, or `*` as the only wildcard (`worker*` → `worker%`; `*` alone means all). `%` and `_` match themselves. |
 
 ```
 GET /api/cost-management/v1/recommendations/openshift/nodes?filter[category]=underutilized

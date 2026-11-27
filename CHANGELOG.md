@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Every filter value now matches literally — the ILIKE escaping invariant
+  holds repo-wide ([#957](https://github.com/pgarciaq/ros-ocp-backend/issues/957)):**
+  `filter[cluster]` was escaped in #956, but four ad-hoc constructions
+  remained. `filter[gpu_model]` on the GPU time-slicing list, grouped and
+  detail surfaces and `filter[guest_os]` on `/vm` wrapped the raw value as
+  `%value%`, so `%` and `_` acted as SQL wildcards (`filter[gpu_model]=%`
+  returned every row). The `*`-translation in `filter[machineset_name]` and
+  the snapshot summary's `filter[project]` replaced `*` with `%` and left
+  metacharacters live inside the generated pattern, so
+  `filter[machineset_name]=*_*` matched every name. All four now build their
+  pattern through one constructor: `%` and `_` match themselves, and `*`
+  remains the only wildcard (`*` alone still means all rows). GPU
+  time-slicing history also moves from exact to literal substring model
+  matching, so a partial model name works on every `filter[gpu_model]`
+  surface instead of returning nothing on one of them.
 - **`filter[node]` is one exact identifier on every surface
   ([#958](https://github.com/pgarciaq/ros-ocp-backend/issues/958)):** the GPU
   time-slicing list, grouped and detail handlers compared node names
@@ -24,7 +39,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `filter[cluster]` alias matching is an ILIKE *contains* match, so `%` and
   `_` in a filter value acted as SQL wildcards — `filter[cluster]=%`
   matched every cluster in the org. Aliases now match literally (the value
-  is escaped, and one constructor builds every such pattern). Separately, a
+  is escaped, and one constructor builds every such pattern — a claim that
+  #957 extended to the rest of the repository's ILIKE parameters). Separately, a
   UUID filter in upper case or without dashes silently returned no rows on
   the GPU time-slicing, MIG and nodes lists, because the value was compared
   as text against the canonical lower-case cluster UUID; UUIDs are now
