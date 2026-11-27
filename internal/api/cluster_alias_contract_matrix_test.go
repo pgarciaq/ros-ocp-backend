@@ -282,9 +282,10 @@ func TestClusterAlias_UnionEverySurface(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, code, "body: %v", body)
 	})
 
-	// /nodes/{node} is the same shape and had the same exact scan. It reads
-	// the flat cluster/cluster_uuid form only (no bracket alias), so this leg
-	// stays on the flat parameter.
+	// /nodes/{node} is the same shape and had the same exact scan. #972: it
+	// used to read the flat cluster/cluster_uuid form only, so the documented
+	// bracket spelling ran unfiltered and answered with another cluster's
+	// object; the bracket legs below pin that.
 	//
 	// #964: this route renders ONE node object, so it needs one cluster. An
 	// alias resolving to several readable clusters used to merge their
@@ -309,6 +310,34 @@ func TestClusterAlias_UnionEverySurface(t *testing.T) {
 	t.Run("node detail, alias matching nothing", func(t *testing.T) {
 		code, body := getJSON(t, app, fx.orgID, clusterAliasBase+"/nodes/alias-node-a1", url.Values{"cluster": {"nope"}})
 		require.Equal(t, http.StatusNotFound, code, "body: %v", body)
+	})
+
+	// #972: the bracket spelling is the documented one, and it must reach the
+	// same resolution as the flat form. Pre-fix these three legs saw no filter
+	// at all: the "different cluster" leg answered 200 with cluster A's object
+	// and the "several clusters" leg answered 200 instead of the shared 400.
+	t.Run("node detail, bracket form binds the cluster", func(t *testing.T) {
+		code, body := getJSON(t, app, fx.orgID, clusterAliasBase+"/nodes/alias-node-a1", url.Values{"filter[cluster]": {"alias-prod-east"}})
+		require.Equal(t, http.StatusOK, code, metaMessage(body))
+		assert.Equal(t, fx.a, body["cluster_uuid"], "the bracket form must answer with the requested cluster's object")
+	})
+
+	t.Run("node detail, bracket form by UUID", func(t *testing.T) {
+		code, body := getJSON(t, app, fx.orgID, clusterAliasBase+"/nodes/alias-node-a1", url.Values{"filter[cluster]": {fx.a}})
+		require.Equal(t, http.StatusOK, code, metaMessage(body))
+		assert.Equal(t, fx.a, body["cluster_uuid"])
+	})
+
+	t.Run("node detail, bracket form matching a different cluster", func(t *testing.T) {
+		code, body := getJSON(t, app, fx.orgID, clusterAliasBase+"/nodes/alias-node-a1", url.Values{"filter[cluster]": {"alias-staging"}})
+		require.Equal(t, http.StatusNotFound, code,
+			"the node lives in cluster A only; filtering to C must 404, never answer with A's object under a 200. body: %v", body)
+	})
+
+	t.Run("node detail, bracket form matching several clusters", func(t *testing.T) {
+		code, body := getJSON(t, app, fx.orgID, clusterAliasBase+"/nodes/alias-node-a1", url.Values{"filter[cluster]": {"prod"}})
+		require.Equal(t, http.StatusBadRequest, code, "one object cannot carry two clusters; body: %v", body)
+		assert.Contains(t, metaMessage(body), "resolves to 2 clusters")
 	})
 }
 

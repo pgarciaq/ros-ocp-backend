@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`/nodes/{node}` reads the documented `filter[cluster]` spelling
+  ([#972](https://github.com/pgarciaq/ros-ocp-backend/issues/972)):** the node
+  detail handler read only the flat `cluster_uuid` / `cluster` pair, so the
+  bracket form every sibling detail route accepts fell through to the
+  unfiltered path. A node name that exists in several clusters then answered
+  `200` with **another cluster's object**, and an alias resolving to several
+  clusters bypassed the shared `400` that tells the caller to narrow the alias —
+  the #969 ambiguity rule was unreachable through the documented form. The
+  handler now reads `filter[cluster_uuid]` and `filter[cluster]` after the flat
+  forms: a UUID binds its cluster, a single-cluster alias resolves, an
+  ambiguous alias is the `400` with the match count, and an unknown alias stays
+  `404 node not found`. The flat forms are unchanged.
 - **`filter[cluster]` works on the snapshot summary
   ([#963](https://github.com/pgarciaq/ros-ocp-backend/issues/963)):** the
   filter was bound straight to the `cluster_uuid` column, so every non-UUID

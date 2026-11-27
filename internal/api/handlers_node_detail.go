@@ -74,9 +74,22 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "error", "message": "node not found"})
 	}
 
+	// #972: the bracket spellings are the documented form, and every sibling
+	// detail route reads them (handlers_node_hourly.go, the GPU time-slicing
+	// detail, pvc/quota detail, VM history). This handler used to read only the
+	// flat pair, so `filter[cluster]=<other cluster>` fell through to the
+	// unfiltered path and answered with the merged node — another cluster's
+	// object, under a 200. Keep the flat forms first: they are the spellings
+	// the existing consumers send.
 	clusterFilter := strings.TrimSpace(c.QueryParam("cluster_uuid"))
 	if clusterFilter == "" {
 		clusterFilter = strings.TrimSpace(c.QueryParam("cluster"))
+	}
+	if clusterFilter == "" {
+		clusterFilter = strings.TrimSpace(queryparams.FirstFilter(c, "cluster_uuid"))
+	}
+	if clusterFilter == "" {
+		clusterFilter = strings.TrimSpace(queryparams.FirstFilter(c, "cluster"))
 	}
 	if clusterFilter != "" {
 		// #950: the same union alias contract as the /nodes list (#790) and
