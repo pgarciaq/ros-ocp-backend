@@ -264,6 +264,18 @@ Recommendation: remove the two stale worktrees and delete the local branches (th
 | #944 resolutions | Keep `go 1.26.9`; decide `limit=-1` explicitly; adopt the CVE/`.env`/hermetic commits | **notes for #944 — not in flight** |
 | KMO stale worktrees/branches | Removed / deleted; tips verified on `pgarciaq/` and in the phase branch | **done 2026-11-26** |
 
+**Batch A implementation record (2026-11-27).** Landed on the phase-17 branch as
+five commits — `2ab31e12` (#956), `8fd10043` (#951), `5959f80d` (#953 503),
+`1072f172` (#954a), `96cb8fc0` (#953 warn log) — with surface-level acceptance
+legs in `bbc40faa`. Three deviations from the filed recommendations, each with a
+recorded reason: `escapeILIKE` already existed, so #956 needed only the pattern
+constructor, not a second replacer; #951 canonicalizes where **Go** compares
+UUID strings (four sites, including `filterClustersByRBAC`) and deliberately not
+where Postgres compares `uuid` values; and #953's singular resolver keeps the
+best-effort contract with the warn log the decision names, rather than becoming
+`first(resolveClusterFilterUUIDs(...))` — that would swallow a row-scope error
+inside the currency path. Not pushed or reviewed at the time of writing.
+
 ## 7. Priority remediation order
 
 Proposed batching — one PR per letter. **Batch A does not depend on #944**: it fixes defects in #947's own phase-17 change and can land on the current phase-17 branch. B–E are follow-ups whose timing is the owner's call; the rebase (§6.7) changes their base, not their content.

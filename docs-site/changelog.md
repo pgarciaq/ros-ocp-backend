@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Cluster filters now mean what they say — aliases match literally, UUIDs
+  are case-insensitive ([#956](https://github.com/pgarciaq/ros-ocp-backend/issues/956),
+  [#951](https://github.com/pgarciaq/ros-ocp-backend/issues/951)):**
+  `filter[cluster]` alias matching is an ILIKE *contains* match, so `%` and
+  `_` in a filter value acted as SQL wildcards — `filter[cluster]=%`
+  matched every cluster in the org. Aliases now match literally (the value
+  is escaped, and one constructor builds every such pattern). Separately, a
+  UUID filter in upper case or without dashes silently returned no rows on
+  the GPU time-slicing, MIG and nodes lists, because the value was compared
+  as text against the canonical lower-case cluster UUID; UUIDs are now
+  canonicalized before every string comparison, including the RBAC grant
+  set. Unknown aliases keep the 200 + empty contract.
+- **A failed cluster-filter lookup now answers 503, not an empty list
+  ([#953](https://github.com/pgarciaq/ros-ocp-backend/issues/953)):** on
+  the GPU time-slicing and MIG lists, an error while resolving
+  `filter[cluster]` (database unavailable, pool exhausted) was
+  indistinguishable from a filter that legitimately matches nothing — the
+  request returned a confident `200` with `count: 0`. It now returns `503`
+  with a message; the display-currency lookup on the nodes list stays
+  best-effort by design, since it only labels currency and degrades to the
+  org default with a warning.
 - **Substring cluster filters are now consistent across all surfaces ([#947](https://github.com/pgarciaq/ros-ocp-backend/issues/947)):**
   a `filter[cluster]` value matching several clusters by alias substring
   (e.g. `team-a` matching `team-a-frontend` and `team-a-backend`) now
@@ -15,7 +36,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   lists — union semantics, matching koku's alias contract and the main
   list surfaces. Previously those two surfaces resolved a multi-match
   alias to its first-matched cluster only. The display-currency resolution
-  for multi-match filters remains first-match (clusters may differ in
+  for multi-match filters remains first-match, in a deterministic order
+  (the lowest matching cluster UUID) (clusters may differ in
   currency; a union rate would be a fiction). Unknown aliases keep the
   200 + empty contract.
 - **High-rate FX conversions were silently wrong ([#948](https://github.com/pgarciaq/ros-ocp-backend/issues/948)):**
