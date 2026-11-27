@@ -582,3 +582,56 @@ func TestClusterAliasBatch2_PartialGrant(t *testing.T) {
 		assert.Equal(t, 0, metaCount(body))
 	})
 }
+
+// TestClusterAliasBatch2_ExactAliasBindsLiterally is the end-to-end leg #968
+// was missing: the mapper-level assertion proved the mapping emitted
+// `c.cluster_alias = ?`, but nothing proved the query still carried it.
+// `ApplyQueryParams` drops keys absent from the native allowlist with a
+// warning, so a missing atom rendered `filter[exact:cluster]=<alias>` as a
+// silent no-op — 200 with every cluster's rows (found by the 2026-11-27 live
+// replay, not by the unit suite).
+//
+// The assertions are on ROWS RETURNED, not on the mapper's map: the partial
+// alias leg is the discriminator, because pre-fix it returns the unfiltered
+// three-cluster page while post-fix it returns nothing.
+func TestClusterAliasBatch2_ExactAliasBindsLiterally(t *testing.T) {
+	fx := seedClusterAliasBatch2Fixture(t)
+	app := clusterAliasBatch2App(unrestrictedHeatmapPerms())
+
+	surfaces := []struct{ name, path string }{
+		{"history", clusterAliasBatch2Base + "/history"},
+		{"quality", clusterAliasBatch2Base + "/quality"},
+	}
+	legs := []struct {
+		name        string
+		value       string
+		wantRows    int
+		wantCluster string
+	}{
+		// The full alias is also the substring shape's answer, so on its own
+		// it cannot tell a bound clause from a dropped one; the row identity
+		// is what makes it meaningful.
+		{"full alias of the first cluster", "alias-prod-east", 1, fx.a},
+		{"full alias of the third cluster", "alias-staging", 1, fx.c},
+		// The discriminator: not a full alias, so a literal bind matches
+		// nothing. Pre-fix the clause is dropped and all three rows return.
+		{"partial alias is not a literal match", "alias-prod", 0, ""},
+	}
+	for _, s := range surfaces {
+		for _, l := range legs {
+			code, body := getJSON(t, app, fx.orgID, s.path, url.Values{"filter[exact:cluster]": {l.value}})
+			require.Equal(t, http.StatusOK, code, metaMessage(body))
+			require.Equal(t, l.wantRows, metaCount(body),
+				"%s: filter[exact:cluster]=%q must bind the alias literally; a count above the expectation means the applied query dropped `c.cluster_alias = ?` (the native allowlist atom) and returned every cluster's rows",
+				s.name, l.value)
+			if l.wantCluster != "" {
+				data, _ := body["data"].([]any)
+				require.Len(t, data, 1, "%s: one row for %q", s.name, l.value)
+				row, _ := data[0].(map[string]any)
+				assert.Equal(t, l.wantCluster, row["cluster_uuid"],
+					"%s: filter[exact:cluster]=%q must return that cluster's row (row identity, not just count)",
+					s.name, l.value)
+			}
+		}
+	}
+}

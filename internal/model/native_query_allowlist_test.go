@@ -79,6 +79,8 @@ func TestNativeQueryAllowlist_MapNativeNamespaceQueryParameters(t *testing.T) {
 	clusterUUID := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
 	query := url.Values{
 		"cluster":               {"edge-cluster", clusterUUID.String()},
+		"filter[exact:cluster]": {"edge-exact"},
+		"exclude[cluster]":      {"edge-excluded"},
 		"project":               {"team-a", "team-b"},
 		"exclude[project]":      {"kube-public"},
 		"filter[exact:project]": {"exact-ns"},
@@ -104,12 +106,14 @@ func TestNativeQueryAllowlist_MapNativeNamespaceQueryParameters(t *testing.T) {
 
 func TestNativeQueryAllowlist_MapQualityQueryParameters(t *testing.T) {
 	query := url.Values{
-		"start_date": {"2025-03-01"},
-		"end_date":   {"2025-03-05"},
-		"cluster":    {"c1", "c2"},
-		"project":    {"p1"},
-		"workload":   {"w1"},
-		"container":  {"ctr1"},
+		"start_date":            {"2025-03-01"},
+		"end_date":              {"2025-03-05"},
+		"cluster":               {"c1", "c2"},
+		"filter[exact:cluster]": {"c-exact"},
+		"exclude[cluster]":      {"c-excluded"},
+		"project":               {"p1"},
+		"workload":              {"w1"},
+		"container":             {"ctr1"},
 	}
 	c := echoCtxGET(query)
 	params, err := api.MapQualityQueryParameters(c)
@@ -119,14 +123,16 @@ func TestNativeQueryAllowlist_MapQualityQueryParameters(t *testing.T) {
 
 func TestNativeQueryAllowlist_MapHistoryQueryParameters(t *testing.T) {
 	query := url.Values{
-		"start_date": {"2025-04-01"},
-		"end_date":   {"2025-04-07"},
-		"cluster":    {"hist-cluster"},
-		"project":    {"hp"},
-		"workload":   {"hw"},
-		"container":  {"hc"},
-		"term":       {"short", "medium"},
-		"engine":     {"cost"},
+		"start_date":            {"2025-04-01"},
+		"end_date":              {"2025-04-07"},
+		"cluster":               {"hist-cluster"},
+		"filter[exact:cluster]": {"hist-exact"},
+		"exclude[cluster]":      {"hist-excluded"},
+		"project":               {"hp"},
+		"workload":              {"hw"},
+		"container":             {"hc"},
+		"term":                  {"short", "medium"},
+		"engine":                {"cost"},
 	}
 	c := echoCtxGET(query)
 	params, err := api.MapHistoryQueryParameters(c)

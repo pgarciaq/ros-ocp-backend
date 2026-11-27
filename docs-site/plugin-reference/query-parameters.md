@@ -1,6 +1,6 @@
 # Query Parameters
 
-> **Last verified:** 2026-10-05
+> **Last verified:** 2026-11-27
 
 ROS-OCP API query parameters support **two equivalent syntaxes** used across the Cost
 Management ecosystem:
@@ -86,8 +86,8 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 | Category | `category` | `filter[category]` | Unified node classification filter ([details](#node-utilization-filters)). Values: `idle`, `overcommitted`, `stranded_cpu`, `stranded_memory`, `underutilized`, `optimized` |
 | Recommendation type | `recommendation_type` | `filter[recommendation_type]` | Recommendation category (PVC/snapshot endpoints) |
 | Tag | `tag=key:value` (repeatable) | `filter[tag:<key>]` | Tag key filter (when tags feature enabled) |
-| Exact match | — | `filter[exact:<field>]` | Exact match instead of partial |
-| Exclude | — | `exclude[<field>]` | Exclude matching values |
+| Exact match | — | `filter[exact:<field>]` | Exact match instead of partial (for `cluster`, honoured on the container/namespace lists and `/history` + `/quality/*` only — see [cluster filter](#cluster-filter)) |
+| Exclude | — | `exclude[<field>]` | Exclude matching values (same cluster scope as exact) |
 | Sort | `order_by` + `order_how` | `order_by[<field>]` | Sort field; value is `asc` or `desc` |
 | Pagination | `limit` / `offset` | `limit` / `offset` | Offset pagination (most list endpoints) |
 | Keyset cursor | `after` | `after` | Keyset pagination — supported on all list endpoints (container, namespace, node, PVC, GPU MIG, GPU timeslicing, VM, quota, cluster-quota, machineset, snapshot); the value is an opaque base64url-encoded cursor from `meta.next_cursor`; see [API Pagination](../pagination.md) |
@@ -125,6 +125,20 @@ cluster's data under the same name, and merging the hourly series would
 interleave two clusters. Those surfaces answer `400` with the match count and
 the way out (`pass a cluster UUID or a narrower alias`). List and aggregate
 surfaces — every other row-carrying surface — keep the union above.
+
+**`filter[exact:cluster]` and `exclude[cluster]`, and repeated values.** The
+container and namespace lists and `/history` and `/quality/*` honour all three:
+`exact` binds the alias literally, `exclude` negates the membership, and a
+repeated `filter[cluster]` is OR'd.
+
+The raw readers read the plain single-value form and ignore the other three,
+and they split in two by what an absent plain form does. `/nodes`, `/pvcs`,
+`/snapshots`, `/snapshots/summary`, `/quota` and `/cluster-quota` answer as
+though nothing were filtered. `/gpu/timeslicing/history` and
+`/vms/{vm}/history` require a cluster, so exact-only or exclude-only answers
+`400 cluster_uuid is required`. A repeated value keeps the first on all eight.
+Send exactly one plain `filter[cluster]` value on these routes, never
+`exact`/`exclude`.
 
 **Matching semantics.** `filter[node]` is an exact, case-sensitive identifier on
 every surface, list and detail alike. `filter[gpu_model]` is a literal,

@@ -58,8 +58,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   same. All six now share the container lists' atoms: a UUID binds the uuid
   column, anything else is a case-insensitive alias substring, several values
   are OR'd, and the exact-alias key is gone from the native allowlist.
-  `exclude[cluster]` and `filter[exact:cluster]` — documented on every list
-  surface and silently dropped here — now negate and bind literally as well.
+  `exclude[cluster]` and `filter[exact:cluster]` now negate and bind literally
+  here too. The boundary is the reader, not the route family: the aggregate
+  readers that take a single cluster — `/nodes`, `/pvcs`, `/snapshots`,
+  `/snapshots/summary`, `/quota`, `/cluster-quota` — read the plain
+  `filter[cluster]` form only and ignore the other two (measured on the bench:
+  `/nodes` answers 86 rows unfiltered and 86 for
+  `filter[exact:cluster]=<uuid>`).
+- **`filter[exact:cluster]=<alias>` filtered nothing on the native lists
+  ([#968](https://github.com/pgarciaq/ros-ocp-backend/issues/968)):** the
+  exact form builds a `c.cluster_alias = ?` atom, and the native allowlist —
+  which `ApplyQueryParams` uses to drop unknown keys instead of failing the
+  request — did not carry it. The request answered `200` with every cluster's
+  rows: on the bench `/history?filter[exact:cluster]=demo-special` returned
+  61,244 rows where that alias owns 960, `/quality/containers` 12,743 where it
+  owns 160, `/namespace` 164 where it owns 15, and the container list
+  `/recommendations/openshift` 1,783 where it owns 30. The atom is now
+  allowlisted for the container and the namespace mapper, and the
+  `org_container_keys` / `org_namespace_keys` remap tables carry it as well:
+  those two were dropping it from the count and page legs, visible only as a
+  false "skipping unknown query key" warning because the detail-eligibility
+  predicate happened to mask the dropped clause. The deprecated `/container`
+  compat route was never affected — it resolves the filter into
+  `recommendation_sets.cluster_uuid IN ?` before the allowlist sees it — and the
+  alias-include form was never affected either. A unit test that asserted the
+  mapper's map content passed throughout, which is why the end-to-end legs are
+  now asserted on rows returned.
 
 - **`filter[cluster]` returns every matching cluster on the surfaces that still
   compared the value to a UUID ([#950](https://github.com/pgarciaq/ros-ocp-backend/issues/950)):**

@@ -19,6 +19,7 @@ var nativeNSKeysFilterAtoms = map[string]string{
 	"c.cluster_uuid = ?":                    "onk.cluster_uuid = ?",
 	"c.cluster_uuid != ?":                   "onk.cluster_uuid != ?",
 	"c.cluster_alias ILIKE ? ESCAPE '\\'":   "c.cluster_alias ILIKE ? ESCAPE '\\'",
+	"c.cluster_alias = ?":                   "c.cluster_alias = ?",
 	"c.cluster_alias != ?":                  "c.cluster_alias != ?",
 	"ns.namespace_name ILIKE ? ESCAPE '\\'": "onk.namespace_name ILIKE ? ESCAPE '\\'",
 	"ns.namespace_name = ?":                 "onk.namespace_name = ?",

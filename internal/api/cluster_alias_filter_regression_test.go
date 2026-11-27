@@ -437,3 +437,146 @@ func TestClusterAliasFilter_CrossTenantCollision_CompatPaths(t *testing.T) {
 			"this org's own alias must still resolve its rows")
 	})
 }
+
+// TestClusterAliasFilter_NamespaceExactAliasBindsLiterally is the namespace
+// half of the #968 end-to-end gap. The namespace list has two query paths:
+// the DISTINCT path applies filter atoms without an allowlist gate, and the
+// org_namespace_keys path (taken whenever the request filters staleness or
+// tags) gates them on `nativeNSFilterAtoms`. The live 2026-11-27 replay hit
+// the keys path — `filter[exact:cluster]=demo-special` returned the unfiltered
+// page there while the include form narrowed correctly — because that atom
+// list lacked `c.cluster_alias = ?`.
+//
+// The request therefore carries filter[stale]=false (which selects the keys
+// path) and seeds org_namespace_keys, so it exercises the production path.
+// Mounting the non-fallback handler or omitting stale would test the DISTINCT
+// path, which never had this defect.
+func TestClusterAliasFilter_NamespaceExactAliasBindsLiterally(t *testing.T) {
+	setupAliasFilterTest(t)
+	ctx := context.Background()
+	seedAliasFilterOrg(t, ctx)
+	seedAliasFilterCompatRows(t, ctx)
+
+	pool := database.GetPool()
+	for _, cu := range []string{testutil.TestClusterUUID, aliasFilterClusterB} {
+		_, err := pool.Exec(ctx, `INSERT INTO org_namespace_keys
+			(org_id, cluster_uuid, namespace_name, last_reported, resolved_tags)
+			VALUES ($1, $2, 'ns-af', now(), '{}') ON CONFLICT DO NOTHING`,
+			testutil.TestOrgID, cu)
+		require.NoError(t, err)
+	}
+
+	app := permsApp(nil, func(v1 *echo.Group) {
+		v1.GET("/recommendations/openshift/namespace", api.GetNamespaceRecommendationSetListWithFallback)
+	})
+
+	get := func(t *testing.T, query string) []map[string]interface{} {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet,
+			"/api/cost-management/v1/recommendations/openshift/namespace?"+query, nil)
+		req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+		return dataRows(t, rec.Body.String())
+	}
+
+	// Baseline on the same path: both clusters' rows, so the narrower answers
+	// below are not vacuous.
+	require.Len(t, get(t, "filter%5Bstale%5D=false"), 2,
+		"baseline (keys path): both clusters' namespace rows")
+
+	// Control: the include form narrows on this path.
+	require.Len(t, get(t, "filter%5Bstale%5D=false&filter%5Bcluster%5D="+aliasFilterAliasA), 1,
+		"include form must narrow on the keys path")
+
+	rows := get(t, "filter%5Bstale%5D=false&filter%5Bexact%3Acluster%5D="+aliasFilterAliasA)
+	require.Len(t, rows, 1,
+		"filter[exact:cluster]=%q must bind the alias literally on the keys path; more rows means the applied query dropped `c.cluster_alias = ?` (nativeNSFilterAtoms)", aliasFilterAliasA)
+	assert.Equal(t, testutil.TestClusterUUID, fmt.Sprint(rows[0]["cluster_uuid"]),
+		"the exact alias must return its own cluster's row")
+
+	rows = get(t, "filter%5Bstale%5D=false&filter%5Bexact%3Acluster%5D="+aliasFilterAliasB)
+	require.Len(t, rows, 1)
+	assert.Equal(t, aliasFilterClusterB, fmt.Sprint(rows[0]["cluster_uuid"]))
+
+	assert.Empty(t, get(t, "filter%5Bstale%5D=false&filter%5Bexact%3Acluster%5D=alpha"),
+		"a partial alias is not a literal match; rows here mean the exact clause was dropped")
+}
+
+// TestClusterAliasFilter_ContainerKeysExactAliasBindsLiterally is the third
+// #968 end-to-end leg. The container list has no DISTINCT path at all
+// (usesOrgContainerKeys returns true unconditionally), so its page and count
+// both come from org_container_keys via ApplyQueryParamsToKeys — a remap
+// table gated by the same allowlist function. Pre-fix the exact atom was
+// allowlisted nowhere, reached neither keysParams nor detailParams, and
+// `filter[exact:cluster]=<alias>` answered 200 with every cluster's rows.
+//
+// Mounted route is the production native wiring (`/recommendations/openshift`
+// → GetRecommendationSetListWithFallback), not the legacy compat list.
+// Each cluster carries a DISTINCT container name on purpose: org_container_keys
+// is keyed by (org_id, namespace, workload, container_name) — no cluster — so
+// two clusters reporting the same container are ONE key row by design.
+func TestClusterAliasFilter_ContainerKeysExactAliasBindsLiterally(t *testing.T) {
+	setupAliasFilterTest(t)
+	ctx := context.Background()
+	seedAliasFilterOrg(t, ctx)
+
+	pool := database.GetPool()
+	for _, seed := range []struct{ cluster, container string }{
+		{testutil.TestClusterUUID, "ctr-keys-a"},
+		{aliasFilterClusterB, "ctr-keys-b"},
+	} {
+		_, err := pool.Exec(ctx, `INSERT INTO recommendation_sets
+			(org_id, cluster_uuid, container_id, namespace, workload, workload_type, container_name, term, engine, stale,
+			 notification_codes, estimated_savings_cents, monitoring_end_time, updated_at)
+			VALUES ($1, $2, $3, 'ns-keys', 'wl-keys', 'deployment', $4, 'short', 'cost', false, '{}', 100,
+			 now() - interval '1 minute', now())`,
+			testutil.TestOrgID, seed.cluster, seed.cluster+"-keys", seed.container)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `INSERT INTO org_container_keys
+			(org_id, cluster_uuid, namespace, workload, workload_type, container_name, last_reported, resolved_tags, is_stale)
+			VALUES ($1, $2, 'ns-keys', 'wl-keys', 'deployment', $3, now(), '{}', false)`,
+			testutil.TestOrgID, seed.cluster, seed.container)
+		require.NoError(t, err)
+	}
+
+	app := permsApp(nil, func(v1 *echo.Group) {
+		v1.GET("/recommendations/openshift", api.GetRecommendationSetListWithFallback)
+	})
+
+	get := func(t *testing.T, query string) []map[string]interface{} {
+		t.Helper()
+		target := "/api/cost-management/v1/recommendations/openshift"
+		if query != "" {
+			target += "?" + query
+		}
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+		return dataRows(t, rec.Body.String())
+	}
+
+	// Baseline: both clusters' container keys, so the answers below are not
+	// vacuous.
+	require.Len(t, get(t, ""), 2, "baseline: both clusters' container rows")
+
+	// Control: the include form narrows through its ILIKE atom.
+	require.Len(t, get(t, "filter%5Bcluster%5D="+aliasFilterAliasA), 1,
+		"include form must narrow the container list")
+
+	rows := get(t, "filter%5Bexact%3Acluster%5D="+aliasFilterAliasA)
+	require.Len(t, rows, 1,
+		"filter[exact:cluster]=%q must bind the alias literally on the container keys path; more rows means the applied query dropped `c.cluster_alias = ?` (nativeRecFilterAtoms / nativeRecKeysFilterAtoms)", aliasFilterAliasA)
+	assert.Equal(t, testutil.TestClusterUUID, fmt.Sprint(rows[0]["cluster_uuid"]),
+		"the exact alias must return its own cluster's row")
+
+	rows = get(t, "filter%5Bexact%3Acluster%5D="+aliasFilterAliasB)
+	require.Len(t, rows, 1)
+	assert.Equal(t, aliasFilterClusterB, fmt.Sprint(rows[0]["cluster_uuid"]))
+
+	assert.Empty(t, get(t, "filter%5Bexact%3Acluster%5D=alpha"),
+		"a partial alias is not a literal match; rows here mean the exact clause was dropped")
+}
