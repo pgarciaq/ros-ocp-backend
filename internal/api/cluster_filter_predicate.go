@@ -160,10 +160,15 @@ func resolveClusterFilterUUID(ctx context.Context, pool *pgxpool.Pool, orgID, va
 		LIMIT 1`, orgID, containsPattern(value)).Scan(&resolved)
 	if err != nil {
 		// No match is not a failure — an unknown alias legitimately has no
-		// rows to price. Anything else is: it degrades the label to the org
-		// default, and an unlogged degradation is indistinguishable from "no
-		// filter" the next time someone debugs a wrong currency (#953).
-		if !errors.Is(err, pgx.ErrNoRows) {
+		// rows to price. Neither is a client that hung up: the query is
+		// canceled, the response goes nowhere, and clients disconnect often
+		// enough that warning on it would bury the real degradations.
+		// Anything else is: it degrades the label to the default, and an
+		// unlogged degradation is indistinguishable from "no filter" the next
+		// time someone debugs a wrong currency (#953).
+		if !errors.Is(err, pgx.ErrNoRows) &&
+			!errors.Is(err, context.Canceled) &&
+			!errors.Is(err, context.DeadlineExceeded) {
 			logging.ForOrgOnly(orgID).Warnf(
 				"cluster filter %q did not resolve for the display currency: %v (falling back to the default currency label)",
 				value, err)

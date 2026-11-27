@@ -81,6 +81,17 @@ func TestResolveClusterFilterUUID(t *testing.T) {
 		"no match resolves to the default label")
 	assert.NotContains(t, buf.String(), "did not resolve",
 		"no match (pgx.ErrNoRows) is not a lookup failure and must not warn (#953)")
+
+	// Nor is a client that hung up: the query is canceled, the response goes
+	// nowhere, and warning on it would make every aborted request with a
+	// cluster filter look like a currency-resolution failure.
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	buf.Reset()
+	assert.Equal(t, "", resolveClusterFilterUUID(canceled, pool, orgID, "team-a"),
+		"a canceled request still degrades to the default label")
+	assert.NotContains(t, buf.String(), "did not resolve",
+		"a canceled request is not a lookup failure and must not warn (#953)")
 }
 
 // TestResolveClusterFilterUUIDs: the row-scope resolver returns EVERY match
