@@ -324,6 +324,10 @@ into the lab DB; the run needs one more port-forward and one more package:
    convention), forward another port (e.g. 15433) and pass
    `IQE_ROS_DB_DSN=postgresql://ros_user@127.0.0.1:15433/costonprem_ros`.
    The runner's host networking reaches the host's forwarded port.
+   **`IQE_ROS_DB_DSN` is required — there is no default** (since #955): 15432
+   is the koku *test*-DB convention, and a default that reaches a different
+   database seeds rows the API under test never reads, which then looks like
+   a product bug. Unset ⇒ the test skips with this pointer.
 2. **psycopg2-binary** in the runner (not in the base image):
    ```bash
    podman exec -e PIP_INDEX_URL=https://pypi.org/simple <runner> \
@@ -338,6 +342,10 @@ into the lab DB; the run needs one more port-forward and one more package:
      <runner> /iqe_venv/bin/iqe tests plugin ros_ocp \
      /iqe_venv/lib64/python3.12/site-packages/iqe_ros_ocp/tests/rest/test_cluster_alias_multi_match.py
    ```
+   The run takes ~40–60s: both tests poll until the seeded clusters clear the
+   API's per-org cluster cache (`ROS_CLUSTER_CACHE_TTL`, default 30s) before
+   asserting. A deployment that raises that TTL needs the same value exported
+   to the test.
 
 **Skip semantics by design:** an unreachable DB, a missing driver, or a seed
 failure (schema drift after a backend migration) skips the test with a
@@ -350,8 +358,12 @@ test's `_seed_multi_match_pair`.
 The test combines this seeding with the #925 service-account pattern (the
 RBAC-scoped section above) for the intersection leg; its RBAC grant and DB
 rows are per-run unique and torn down on exit (verified: zero residue,
-2026-11-26). Validated live 2026-11-26 against backend tag
-`branch-202611261759`: **1 passed** (five legs).
+2026-11-26 and 2026-11-27). Validated live 2026-11-27: **2 passed** on the
+batch-A backend (`batcha-202611270108`, #951 + #956 + #953 + #954), twice in
+a row with a warm cluster cache — and **failing on the right legs** against
+the previous tag `branch-202611261759`: `%` matched the fixture pair,
+`_` matched the `-` in the alias, and an uppercase UUID returned rows on
+`/nodes` while the GPU surfaces returned none.
 
 ## Running cost_management-plugin tests (the koku-api base)
 
