@@ -165,7 +165,7 @@ func resolveClusterFilterUUID(ctx context.Context, pool *pgxpool.Pool, orgID, va
 		// filter" the next time someone debugs a wrong currency (#953).
 		if !errors.Is(err, pgx.ErrNoRows) {
 			logging.ForOrgOnly(orgID).Warnf(
-				"cluster filter %q did not resolve for the display currency: %v (using the cluster-set default)",
+				"cluster filter %q did not resolve for the display currency: %v (falling back to the default currency label)",
 				value, err)
 		}
 		return ""

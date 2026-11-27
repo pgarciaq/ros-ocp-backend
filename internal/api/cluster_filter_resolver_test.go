@@ -66,6 +66,21 @@ func TestResolveClusterFilterUUID(t *testing.T) {
 		"an empty filter resolves to empty")
 	assert.Equal(t, "", resolveClusterFilterUUID(ctx, pool, "other-org", "beta-b"),
 		"another org's alias does not resolve (org-scoped)")
+
+	// A legitimate no-match is not a failure and must stay out of the log: an
+	// unknown alias is a documented 200 + empty, and warning on it would make
+	// the degradation warning (#953) useless noise.
+	var buf bytes.Buffer
+	prev := logging.GetLogger().Logger.Out
+	if prev == nil {
+		prev = os.Stderr
+	}
+	logging.SetOutput(&buf)
+	t.Cleanup(func() { logging.SetOutput(prev) })
+	assert.Equal(t, "", resolveClusterFilterUUID(ctx, pool, orgID, "no-such-alias"),
+		"no match resolves to the default label")
+	assert.NotContains(t, buf.String(), "did not resolve",
+		"no match (pgx.ErrNoRows) is not a lookup failure and must not warn (#953)")
 }
 
 // TestResolveClusterFilterUUIDs: the row-scope resolver returns EVERY match
@@ -176,8 +191,14 @@ func TestResolveClusterFilterUUIDFirstMatchIsDeterministic(t *testing.T) {
 // someone debugs a wrong currency.
 func TestResolveClusterFilterUUIDDegradesOnLookupFailure(t *testing.T) {
 	var buf bytes.Buffer
+	// Capture the process logger, then restore whatever writer was there:
+	// this package has parallel tests, and the default is not ours to assume.
+	prev := logging.GetLogger().Logger.Out
+	if prev == nil {
+		prev = os.Stderr
+	}
 	logging.SetOutput(&buf)
-	t.Cleanup(func() { logging.SetOutput(os.Stdout) })
+	t.Cleanup(func() { logging.SetOutput(prev) })
 
 	dead, err := pgxpool.New(context.Background(), "postgres://u:p@127.0.0.1:1/db?connect_timeout=2")
 	require.NoError(t, err)
