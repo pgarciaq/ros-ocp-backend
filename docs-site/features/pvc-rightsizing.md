@@ -219,6 +219,11 @@ Required query parameters: `cluster_uuid` (or `filter[cluster]`), `namespace` (o
 `terms` map (`short`, `medium`, `long`) and `historical_usage` (daily min/max/avg
 from `daily_pvc_digests`).
 
+The detail route renders one PVC, so `filter[cluster]` must resolve to exactly one
+readable cluster: an alias matching several answers `400` (pass a UUID or a
+narrower alias). See
+[cluster filter](../plugin-reference/query-parameters.md#cluster-filter).
+
 ### Query Parameters (list)
 
 Bracket syntax is preferred; flat ROS aliases are also accepted. See

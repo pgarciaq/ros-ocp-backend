@@ -285,9 +285,20 @@ func TestClusterAlias_UnionEverySurface(t *testing.T) {
 	// /nodes/{node} is the same shape and had the same exact scan. It reads
 	// the flat cluster/cluster_uuid form only (no bracket alias), so this leg
 	// stays on the flat parameter.
-	t.Run("node detail, alias matching the cluster that holds the node", func(t *testing.T) {
-		code, body := getJSON(t, app, fx.orgID, clusterAliasBase+"/nodes/alias-node-a1", url.Values{"cluster": {"prod"}})
+	//
+	// #964: this route renders ONE node object, so it needs one cluster. An
+	// alias resolving to several readable clusters used to merge their
+	// term/engine variants under a single cluster_uuid; it now answers the
+	// shared 400 and names the way out.
+	t.Run("node detail, single-cluster alias holding the node", func(t *testing.T) {
+		code, body := getJSON(t, app, fx.orgID, clusterAliasBase+"/nodes/alias-node-a1", url.Values{"cluster": {"prod-east"}})
 		require.Equal(t, http.StatusOK, code, metaMessage(body))
+	})
+
+	t.Run("node detail, alias matching several clusters", func(t *testing.T) {
+		code, body := getJSON(t, app, fx.orgID, clusterAliasBase+"/nodes/alias-node-a1", url.Values{"cluster": {"prod"}})
+		require.Equal(t, http.StatusBadRequest, code, "one object cannot carry two clusters; body: %v", body)
+		assert.Contains(t, metaMessage(body), "resolves to 2 clusters")
 	})
 
 	t.Run("node detail, alias matching a different cluster", func(t *testing.T) {

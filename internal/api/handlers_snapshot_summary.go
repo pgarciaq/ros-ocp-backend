@@ -131,15 +131,42 @@ func GetSnapshotSummary(c echo.Context) error {
 
 	rbacSQL, rbacArgs, rbacIdx, rbacDeny := snapshotRBACClusterFilter(userPerms, argIdx)
 	if rbacDeny {
-		return emptySnapshotSummaryResponse(c, orgID, clusterFilter, limit, offset)
+		// No readable cluster, so no cluster currency to label the empty page:
+		// pass "" for the org default (a UUID here is not one the caller may read).
+		return emptySnapshotSummaryResponse(c, orgID, "", limit, offset)
 	}
 	filterSQL += rbacSQL
 	args = append(args, rbacArgs...)
 	argIdx = rbacIdx
 
+	// resolvedClusterUUID labels the display currency. An alias is not a UUID,
+	// so it used to fall through to the org default (#790's class of bug);
+	// several matched clusters have no single currency, and the org default is
+	// the honest label for an aggregate across them.
+	resolvedClusterUUID := clusterFilter
 	if clusterFilter != "" {
-		filterSQL += ` AND cluster_uuid = $` + strconv.Itoa(argIdx)
-		args = append(args, clusterFilter)
+		// #963: the union alias contract. Before this, a non-UUID value was
+		// bound straight to a uuid column, so a documented filter value failed
+		// the whole request with a Postgres cast error (503).
+		scoped, scopeErr := clusterScopeForFilter(ctx, pool, orgID, userPerms, clusterFilter)
+		if scopeErr != nil {
+			hlog.Errorf("snapshot summary: resolve cluster filter: %v", scopeErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
+				"status":  "error",
+				"message": "unable to fetch snapshot summaries",
+			})
+		}
+		resolvedClusterUUID = ""
+		if len(scoped) == 1 {
+			resolvedClusterUUID = scoped[0]
+		}
+		if len(scoped) == 0 {
+			return emptySnapshotSummaryResponse(c, orgID, resolvedClusterUUID, limit, offset)
+		}
+		// The rows are an aggregate, so a union is representable: every
+		// matched cluster's groups are returned, each carrying cluster_uuid.
+		filterSQL += ` AND cluster_uuid = ANY($` + strconv.Itoa(argIdx) + `)`
+		args = append(args, scoped)
 		argIdx++
 	}
 
@@ -267,7 +294,7 @@ func GetSnapshotSummary(c echo.Context) error {
 	resp.Meta.Count = total
 	resp.Meta.Limit = limit
 	resp.Meta.Offset = offset
-	displayCurrency, _ := resolveDisplayCurrency(ctx, orgID, clusterFilter)
+	displayCurrency, _ := resolveDisplayCurrency(ctx, orgID, resolvedClusterUUID)
 	resp.Meta.Currency = displayCurrency
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	resp.Data = data

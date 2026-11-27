@@ -83,22 +83,33 @@ func GetNodeHourlyUtilization(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	allClusters, clusterErr := getClustersForOrg(ctx, orgID)
-	if clusterErr != nil {
-		hlog.Errorf("GetNodeHourlyUtilization: resolve clusters: %v", clusterErr)
+
+	// #964: the hourly series is per (cluster, node) and its rows carry no
+	// cluster column, so the filter has to name exactly one readable cluster.
+	// An alias resolving to several has no truthful answer here — merging
+	// their hours would interleave two clusters under one series.
+	scoped, scopeErr := clusterScopeForFilter(ctx, pool, orgID, userPerms, clusterID)
+	if scopeErr != nil {
+		hlog.Errorf("GetNodeHourlyUtilization: resolve cluster filter: %v", scopeErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to resolve clusters for organization",
 		})
 	}
-	allowedClusters := filterClustersByRBAC(allClusters, userPerms)
-	if !clusterAllowed(allowedClusters, clusterID) {
+	if len(scoped) == 0 {
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, NodeHourlyUtilizationResponse{
 			Meta: NodeHourlyUtilizationMeta{Count: 0, Days: days},
 			Data: []NodeHourlyUtilizationRow{},
 		})
 	}
+	if len(scoped) > 1 {
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"status":  "error",
+			"message": clusterFilterAmbiguousMessage(clusterID, len(scoped)),
+		})
+	}
+	clusterID = scoped[0]
 
 	rows, queryErr := queryHourlyNodeDigests(ctx, pool, orgID, clusterID, nodeName, days)
 	if queryErr != nil {

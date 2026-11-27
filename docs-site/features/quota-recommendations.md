@@ -219,6 +219,10 @@ When `RBAC_ENABLE=true`, list results are scoped to clusters the caller may read
 authorized returns **HTTP 200** with an empty `data` array (not 403), matching other ROS list
 endpoints.
 
+The detail endpoint renders one quota, so `filter[cluster]` there must resolve to exactly
+one readable cluster: an alias matching several answers `400` (pass a UUID or a narrower
+alias). See [cluster filter](../plugin-reference/query-parameters.md#cluster-filter).
+
 ### List filters, sorting, and grouping
 
 | Parameter | Example | Description |

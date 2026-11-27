@@ -123,15 +123,6 @@ func GetQuotaRecommendationDetail(c echo.Context) error {
 		})
 	}
 
-	// #752: out-of-scope resolves are indistinguishable from not-found
-	// (after parameter validation — 400s keep precedence).
-	if !readerClusterAllowed(c, id.clusterUUID) {
-		return c.JSON(http.StatusNotFound, echo.Map{
-			"status":  "error",
-			"message": "quota recommendation not found",
-		})
-	}
-
 	pool := db.GetPool()
 	if pool == nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -140,6 +131,31 @@ func GetQuotaRecommendationDetail(c echo.Context) error {
 		})
 	}
 	ctx := c.Request().Context()
+
+	// #752 + #967: an out-of-scope cluster stays indistinguishable from
+	// not-found; a lookup failure is a 503; an alias naming several
+	// readable clusters is the shared 400.
+	scope, scopeErr := resolveDetailCluster(ctx, pool, orgID, get_user_permissions(c), id.clusterUUID)
+	if scopeErr != nil {
+		hlog.Errorf("GetQuotaRecommendationDetail: resolve cluster filter: %v", scopeErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to resolve clusters for organization",
+		})
+	}
+	if scope.Ambiguous > 1 {
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"status":  "error",
+			"message": clusterFilterAmbiguousMessage(id.clusterUUID, scope.Ambiguous),
+		})
+	}
+	if !scope.Found {
+		return c.JSON(http.StatusNotFound, echo.Map{
+			"status":  "error",
+			"message": "quota recommendation not found",
+		})
+	}
+	id.clusterUUID = scope.UUID
 
 	query := `
 		SELECT cluster_uuid, namespace, quota_name, recommendation_type, risk_level, headroom_basis_points,
@@ -288,15 +304,6 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 		})
 	}
 
-	// #752: out-of-scope resolves are indistinguishable from not-found
-	// (after parameter validation — 400s keep precedence).
-	if !readerClusterAllowed(c, id.clusterUUID) {
-		return c.JSON(http.StatusNotFound, echo.Map{
-			"status":  "error",
-			"message": "cluster-quota recommendation not found",
-		})
-	}
-
 	pool := db.GetPool()
 	if pool == nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -305,6 +312,29 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 		})
 	}
 	ctx := c.Request().Context()
+
+	// #752 + #967: same resolution as the quota detail route.
+	scope, scopeErr := resolveDetailCluster(ctx, pool, orgID, get_user_permissions(c), id.clusterUUID)
+	if scopeErr != nil {
+		hlog.Errorf("GetClusterQuotaRecommendationDetail: resolve cluster filter: %v", scopeErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to resolve clusters for organization",
+		})
+	}
+	if scope.Ambiguous > 1 {
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"status":  "error",
+			"message": clusterFilterAmbiguousMessage(id.clusterUUID, scope.Ambiguous),
+		})
+	}
+	if !scope.Found {
+		return c.JSON(http.StatusNotFound, echo.Map{
+			"status":  "error",
+			"message": "cluster-quota recommendation not found",
+		})
+	}
+	id.clusterUUID = scope.UUID
 
 	query := `
 		SELECT cluster_uuid, cluster_quota_name, recommendation_type, risk_level,

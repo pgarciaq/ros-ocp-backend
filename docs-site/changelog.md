@@ -8,6 +8,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`filter[cluster]` works on the snapshot summary
+  ([#963](https://github.com/pgarciaq/ros-ocp-backend/issues/963)):** the
+  filter was bound straight to the `cluster_uuid` column, so every non-UUID
+  value — including the alias form the parameter is documented to accept —
+  failed Postgres's uuid cast and the whole request answered `503`. It now
+  resolves like the rest of the API: a UUID binds exactly, anything else is an
+  org-scoped, case-insensitive alias substring, and the summary aggregates
+  every matching cluster (each group still carries its `cluster_uuid`). The
+  response currency is the one cluster's currency when the filter resolves to
+  exactly one, and the org default when it aggregates several.
+- **The node hourly series and the GPU time-slicing history accept an alias
+  ([#964](https://github.com/pgarciaq/ros-ocp-backend/issues/964)):** the
+  hourly series compared the value to a UUID column and dropped anything else,
+  so an alias returned an empty series; the time-slicing history had the same
+  exact-UUID assumption. History rows carry the cluster, so it now returns the
+  **union** of every matching readable cluster. Hourly digests do not carry a
+  cluster column — one series cannot interleave two clusters — so an alias
+  resolving to several answers the shared `400` (match count plus the way
+  out), one that resolves to nothing keeps the empty `200`, and a lookup
+  failure is a `503`.
+- **The single-object detail routes resolve aliases and refuse to pick a
+  cluster ([#967](https://github.com/pgarciaq/ros-ocp-backend/issues/967)):**
+  `/vm/detail`, `/pvcs/detail`, `/quota/detail` and `/cluster-quota/detail`
+  accepted only an exact UUID; an alias — including the UI's own spelling —
+  was indistinguishable from a missing object and answered `404`. All four now
+  resolve the filter, and because their response is one object, an alias
+  resolving to several readable clusters answers the shared `400` instead of
+  returning whichever cluster the query happened to hit. An unresolvable value
+  keeps the `404`, a lookup failure is a `503`, and the whole check runs inside
+  the caller's RBAC grant. `/vms/{vm}/history` moves to the union contract: its
+  rows carry the cluster, so a substring returns every matching cluster's
+  history. The same ambiguity rule now covers `/nodes/{node}` — shipped in
+  #950 on the union contract, it silently merged two clusters' term/engine
+  variants under one `cluster_uuid`; it answers `400` when an alias names
+  several readable clusters.
+- **`/history` and the quality endpoints accept a UUID and an alias
+  ([#968](https://github.com/pgarciaq/ros-ocp-backend/issues/968)):** these
+  six mappers emitted `cluster_alias IN (…)`, comparing the client value to
+  the alias **exactly**. A cluster UUID — the shape every other surface binds —
+  matched no alias and returned an empty page, and a partial alias did the
+  same. All six now share the container lists' atoms: a UUID binds the uuid
+  column, anything else is a case-insensitive alias substring, several values
+  are OR'd, and the exact-alias key is gone from the native allowlist.
+  `exclude[cluster]` and `filter[exact:cluster]` — documented on every list
+  surface and silently dropped here — now negate and bind literally as well.
+
 - **`filter[cluster]` returns every matching cluster on the surfaces that still
   compared the value to a UUID ([#950](https://github.com/pgarciaq/ros-ocp-backend/issues/950)):**
   the GPU time-slicing **detail** route, the node-utilization **detail** route

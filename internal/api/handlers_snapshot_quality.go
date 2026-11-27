@@ -54,8 +54,8 @@ func MapSnapshotQualityQueryParameters(c echo.Context) (map[string]interface{}, 
 		queryParams["q.measured_at < ?"] = t.Add(24 * time.Hour)
 	}
 
-	if clusters := queryparams.IncludeValues(c, "cluster"); len(clusters) > 0 {
-		queryParams["c.cluster_alias IN ?"] = clusters
+	if err := applyNativeClusterFilter(c, queryParams); err != nil {
+		return queryParams, err
 	}
 	if snapshots := queryparams.IncludeValues(c, "snapshot_name"); len(snapshots) > 0 {
 		queryParams["q.snapshot_name IN ?"] = snapshots

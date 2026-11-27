@@ -75,15 +75,6 @@ func GetPVCRecommendationDetail(c echo.Context) error {
 		})
 	}
 
-	// #752: out-of-scope resolves are indistinguishable from not-found
-	// (after parameter validation — 400s keep precedence).
-	if !readerClusterAllowed(c, id.clusterUUID) {
-		return c.JSON(http.StatusNotFound, echo.Map{
-			"status":  "not_found",
-			"message": "PVC recommendation not found",
-		})
-	}
-
 	pool := db.GetPool()
 	if pool == nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -93,6 +84,33 @@ func GetPVCRecommendationDetail(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
+
+	// #752 + #967: an out-of-scope cluster is indistinguishable from
+	// not-found (after parameter validation — 400s keep precedence), a
+	// lookup failure is a 503, and an alias naming several readable
+	// clusters is the shared 400 rather than one cluster's object picked
+	// for the caller.
+	scope, scopeErr := resolveDetailCluster(ctx, pool, orgID, get_user_permissions(c), id.clusterUUID)
+	if scopeErr != nil {
+		hlog.Errorf("GetPVCRecommendationDetail: resolve cluster filter: %v", scopeErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to resolve clusters for organization",
+		})
+	}
+	if scope.Ambiguous > 1 {
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"status":  "error",
+			"message": clusterFilterAmbiguousMessage(id.clusterUUID, scope.Ambiguous),
+		})
+	}
+	if !scope.Found {
+		return c.JSON(http.StatusNotFound, echo.Map{
+			"status":  "not_found",
+			"message": "PVC recommendation not found",
+		})
+	}
+	id.clusterUUID = scope.UUID
 
 	termQuery := pvcRecommendationSelectSQL + `
 		FROM pvc_recommendation_sets

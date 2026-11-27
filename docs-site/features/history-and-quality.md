@@ -48,6 +48,10 @@ Filter to a single container (or cluster, project, workload) with query paramete
 GET /api/cost-management/v1/recommendations/openshift/history?filter[container]=<name>&filter[cluster]=<cluster_alias>
 ```
 
+`filter[cluster]` takes a cluster UUID or an alias substring on every one of these
+surfaces, and returns every matching cluster (see
+[cluster filter](../plugin-reference/query-parameters.md#cluster-filter)).
+
 | Filter | Parameter |
 |--------|-----------|
 | Cluster | `cluster` (UUID or alias) |

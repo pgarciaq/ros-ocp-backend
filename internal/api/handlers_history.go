@@ -89,7 +89,10 @@ func MapHistoryQueryParameters(c echo.Context) (map[string]interface{}, error) {
 		if err := checkHistoryFilterCardinality("cluster", clusters); err != nil {
 			return queryParams, err
 		}
-		queryParams["c.cluster_alias IN ?"] = clusters
+	}
+	// Called unconditionally: exclude and exact values reach it too (#968).
+	if err := applyNativeClusterFilter(c, queryParams); err != nil {
+		return queryParams, err
 	}
 	if projects := queryparams.IncludeValues(c, "project"); len(projects) > 0 {
 		if err := checkHistoryFilterCardinality("project", projects); err != nil {

@@ -90,16 +90,19 @@ func GetVMRecommendationHistory(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	allClusters, clusterErr := getClustersForOrg(ctx, orgID)
-	if clusterErr != nil {
-		hlog.Errorf("GetVMRecommendationHistory: resolve clusters: %v", clusterErr)
+
+	// #967: history rows carry cluster_id, so this is a union surface — an
+	// alias resolving to several readable clusters returns all of them, and a
+	// lookup failure is a 503 rather than an empty page (#953).
+	scopedClusters, scopeErr := clusterScopeForFilter(ctx, pool, orgID, userPerms, clusterID)
+	if scopeErr != nil {
+		hlog.Errorf("GetVMRecommendationHistory: resolve cluster filter: %v", scopeErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to resolve clusters for organization",
 		})
 	}
-	allowedClusters := filterClustersByRBAC(allClusters, userPerms)
-	if !clusterAllowed(allowedClusters, clusterID) {
+	if len(scopedClusters) == 0 {
 		setRecommendationNoStore(c)
 		if responseFormat == listoptions.ResponseFormatCSV {
 			return streamCSV(c, csvFilename("vm-recommendation-history"), func(ctx context.Context, w io.Writer) error {
@@ -113,7 +116,7 @@ func GetVMRecommendationHistory(c echo.Context) error {
 	}
 
 	rows, total, listErr := vm.ListVMRecommendationHistory(
-		ctx, pool, orgID, clusterID, vmName, namespace, term, engineName, limit, offset,
+		ctx, pool, orgID, scopedClusters, vmName, namespace, term, engineName, limit, offset,
 	)
 	if listErr != nil {
 		hlog.Errorf("GetVMRecommendationHistory: query: %v", listErr)

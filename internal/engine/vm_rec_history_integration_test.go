@@ -90,7 +90,7 @@ func TestVMRecHistory_Pagination(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	rows, total, err := vm.ListVMRecommendationHistory(ctx, pool, orgID, clusterID, vmName, ns, "short_term", "cost", 2, 0)
+	rows, total, err := vm.ListVMRecommendationHistory(ctx, pool, orgID, []string{clusterID}, vmName, ns, "short_term", "cost", 2, 0)
 	require.NoError(t, err)
 	assert.Equal(t, int64(3), total)
 	assert.Len(t, rows, 2)

@@ -498,21 +498,31 @@ func GetVMRecommendationDetail(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	allClusters, err := getClustersForOrg(ctx, orgID)
-	if err != nil {
-		hlog.Errorf("GetVMRecommendationDetail: resolve clusters: %v", err)
+
+	// #967: a detail route renders one VM, so the cluster value must name
+	// exactly one readable cluster — several matches is the shared 400, not
+	// one cluster's VM picked for the caller.
+	scope, scopeErr := resolveDetailCluster(ctx, pool, orgID, get_user_permissions(c), clusterUUID)
+	if scopeErr != nil {
+		hlog.Errorf("GetVMRecommendationDetail: resolve clusters: %v", scopeErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to resolve clusters for organization",
 		})
 	}
-	allowed := filterClustersByRBAC(allClusters, get_user_permissions(c))
-	if !clusterAllowed(allowed, clusterUUID) {
+	if scope.Ambiguous > 1 {
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"status":  "error",
+			"message": clusterFilterAmbiguousMessage(clusterUUID, scope.Ambiguous),
+		})
+	}
+	if !scope.Found {
 		return c.JSON(http.StatusNotFound, echo.Map{
 			"status":  "not_found",
 			"message": "VM recommendation not found",
 		})
 	}
+	clusterUUID = scope.UUID
 
 	rec, digests, err := vm.GetVMRecommendationDetail(ctx, pool, orgID, clusterUUID, vmName, namespace, term, engineName)
 	if err != nil {

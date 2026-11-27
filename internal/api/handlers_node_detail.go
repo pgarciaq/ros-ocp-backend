@@ -95,6 +95,15 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 		if len(scoped) == 0 {
 			return c.JSON(http.StatusNotFound, echo.Map{"status": "error", "message": "node not found"})
 		}
+		// This route renders ONE node, so it needs one cluster: node names
+		// repeat across clusters ("worker-0"), and a merged payload would
+		// mix two clusters' rows under a single cluster_uuid.
+		if len(scoped) > 1 {
+			return c.JSON(http.StatusBadRequest, echo.Map{
+				"status":  "error",
+				"message": clusterFilterAmbiguousMessage(clusterFilter, len(scoped)),
+			})
+		}
 		allowedClusters = scoped
 	}
 

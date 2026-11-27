@@ -17,8 +17,11 @@ var nativeRecFixedQueryKeys = map[string]struct{}{
 	"rs.term IN ?":               {},
 	"rs.category IN ?":           {},
 
-	// recommendation_quality / recommendation_history cluster filter (handlers_quality.go, handlers_history.go)
-	"c.cluster_alias IN ?": {},
+	// recommendation_quality / recommendation_history cluster filter emits the
+	// c.* atoms in nativeRecFilterAtoms (c.cluster_uuid = ? /
+	// c.cluster_alias ILIKE ? ESCAPE '\' and their OR composites) via
+	// applyNativeClusterFilter (#968). The former exact `c.cluster_alias IN ?`
+	// key is gone: it made a UUID — and any alias substring — match nothing.
 
 	// recommendation_quality (handlers_quality.go)
 	"q.measured_at >= ?":    {},

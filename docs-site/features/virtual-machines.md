@@ -532,6 +532,12 @@ GET /api/cost-management/v1/recommendations/openshift/vm/detail
 
 Adds `daily_digests[]` with per-day percentile fields for charts.
 
+The detail route renders one VM, so `filter[cluster]` must resolve to exactly one
+readable cluster: an alias matching several answers `400` (pass a UUID or a
+narrower alias). History is list-shaped — its rows carry the cluster — so an
+alias there returns every matching cluster's history. See
+[cluster filter](../plugin-reference/query-parameters.md#cluster-filter).
+
 ### Recommendation history
 
 ```http

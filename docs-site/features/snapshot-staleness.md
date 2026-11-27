@@ -97,7 +97,7 @@ redundant snapshots (excludes **active** and **managed** from reclaimable totals
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `group_by` | enum | `project` or `namespace` (default per-namespace rollup) or `cluster` |
-| `filter[cluster]` | UUID (exact) or alias (partial) | Filter by cluster |
+| `filter[cluster]` | UUID (exact) or alias (partial) | Filter by cluster — an alias returning several clusters is aggregated across all of them, each group carrying its `cluster_uuid` |
 | `filter[project]` | string | Filter by namespace |
 | `filter[recommendation_type]` | enum | Same values as list |
 | `order_by` | string | `reclaimable_monthly_holding_cost_usd`, `reclaimable_restore_size_gib`, `actionable_snapshot_count`, `snapshot_count` |

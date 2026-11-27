@@ -89,16 +89,18 @@ func GetNodeGPUTimeslicingRecommendationHistory(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	allClusters, clusterErr := getClustersForOrg(ctx, orgID)
-	if clusterErr != nil {
-		hlog.Errorf("GetNodeGPUTimeslicingRecommendationHistory: resolve clusters: %v", clusterErr)
+	// #964: the rows carry cluster_uuid, so this is a union surface — an alias
+	// resolving to several readable clusters returns every one of them, and a
+	// lookup failure is a 503, not an empty page (#953).
+	scopedClusters, scopeErr := clusterScopeForFilter(ctx, pool, orgID, userPerms, clusterUUID)
+	if scopeErr != nil {
+		hlog.Errorf("GetNodeGPUTimeslicingRecommendationHistory: resolve cluster filter: %v", scopeErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to resolve clusters for organization",
 		})
 	}
-	allowedClusters := filterClustersByRBAC(allClusters, userPerms)
-	if !clusterAllowed(allowedClusters, clusterUUID) {
+	if len(scopedClusters) == 0 {
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, NodeGPUTimeslicingHistoryResponse{
 			Meta: Metadata{Count: 0, Limit: limit, Offset: offset},
@@ -111,7 +113,7 @@ func GetNodeGPUTimeslicingRecommendationHistory(c echo.Context) error {
 	listErr := db.WithHeavyStatementTimeout(ctx, pool, func(ctx context.Context, q db.QueryRower) error {
 		var innerErr error
 		rows, total, innerErr = engine.ListNodeGPUTimeslicingRecommendationHistory(
-			ctx, q, orgID, clusterUUID, nodeName, gpuModel, term,
+			ctx, q, orgID, scopedClusters, nodeName, gpuModel, term,
 			orderCol, orderDir, limit, offset,
 		)
 		return innerErr

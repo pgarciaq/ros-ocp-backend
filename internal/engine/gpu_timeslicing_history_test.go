@@ -32,7 +32,7 @@ func TestNodeGPUTimeslicingHistory_ListAndPagination(t *testing.T) {
 	}
 
 	rows, total, err := gpu.ListNodeGPUTimeslicingRecommendationHistory(
-		ctx, pool, orgID, clusterUUID, nodeName, gpuModel, "", "recorded_at", "desc", 2, 0,
+		ctx, pool, orgID, []string{clusterUUID}, nodeName, gpuModel, "", "recorded_at", "desc", 2, 0,
 	)
 	require.NoError(t, err)
 	assert.Equal(t, int64(3), total)
@@ -60,7 +60,7 @@ func TestNodeGPUTimeslicingHistory_FilterTerm(t *testing.T) {
 	}
 
 	rows, total, err := gpu.ListNodeGPUTimeslicingRecommendationHistory(
-		ctx, pool, orgID, clusterUUID, nodeName, "", "short", "recorded_at", "desc", 10, 0,
+		ctx, pool, orgID, []string{clusterUUID}, nodeName, "", "short", "recorded_at", "desc", 10, 0,
 	)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), total)

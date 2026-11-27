@@ -175,6 +175,10 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
 GET /api/cost-management/v1/recommendations/openshift/cluster-quota/detail
 ```
 
+The detail endpoint renders one CRQ, so `filter[cluster]` there must resolve to exactly
+one readable cluster: an alias matching several answers `400` (pass a UUID or a narrower
+alias). See [cluster filter](../plugin-reference/query-parameters.md#cluster-filter).
+
 ### List filters, sorting, and grouping
 
 | Parameter | Example | Description |

@@ -59,7 +59,9 @@ func PruneVMRecommendationHistory(ctx context.Context, pool *pgxpool.Pool) error
 func ListVMRecommendationHistory(
 	ctx context.Context,
 	pool *pgxpool.Pool,
-	orgID, clusterID, vmName, namespace, term, engine string,
+	orgID string,
+	clusterIDs []string,
+	vmName, namespace, term, engine string,
 	limit, offset int,
 ) ([]VMRecommendationHistoryRow, int64, error) {
 	if pool == nil {
@@ -75,9 +77,9 @@ func ListVMRecommendationHistory(
 	var total int64
 	err := pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM vm_recommendation_history
-		WHERE org_id = $1 AND cluster_id = $2 AND vm_name = $3 AND namespace = $4
+		WHERE org_id = $1 AND cluster_id = ANY($2) AND vm_name = $3 AND namespace = $4
 		  AND term = $5 AND engine = $6`,
-		orgID, clusterID, vmName, namespace, term, engine,
+		orgID, clusterIDs, vmName, namespace, term, engine,
 	).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("count VM rec history: %w", err)
@@ -89,11 +91,11 @@ func ListVMRecommendationHistory(
 			gpu_classification, recommended_gpu_action,
 			category, confidence, created_at
 		FROM vm_recommendation_history
-		WHERE org_id = $1 AND cluster_id = $2 AND vm_name = $3 AND namespace = $4
+		WHERE org_id = $1 AND cluster_id = ANY($2) AND vm_name = $3 AND namespace = $4
 		  AND term = $5 AND engine = $6
 		ORDER BY created_at DESC
 		LIMIT $7 OFFSET $8`,
-		orgID, clusterID, vmName, namespace, term, engine, limit, offset,
+		orgID, clusterIDs, vmName, namespace, term, engine, limit, offset,
 	)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list VM rec history: %w", err)

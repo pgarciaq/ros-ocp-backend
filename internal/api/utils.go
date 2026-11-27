@@ -692,6 +692,53 @@ func buildNativeModeClause(param, column, mode string, vals []string, maxLen int
 	return map[string]any{joinedSQLClause: allParamVals}, nil
 }
 
+// applyNativeClusterFilter maps filter[cluster] onto the native c.* atoms for
+// the ORM query paths (recommendation history and the quality families). Those
+// mappers used to emit a single `c.cluster_alias IN (...)` key (#968), which
+// compared the client value to the alias EXACTLY: a cluster UUID — the shape
+// every other surface binds — matched nothing, and so did an alias substring.
+// The only working input was the full alias spelled byte-for-byte, the one
+// shape the docs never describe.
+//
+// It reuses parseNativeClusterParams, so the resolution is the one the
+// container list already applies: a UUID is an exact uuid comparison, any other
+// value is a case-insensitive alias substring, and several values are OR'd into
+// a union. Exclude negates the membership and exact binds the alias literally,
+// the modes the container list supports and the documented table promises. The
+// clauses this produces (`c.cluster_uuid = ?`, `c.cluster_alias ILIKE ?
+// ESCAPE '\'`, their negations and OR composites) are on the ADR-0169
+// allowlist by construction — which is why this is a mapping change and not a
+// new SQL key.
+//
+// Union and RBAC compose: ApplyNativeRBAC bounds the same query independently,
+// so a wider match set can never widen a grant.
+func applyNativeClusterFilter(c echo.Context, queryParams map[string]interface{}) error {
+	includeVals := queryparams.IncludeValues(c, "cluster")
+	excludeVals := queryparams.ExcludeValues(c, "cluster")
+	exactVals := queryparams.ExactValues(c, "cluster")
+	if len(includeVals) == 0 && len(excludeVals) == 0 && len(exactVals) == 0 {
+		return nil
+	}
+	cfg := config.GetConfig()
+	if len(includeVals) > cfg.MaxCountPerQueryParam {
+		return namespaceAPIErrf(true, "too many cluster parameters, a maximum of %d is allowed", cfg.MaxCountPerQueryParam)
+	}
+	if len(excludeVals) > cfg.MaxCountPerQueryParam {
+		return namespaceAPIErrf(true, "too many cluster parameters, a maximum of %d is allowed", cfg.MaxCountPerQueryParam)
+	}
+	if len(exactVals) > cfg.MaxCountPerQueryParam {
+		return namespaceAPIErrf(true, "too many cluster parameters, a maximum of %d is allowed", cfg.MaxCountPerQueryParam)
+	}
+	clause, err := buildNativeSQLClauseWithFilterType("cluster", includeVals, exactVals, excludeVals, "", model.ClusterMaxLen, true, false, false)
+	if err != nil {
+		return err
+	}
+	for key, value := range clause {
+		queryParams[key] = value
+	}
+	return nil
+}
+
 // buildNativeSQLClauseWithFilterType handles include/exclude/exact for native queries.
 func buildNativeSQLClauseWithFilterType(param string, includeVals, exactVals, excludeVals []string, column string, maxLen int, allowDot bool, skipSanitize bool, treatIncludeAsExact bool) (map[string]any, error) {
 	hasExclude, hasExact, hasInclude := len(excludeVals) > 0, len(exactVals) > 0, len(includeVals) > 0

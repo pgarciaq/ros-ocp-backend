@@ -19,11 +19,15 @@ var NodeGPUTimeslicingHistoryOrderBy = map[string]string{
 }
 
 // ListNodeGPUTimeslicingRecommendationHistory returns paginated history snapshots
-// for a node GPU time-slicing recommendation key.
+// for a node GPU time-slicing recommendation key. clusterUUIDs is the resolved
+// filter scope (#964): the rows carry their cluster_uuid, so an alias matching
+// several clusters returns the union rather than silently nothing.
 func ListNodeGPUTimeslicingRecommendationHistory(
 	ctx context.Context,
 	q db.QueryRower,
-	orgID, clusterUUID, nodeName, gpuModel, term string,
+	orgID string,
+	clusterUUIDs []string,
+	nodeName, gpuModel, term string,
 	orderCol, orderDir string,
 	limit, offset int,
 ) ([]types.NodeGPUTimeslicingRecommendationHistory, int64, error) {
@@ -44,8 +48,8 @@ func ListNodeGPUTimeslicingRecommendationHistory(
 	}
 
 	baseWhere := `
-		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND node_name = $3`
-	args := []any{orgID, clusterUUID, nodeName}
+		WHERE org_id = $1 AND cluster_uuid = ANY($2::uuid[]) AND node_name = $3`
+	args := []any{orgID, clusterUUIDs, nodeName}
 	argIdx := 4
 
 	if gpuModel != "" {

@@ -114,6 +114,18 @@ thing on every surface that accepts it:
 - A lookup failure is a `5xx`, never an empty `200`: "could not resolve" and
   "matched nothing" stay distinguishable.
 
+**Surfaces that can render only one cluster answer `400`.** The node detail
+(`/nodes/{node}`), the per-node hourly series
+(`/node/{node}/hourly-utilization`) and the single-object detail routes
+(`/vm/detail`, `/pvcs/detail`, `/quota/detail`, `/cluster-quota/detail`)
+place one object — or one series whose rows carry no cluster column — in the
+response. An alias that resolves to several readable clusters therefore has
+no truthful answer there: returning one cluster's object would show another
+cluster's data under the same name, and merging the hourly series would
+interleave two clusters. Those surfaces answer `400` with the match count and
+the way out (`pass a cluster UUID or a narrower alias`). List and aggregate
+surfaces — every other row-carrying surface — keep the union above.
+
 **Matching semantics.** `filter[node]` is an exact, case-sensitive identifier on
 every surface, list and detail alike. `filter[gpu_model]` is a literal,
 case-insensitive substring match everywhere it is accepted — the GPU summary,

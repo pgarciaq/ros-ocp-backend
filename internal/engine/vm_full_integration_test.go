@@ -119,7 +119,7 @@ func TestVMRecommendationPipeline_Integration(t *testing.T) {
 		assert.Greater(t, after, before)
 
 		history, total, err := vm.ListVMRecommendationHistory(
-			ctx, pool, orgID, clusterUUID.String(),
+			ctx, pool, orgID, []string{clusterUUID.String()},
 			"guest-agent-vm-01", "vm-notif", "short_term", "cost", 10, 0,
 		)
 		require.NoError(t, err)

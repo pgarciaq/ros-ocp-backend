@@ -152,6 +152,74 @@ func resolveClusterAliasScope(ctx context.Context, pool *pgxpool.Pool, orgID str
 	return intersectClusterUUIDs(allowed, match), nil
 }
 
+// clusterScopeForFilter resolves a client cluster value to the clusters a
+// request may read, fetching the org's cluster list only when RBAC actually
+// narrows it. An unrestricted caller filtering by UUID therefore needs no
+// lookup at all — the value binds exactly and nothing intersects it, which
+// keeps these readers working on a cluster whose `clusters` row is not
+// registered yet (a UUID used to be a direct bind everywhere).
+//
+// A lookup failure is returned, never flattened into "no match" (#953).
+func clusterScopeForFilter(ctx context.Context, pool *pgxpool.Pool, orgID string, userPerms map[string][]string, filter string) ([]string, error) {
+	unrestricted := !fleetSummaryNeedsClusterFilter(userPerms)
+	var allowed []string
+	if !unrestricted {
+		all, err := getClustersForOrg(ctx, orgID)
+		if err != nil {
+			return nil, err
+		}
+		allowed = filterClustersByRBAC(all, userPerms)
+	}
+	return resolveClusterAliasScope(ctx, pool, orgID, allowed, unrestricted, filter)
+}
+
+// detailCluster is the resolved scope of a client-supplied cluster value on a
+// single-object detail route.
+type detailCluster struct {
+	UUID      string
+	Found     bool
+	Ambiguous int // number of readable matches when > 1
+}
+
+// resolveDetailCluster maps a client cluster value on a single-object detail
+// route to exactly one readable cluster (#967). Those routes render one
+// object, so a filter naming several clusters has no truthful answer:
+// picking one would return another cluster's object of the same name (or
+// merge two clusters' rows), which is the silent wrong answer the alias
+// contract exists to remove.
+//
+// A lookup failure is an error, not "not found" (#953).
+func resolveDetailCluster(ctx context.Context, pool *pgxpool.Pool, orgID string, userPerms map[string][]string, filter string) (detailCluster, error) {
+	scoped, err := clusterScopeForFilter(ctx, pool, orgID, userPerms, filter)
+	if err != nil {
+		return detailCluster{}, err
+	}
+	switch len(scoped) {
+	case 0:
+		return detailCluster{}, nil
+	case 1:
+		return detailCluster{UUID: scoped[0], Found: true}, nil
+	default:
+		return detailCluster{Ambiguous: len(scoped)}, nil
+	}
+}
+
+// clusterFilterAmbiguousMessage is the shared 400 body for surfaces that can
+// render only one cluster — a single-object detail, or a per-cluster series
+// whose rows carry no cluster column. On those, an alias resolving to several
+// clusters has no truthful answer: picking one merges or hides another
+// cluster's data, which is the failure mode the alias contract exists to
+// remove. The caller is told the count and the way out.
+//
+// Union surfaces (lists whose rows carry the cluster, and aggregates) never
+// reach this: they return every match.
+func clusterFilterAmbiguousMessage(filter string, matches int) string {
+	return fmt.Sprintf(
+		"filter[cluster] %q resolves to %d clusters; this surface returns one cluster — pass a cluster UUID or a narrower alias",
+		filter, matches,
+	)
+}
+
 // resolveClusterFilterUUID resolves a client cluster filter to the UUID the
 // currency layer keys on (#790 review: fetchClusterCurrency receives the
 // raw filter value; an alias fails the Koku cluster lookup and silently
