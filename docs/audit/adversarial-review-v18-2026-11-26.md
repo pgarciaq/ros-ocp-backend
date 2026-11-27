@@ -276,6 +276,31 @@ best-effort contract with the warn log the decision names, rather than becoming
 `first(resolveClusterFilterUUIDs(...))` — that would swallow a row-scope error
 inside the currency path. Not pushed or reviewed at the time of writing.
 
+**V18-04(b) implementation record (2026-11-27).** The decided remedy was
+implemented **second**, because the readiness addendum's premise did not hold.
+`convertNodeGPURecsToUserCurrency` does loop per cluster, but every lookup went
+through `GetCachedCurrency`, which memoized **one scalar per request**
+("resolves org-level currency once per request"), and the GPU list installs
+that cache before both list paths. A probe on the real functions returned
+`10.00 USD, 20.00 USD` for an input of `10.00 USD + 20.00 EUR`: the foreign row
+was relabelled, never added, and `meta.currency` came from the same cached
+value. So neither leg of the addendum ("a page can mix denominations", "a
+single-currency page can mislabel its total") was reachable, and warn-and-exclude
+alone would have been inert.
+
+The root cause was fixed first: the cache now keys currency by cluster UUID
+(koku's `effective_rates.currency` comes from the provider's cost model, so it
+is per cluster; four call sites already assumed that, and the namespace and
+`/vm` paths already behaved that way because they install no cache). The
+decided rule then applies to a page that genuinely can mix. Page currency now
+follows the page's first row in both list paths — with per-cluster lookups, a
+reference cluster taken from the stream or from a multi-match filter can be
+off-page, which would exclude every visible row. Two mutation-checked tests
+(cache per cluster; sum excludes and warns), and a third for the all-foreign
+page returning `nil` rather than an unconverted `0.00`. Live multi-currency was
+not reproducible on the SNO lab (all four GPU clusters report `EUR`), so that
+leg is unit-verified only.
+
 ## 7. Priority remediation order
 
 Proposed batching — one PR per letter. **Batch A does not depend on #944**: it fixes defects in #947's own phase-17 change and can land on the current phase-17 branch. B–E are follow-ups whose timing is the owner's call; the rebase (§6.7) changes their base, not their content.
