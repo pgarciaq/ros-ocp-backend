@@ -251,7 +251,12 @@ func buildNodeGPUTimeslicingFilterSQL(
 		}
 	}
 	if nodeNameFilter != "" {
-		filterSQL += " AND lower(t.node_name) = lower($" + strconv.Itoa(argIdx) + ")"
+		// #958: filter[node] is an exact, case-sensitive identifier on every
+		// surface (docs-site/features/node-recommendations.md). This builder
+		// was the only site comparing case-insensitively; a case variant
+		// must return the same empty/404 the /nodes router returns, not a
+		// match that teaches a rule the other seven sites do not implement.
+		filterSQL += " AND t.node_name = $" + strconv.Itoa(argIdx)
 		args = append(args, nodeNameFilter)
 		argIdx++
 	}

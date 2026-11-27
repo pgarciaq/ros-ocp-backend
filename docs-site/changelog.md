@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`filter[node]` is one exact identifier on every surface
+  ([#958](https://github.com/pgarciaq/ros-ocp-backend/issues/958)):** the GPU
+  time-slicing list, grouped and detail handlers compared node names
+  case-insensitively while `/nodes` (list and detail), `/vm`, `/machinesets`,
+  node hourly and the time-slicing history endpoint compared them exactly. A
+  case variant therefore returned rows on one surface and `404 node not
+  found` on another. The case-insensitive builder now compares exactly,
+  matching the documented contract, so `/nodes?filter[node]=node-ros-a` and
+  `/nodes/node-ros-a` agree with `/gpu/timeslicing`. Node names are
+  lower-case DNS labels, so no functional index or migration is involved.
 - **Cluster filters now mean what they say — aliases match literally, UUIDs
   are case-insensitive ([#956](https://github.com/pgarciaq/ros-ocp-backend/issues/956),
   [#951](https://github.com/pgarciaq/ros-ocp-backend/issues/951)):**
@@ -169,7 +179,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   required` — waiting for more observation days does not change that
   outcome. The container (processor-path) reasons were already day-gated
   and are unchanged.
-
 ### Changed
 
 - **Multi-value tags now match every value Koku reports ([#814](https://github.com/pgarciaq/ros-ocp-backend/issues/814)):**
