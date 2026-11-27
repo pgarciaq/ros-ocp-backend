@@ -276,6 +276,19 @@ func GetVMRecommendations(c echo.Context) error {
 	if engineFilter != "" && engineFilter != "cost" && engineFilter != "performance" {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid engine"})
 	}
+	// filter[term]: same vocabulary and error contract as every other
+	// surface, translated at the bind to the spelling vm_recommendations
+	// stores (#959). Before this, /vm bound the raw value: `short` and
+	// `SHORT_TERM` answered 200/0 and `fortnight` answered 200/0 instead of
+	// 400.
+	termFilters, termErr := queryparams.NormalizeTermFilterValuesFrom(queryparams.IncludeTermFilterValues(c))
+	if termErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
+	}
+	vmTerm := ""
+	if len(termFilters) > 0 {
+		vmTerm = queryparams.TermStorageName("vm", termFilters[0])
+	}
 	confidenceFilter := queryparams.FirstFilter(c, "confidence")
 	if confidenceFilter != "" {
 		if _, ok := vmRecValidConfidence[confidenceFilter]; !ok {
@@ -336,7 +349,7 @@ func GetVMRecommendations(c echo.Context) error {
 		Namespace:          queryparams.FirstFilter(c, "project"),
 		VMName:             queryparams.FirstFilter(c, "vm_name"),
 		Node:               queryparams.FirstFilter(c, "node"),
-		Term:               queryparams.FirstFilter(c, "term"),
+		Term:               vmTerm,
 		Engine:             engineFilter,
 		Confidence:         confidenceFilter,
 		GuestAgentDetected: guestAgentDetected,
@@ -447,7 +460,7 @@ func GetVMRecommendationDetail(c echo.Context) error {
 	}
 	vmName := strings.TrimSpace(c.QueryParam("vm_name"))
 	namespace := strings.TrimSpace(c.QueryParam("namespace"))
-	term := strings.TrimSpace(c.QueryParam("term"))
+	termRaw := queryparams.FirstFilter(c, "term")
 	engineName := strings.TrimSpace(c.QueryParam("engine"))
 
 	if clusterUUID == "" || vmName == "" || namespace == "" {
@@ -456,9 +469,16 @@ func GetVMRecommendationDetail(c echo.Context) error {
 			"message": "cluster_uuid, vm_name, and namespace are required",
 		})
 	}
-	if term == "" {
-		term = "medium_term"
+	// Both published spellings in any case; the detail readers take the
+	// `_term` form this plugin stores (#959).
+	if termRaw == "" {
+		termRaw = "medium_term"
 	}
+	termBare, termErr := queryparams.NormalizeRecommendationTermFilter(termRaw)
+	if termErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
+	}
+	term := queryparams.TermStorageName("vm", termBare)
 	if engineName == "" {
 		engineName = "cost"
 	}

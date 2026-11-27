@@ -2,7 +2,6 @@ package queryparams
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/labstack/echo/v4"
 )
@@ -46,8 +45,7 @@ func CollectEngineFilterValues(c echo.Context) ([]string, error) {
 // HasExplicitTermAndEngineFilters reports whether the caller set exactly one term
 // and one engine filter (flat or bracket syntax).
 func HasExplicitTermAndEngineFilters(c echo.Context) bool {
-	term := strings.TrimSpace(FirstFilter(c, "term"))
-	if term == "" {
+	if len(IncludeTermFilterValues(c)) == 0 {
 		return false
 	}
 	engines, err := CollectEngineFilterValues(c)
@@ -62,10 +60,8 @@ func ResolveVariationOrderByKey(c echo.Context, apiField string) (string, bool) 
 	}
 
 	termSuffix := "short"
-	if raw := strings.TrimSpace(FirstFilter(c, "term")); raw != "" {
-		if dbTerm, err := NormalizeRecommendationTermFilter(raw); err == nil && dbTerm != "" {
-			termSuffix = dbTerm
-		}
+	if terms, err := NormalizeTermFilterValuesFrom(IncludeTermFilterValues(c)); err == nil && len(terms) > 0 {
+		termSuffix = terms[0]
 	}
 
 	engine := "cost"

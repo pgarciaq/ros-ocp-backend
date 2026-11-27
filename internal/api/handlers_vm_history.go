@@ -54,10 +54,18 @@ func GetVMRecommendationHistory(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "vm_name and namespace are required"})
 	}
 
-	term := strings.TrimSpace(c.QueryParam("term"))
-	if term == "" {
-		term = "short_term"
+	// Accept both published spellings in any case and translate once at the
+	// bind: vm_recommendation_history stores the `_term` form (#959). Before
+	// this, any unknown value silently returned an empty page.
+	termRaw := queryparams.FirstFilter(c, "term")
+	if termRaw == "" {
+		termRaw = "short_term"
 	}
+	termBare, termErr := queryparams.NormalizeRecommendationTermFilter(termRaw)
+	if termErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
+	}
+	term := queryparams.TermStorageName("vm", termBare)
 	engineName := strings.TrimSpace(c.QueryParam("engine"))
 	if engineName == "" {
 		engineName = "cost"

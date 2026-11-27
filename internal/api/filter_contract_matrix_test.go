@@ -317,3 +317,153 @@ func TestFilterILIKE_MetacharactersMatchLiterally(t *testing.T) {
 		assert.Equal(t, 0, metaCount(body), "%% must not match history rows either")
 	})
 }
+
+// TestFilterTermVocabulary_OneRuleEverywhere pins #959: every term surface
+// accepts both published spellings in any case, and rejects an unknown value
+// with the shared 400 instead of a silent empty list.
+func TestFilterTermVocabulary_OneRuleEverywhere(t *testing.T) {
+	fx := seedFilterMatrixFixture(t)
+	app := filterMatrixEcho()
+
+	spellings := []string{"short", "short_term", "SHORT", "SHORT_TERM"}
+
+	surfaces := []struct {
+		name   string
+		path   string
+		params url.Values
+	}{
+		{"nodes", "/nodes", nil},
+		{"gpu timeslicing", "/gpu/timeslicing", nil},
+		{"vm", "/vm", nil},
+	}
+
+	for _, surface := range surfaces {
+		surface := surface
+		t.Run(surface.name+" spellings", func(t *testing.T) {
+			baseline := -1
+			for _, spelling := range spellings {
+				params := url.Values{}
+				for k, v := range surface.params {
+					params[k] = v
+				}
+				params.Set("filter[term]", spelling)
+				code, body := getJSON(t, app, fx.orgID, filterMatrixBase+surface.path, params)
+				require.Equal(t, http.StatusOK, code, "%s must accept %q; body: %v", surface.name, spelling, body)
+				got := metaCount(body)
+				if baseline < 0 {
+					baseline = got
+					require.Positive(t, baseline, "%s must return rows for the fixture to be meaningful", surface.name)
+					continue
+				}
+				assert.Equal(t, baseline, got, "%s must return the same rows for %q", surface.name, spelling)
+			}
+		})
+	}
+
+	t.Run("fleet heatmap spellings", func(t *testing.T) {
+		for _, spelling := range spellings {
+			code, body := getJSON(t, app, fx.orgID, filterMatrixBase+"/fleet-heatmap", url.Values{"filter[term]": {spelling}})
+			require.Equal(t, http.StatusOK, code, "/fleet-heatmap must accept %q; body: %v", spelling, body)
+			// The payload is keyed on the normalised bare term, so every
+			// accepted spelling must produce the same term and data shape.
+			meta, _ := body["meta"].(map[string]any)
+			require.NotNil(t, meta)
+			assert.Equal(t, "short", meta["term"], "the payload keeps the bare term for %q", spelling)
+		}
+	})
+
+	t.Run("unknown term is 400 with the shared message", func(t *testing.T) {
+		for _, surface := range surfaces {
+			code, body := getJSON(t, app, fx.orgID, filterMatrixBase+surface.path, url.Values{"filter[term]": {"fortnight"}})
+			require.Equal(t, http.StatusBadRequest, code, "%s must reject an unknown term", surface.name)
+			assert.Contains(t, metaMessage(body), `invalid filter[term] value: "fortnight"`, surface.name)
+		}
+
+		code, body := getJSON(t, app, fx.orgID, filterMatrixBase+"/fleet-heatmap", url.Values{"filter[term]": {"fortnight"}})
+		require.Equal(t, http.StatusBadRequest, code)
+		assert.Contains(t, metaMessage(body), `invalid filter[term] value: "fortnight"`, "fleet-heatmap must share the message")
+	})
+
+	t.Run("payload term round-trips", func(t *testing.T) {
+		// The GPU time-slicing payload emits the bare spelling; passing it
+		// back to /vm must select the same rows as the VM spelling.
+		code, body := getJSON(t, app, fx.orgID, filterMatrixBase+"/gpu/timeslicing", url.Values{"filter[term]": {"short"}})
+		require.Equal(t, http.StatusOK, code, metaMessage(body))
+		data, _ := body["data"].([]any)
+		require.NotEmpty(t, data)
+		row, _ := data[0].(map[string]any)
+		emitted, _ := row["term"].(string)
+		require.Equal(t, "short", emitted)
+
+		code, body = getJSON(t, app, fx.orgID, filterMatrixBase+"/vm", url.Values{"filter[term]": {emitted}})
+		require.Equal(t, http.StatusOK, code, metaMessage(body))
+		assert.Equal(t, 1, metaCount(body), "the term a payload emits must be accepted by /vm")
+
+		code, body = getJSON(t, app, fx.orgID, filterMatrixBase+"/vm", url.Values{"filter[term]": {"short_term"}})
+		require.Equal(t, http.StatusOK, code, metaMessage(body))
+		assert.Equal(t, 1, metaCount(body), "/vm must accept its own storage spelling too")
+	})
+
+	t.Run("vm detail spellings", func(t *testing.T) {
+		for _, spelling := range spellings {
+			code, body := getJSON(t, app, fx.orgID, filterMatrixBase+"/vm/detail", url.Values{
+				"cluster_uuid": {fx.clusterID},
+				"vm_name":      {"vm-short_term"},
+				"namespace":    {"test-ns"},
+				"term":         {spelling},
+			})
+			require.Equal(t, http.StatusOK, code, "vm detail must accept %q; body: %v", spelling, body)
+		}
+
+		code, body := getJSON(t, app, fx.orgID, filterMatrixBase+"/vm/detail", url.Values{
+			"cluster_uuid": {fx.clusterID},
+			"vm_name":      {"vm-short_term"},
+			"namespace":    {"test-ns"},
+			"term":         {"fortnight"},
+		})
+		require.Equal(t, http.StatusBadRequest, code)
+		assert.Contains(t, metaMessage(body), `invalid filter[term] value: "fortnight"`)
+	})
+
+	t.Run("vm history spellings", func(t *testing.T) {
+		for _, spelling := range spellings {
+			code, body := getJSON(t, app, fx.orgID, filterMatrixBase+"/vms/vm-short_term/history", url.Values{
+				"cluster_uuid": {fx.clusterID},
+				"namespace":    {"test-ns"},
+				"term":         {spelling},
+			})
+			require.Equal(t, http.StatusOK, code, "vm history must accept %q; body: %v", spelling, body)
+		}
+
+		code, body := getJSON(t, app, fx.orgID, filterMatrixBase+"/vms/vm-short_term/history", url.Values{
+			"cluster_uuid": {fx.clusterID},
+			"namespace":    {"test-ns"},
+			"term":         {"fortnight"},
+		})
+		require.Equal(t, http.StatusBadRequest, code)
+		assert.Contains(t, metaMessage(body), `invalid filter[term] value: "fortnight"`)
+	})
+
+	t.Run("savings summary spellings", func(t *testing.T) {
+		for _, spelling := range spellings {
+			code, body := getJSON(t, app, fx.orgID, filterMatrixBase+"/savings-summary", url.Values{"term": {spelling}})
+			require.Equal(t, http.StatusOK, code, "savings-summary must accept %q; body: %v", spelling, body)
+		}
+
+		code, body := getJSON(t, app, fx.orgID, filterMatrixBase+"/savings-summary", url.Values{"term": {"fortnight"}})
+		require.Equal(t, http.StatusBadRequest, code)
+		assert.Contains(t, metaMessage(body), `invalid filter[term] value: "fortnight"`)
+	})
+
+	t.Run("namespace history spellings", func(t *testing.T) {
+		path := filterMatrixBase + "/namespaces/" + uuid.New().String() + "/history"
+		for _, spelling := range spellings {
+			code, body := getJSON(t, app, fx.orgID, path, url.Values{"filter[term]": {spelling}})
+			assert.Equal(t, http.StatusNotFound, code, "namespace history must not reject %q as a bad term; body: %v", spelling, body)
+		}
+
+		code, body := getJSON(t, app, fx.orgID, path, url.Values{"filter[term]": {"fortnight"}})
+		require.Equal(t, http.StatusBadRequest, code)
+		assert.Contains(t, metaMessage(body), `invalid filter[term] value: "fortnight"`)
+	})
+}

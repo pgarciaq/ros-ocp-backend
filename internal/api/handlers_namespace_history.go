@@ -22,7 +22,12 @@ type NamespaceRecommendationHistoryResponse struct {
 	Data  []engine.NamespaceRecommendationHistoryRow `json:"data"`
 }
 
-func respondNamespaceRecommendationHistory(c echo.Context, orgID, clusterUUID, namespace string, limit int) error {
+func respondNamespaceRecommendationHistory(
+	c echo.Context,
+	orgID, clusterUUID, namespace string,
+	termFilters []string,
+	limit int,
+) error {
 	pool := db.GetPool()
 	if pool == nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -37,7 +42,7 @@ func respondNamespaceRecommendationHistory(c echo.Context, orgID, clusterUUID, n
 		orgID,
 		clusterUUID,
 		namespace,
-		queryparams.IncludeValues(c, "term"),
+		termFilters,
 		queryparams.IncludeValues(c, "engine"),
 		limit,
 	)
@@ -80,6 +85,12 @@ func GetNamespaceRecommendationHistory(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
 
+	// Same term vocabulary and error contract as every other surface (#959).
+	termFilters, termErr := queryparams.NormalizeTermFilterValuesFrom(queryparams.IncludeValues(c, "term"))
+	if termErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
+	}
+
 	currency := resolveUserCurrency(c.Request().Context(), orgID, "")
 	result, lookupErr := model.GetNativeNamespaceRecommendationByID(orgID, idStr, userPerms, false, currency)
 	if lookupErr != nil {
@@ -92,7 +103,7 @@ func GetNamespaceRecommendationHistory(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "recommendation not found"})
 	}
 
-	return respondNamespaceRecommendationHistory(c, orgID, result.ClusterUUID, result.Project, limit)
+	return respondNamespaceRecommendationHistory(c, orgID, result.ClusterUUID, result.Project, termFilters, limit)
 }
 
 // GetNamespaceRecommendationHistoryWithFallback resolves recommendation-id via native
@@ -116,6 +127,12 @@ func GetNamespaceRecommendationHistoryWithFallback(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": limErr.Error()})
 	}
 
+	// Same term vocabulary and error contract as every other surface (#959).
+	termFilters, termErr := queryparams.NormalizeTermFilterValuesFrom(queryparams.IncludeValues(c, "term"))
+	if termErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
+	}
+
 	currency := resolveUserCurrency(c.Request().Context(), orgID, "")
 	result, lookupErr := model.GetNativeNamespaceRecommendationByID(orgID, idStr, userPerms, false, currency)
 	if lookupErr != nil {
@@ -125,7 +142,7 @@ func GetNamespaceRecommendationHistoryWithFallback(c echo.Context) error {
 		})
 	}
 	if result != nil {
-		return respondNamespaceRecommendationHistory(c, orgID, result.ClusterUUID, result.Project, limit)
+		return respondNamespaceRecommendationHistory(c, orgID, result.ClusterUUID, result.Project, termFilters, limit)
 	}
 
 	nsSet := model.NamespaceRecommendationSet{}
@@ -140,5 +157,5 @@ func GetNamespaceRecommendationHistoryWithFallback(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "recommendation not found"})
 	}
 
-	return respondNamespaceRecommendationHistory(c, orgID, legacy.ClusterUUID, legacy.Project, limit)
+	return respondNamespaceRecommendationHistory(c, orgID, legacy.ClusterUUID, legacy.Project, termFilters, limit)
 }

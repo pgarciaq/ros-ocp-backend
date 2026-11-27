@@ -439,7 +439,7 @@ p95)"`. Unknown cluster / RBAC-narrowed callers get HTTP 200 with
 | Status | When | Evidence |
 |--------|------|----------|
 | `400` | `?metric=disk` | `{"status":"error","message":"invalid metric; must be 'cpu' or 'memory'"}` |
-| `400` | `filter[term]=bogus` | `{"status":"error","message":"invalid term; must be 'short', 'medium', or 'long'"}` |
+| `400` | `filter[term]=bogus` | `{"status":"error","message":"invalid filter[term] value: \"bogus\" (valid: short_term, medium_term, long_term)"}` — the shared term message every surface returns |
 | `400` | `filter[engine]=invalid` | `{"status":"error","message":"invalid engine; must be 'cost' or 'performance'"}` |
 | `401` | Missing or unparseable `x-rh-identity` | `{"message":"Unable to unmarshal X-Rh-Identity into struct"}` |
 | `400` | `ROS_VISUAL_INSIGHTS_ENABLED=false` (route not registered — falls through to the detail catch-all) | Recorded live: `{"status":"error","message":"bad recommendation_id"}` |

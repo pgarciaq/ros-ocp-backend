@@ -111,12 +111,17 @@ func GetFleetHeatmap(c echo.Context) error {
 
 	ctx := c.Request().Context()
 
-	term := queryparams.FirstFilter(c, "term")
+	// filter[term] accepts both published spellings (short and short_term,
+	// any case) like every other surface, but the heatmap payload and cache
+	// key keep the bare form (#959). The old validator accepted only the bare
+	// spelling, so a client passing the `_term` value its siblings accept got
+	// a 400 here.
+	term, termErr := queryparams.NormalizeRecommendationTermFilter(queryparams.FirstFilter(c, "term"))
+	if termErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
+	}
 	if term == "" {
 		term = defaultHeatmapTerm
-	}
-	if term != "short" && term != "medium" && term != "long" {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid term; must be 'short', 'medium', or 'long'"})
 	}
 	engine := queryparams.FirstFilter(c, "engine")
 	if engine == "" {

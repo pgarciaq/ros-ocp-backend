@@ -407,28 +407,10 @@ func MapNativeQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	}
 
 	// Term filter
-	termVals := queryparams.AllFilterValues(c, "term")
-	if len(termVals) > 0 {
-		var terms []string
-		seen := make(map[string]struct{}, len(termVals))
-		for _, t := range termVals {
-			dbTerm, termErr := queryparams.NormalizeRecommendationTermFilter(t)
-			if termErr != nil {
-				filterErrs = append(filterErrs, termErr)
-				continue
-			}
-			if dbTerm == "" {
-				continue
-			}
-			if _, ok := seen[dbTerm]; ok {
-				continue
-			}
-			seen[dbTerm] = struct{}{}
-			terms = append(terms, dbTerm)
-		}
-		if len(terms) > 0 {
-			queryParams["rs.term IN ?"] = terms
-		}
+	if terms, termErr := queryparams.NormalizeTermFilterValues(c); termErr != nil {
+		filterErrs = append(filterErrs, termErr)
+	} else if len(terms) > 0 {
+		queryParams["rs.term IN ?"] = terms
 	}
 
 	// Category filter (includes activity states: zombie, idle)
@@ -520,7 +502,7 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		response := buildContainerListMeta(c, page, apiListOptions, currency)
 		response.Data = listData
 
-		termFilter := queryparams.FirstFilter(c, "term")
+		termFilter := normalizedTermFilter(c)
 		terms, termErr := engine.LoadTermConfigCached(c.Request().Context(), db.GetPool(), OrgID, "container")
 		if termErr != nil {
 			terms = engine.DefaultTermsForPlugin("container")
@@ -691,7 +673,7 @@ func serveNativeList(c echo.Context, page model.NativeListPage, opts listoptions
 		if xrhid, xErr := requireXRHID(c); xErr == nil {
 			orgID = xrhid.Identity.OrgID
 		}
-		termFilter := queryparams.FirstFilter(c, "term")
+		termFilter := normalizedTermFilter(c)
 		recType := "container"
 		terms, termErr := engine.LoadTermConfigCached(c.Request().Context(), db.GetPool(), orgID, recType)
 		if termErr != nil {
@@ -833,7 +815,7 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 			orgID = xrhid.Identity.OrgID
 		}
 
-		termFilter := queryparams.FirstFilter(c, "term")
+		termFilter := normalizedTermFilter(c)
 		nsTerms, nsTermErr := engine.LoadTermConfigCached(c.Request().Context(), db.GetPool(), orgID, "container")
 		if nsTermErr != nil {
 			nsTerms = engine.DefaultTermsForPlugin("container")

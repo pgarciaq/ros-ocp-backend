@@ -329,6 +329,66 @@ func NormalizeRecommendationTermFilter(raw string) (dbTerm string, err error) {
 	}
 }
 
+// TermFilterValues returns every filter[term] value on the request (bracket
+// and flat syntax, include/exact/exclude forms), trimmed and de-duplicated by
+// IncludeValues. It does not validate; use NormalizeTermFilterValues at a
+// request boundary.
+func TermFilterValues(c echo.Context) []string { return AllFilterValues(c, "term") }
+
+// IncludeTermFilterValues returns the include-form filter[term] values only
+// (flat and bracket, no exact/exclude). Projection and ordering read this
+// shape: an excluded term must never become a positive selection.
+func IncludeTermFilterValues(c echo.Context) []string { return IncludeValues(c, "term") }
+
+// NormalizeTermFilterValues validates every filter[term] value on the request
+// and returns the distinct DB spellings (short, medium, long) in request
+// order. An empty result means no term filter was supplied.
+//
+// Every surface that accepts filter[term] must call this (or
+// NormalizeRecommendationTermFilter for its single-value form): an unknown
+// term must be a 400 with the shared message, not a silent empty list (#959).
+func NormalizeTermFilterValues(c echo.Context) ([]string, error) {
+	return NormalizeTermFilterValuesFrom(TermFilterValues(c))
+}
+
+// NormalizeTermFilterValuesFrom validates and normalises an explicit list of
+// raw term values. Surfaces that read only the include form (flat + bracket)
+// pass IncludeValues; the shared validator covers include, exact and exclude.
+func NormalizeTermFilterValuesFrom(raw []string) ([]string, error) {
+	out := make([]string, 0, len(raw))
+	seen := make(map[string]struct{}, len(raw))
+	for _, value := range raw {
+		dbTerm, err := NormalizeRecommendationTermFilter(value)
+		if err != nil {
+			return nil, err
+		}
+		if dbTerm == "" {
+			continue
+		}
+		if _, ok := seen[dbTerm]; ok {
+			continue
+		}
+		seen[dbTerm] = struct{}{}
+		out = append(out, dbTerm)
+	}
+	return out, nil
+}
+
+// TermStorageName maps a normalised term to the spelling the plugin's term
+// column stores. The per-plugin name is the published contract (the settings
+// API and IQE pin container-family terms as short|medium|long and VM terms as
+// short_term|medium_term|long_term), so filters accept both spellings
+// everywhere and only the bind point translates (#959).
+func TermStorageName(plugin, dbTerm string) string {
+	if dbTerm == "" {
+		return ""
+	}
+	if plugin == "vm" {
+		return dbTerm + "_term"
+	}
+	return dbTerm
+}
+
 // RecommendationCategories is the served classification vocabulary for
 // filter[category]: zombie and idle are activity states; undersized, oversized
 // and optimized are the sizing classes (librobne/types/category.go).

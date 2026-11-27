@@ -7,7 +7,6 @@ import (
 	"math"
 	"net/http"
 	"sort"
-	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
@@ -128,12 +127,16 @@ func GetFleetSavingsSummary(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid engine"})
 	}
 
-	termProfile := strings.TrimSpace(c.QueryParam("term"))
-	if termProfile == "" {
-		termProfile = "medium"
+	// Same term vocabulary and error contract as every other surface: both
+	// published spellings in any case, unknown value is the shared 400
+	// (#959). The summary compares against bare terms, so no translation.
+	termRaw := queryparams.FirstFilter(c, "term")
+	if termRaw == "" {
+		termRaw = "medium"
 	}
-	if termProfile != "short" && termProfile != "medium" && termProfile != "long" {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid term"})
+	termProfile, termErr := queryparams.NormalizeRecommendationTermFilter(termRaw)
+	if termErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
 	}
 
 	responseFormat, formatErr := listoptions.ResolveResponseFormat(c.Request().Header.Get("Accept"), c.QueryParam("format"))

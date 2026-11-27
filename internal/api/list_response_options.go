@@ -10,7 +10,7 @@ import (
 // hasListProjectionParams reports whether the caller opted into slim list projection
 // via explicit term and/or engine query parameters (flat or filter[...] syntax).
 func hasListProjectionParams(c echo.Context) bool {
-	if queryparams.FirstFilter(c, "term") != "" {
+	if len(queryparams.IncludeTermFilterValues(c)) > 0 {
 		return true
 	}
 	engines, _ := collectEngineFilterValues(c)
@@ -25,16 +25,11 @@ func listResponseOptions(c echo.Context) model.ListResponseOptions {
 		opts.EngineFilter = engines[0]
 	}
 
-	terms := queryparams.IncludeValues(c, "term")
-	if len(terms) == 0 {
-		if flat := queryparams.FirstFilter(c, "term"); flat != "" {
-			terms = []string{flat}
-		}
-	}
+	// Include form only: this selects which term's percentile bands a detail
+	// response carries, so an exclude filter must not become a positive one.
+	terms, _ := queryparams.NormalizeTermFilterValuesFrom(queryparams.IncludeTermFilterValues(c))
 	if len(terms) == 1 {
-		if dbTerm, err := queryparams.NormalizeRecommendationTermFilter(terms[0]); err == nil {
-			opts.TermFilter = dbTerm + "_term"
-		}
+		opts.TermFilter = terms[0] + "_term"
 	}
 
 	return opts

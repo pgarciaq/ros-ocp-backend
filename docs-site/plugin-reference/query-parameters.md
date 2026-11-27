@@ -77,7 +77,7 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 | Container | `container` | `filter[container]` | Container name |
 | Hosted cluster | `hosted_cluster_id` | `filter[hosted_cluster_id]` | Associated hosted cluster (`/hcp` surface; unknown IDs return empty 200) |
 | Node | `node`, `node_name` | `filter[node]` | Node name — exact, case-sensitive (node/GPU endpoints) |
-| Term | `term` | `filter[term]` | Recommendation term (`short_term`, `medium_term`, `long_term`) |
+| Term | `term` | `filter[term]` | Recommendation term — `short_term` / `medium_term` / `long_term` in any case; the bare `short` / `medium` / `long` spelling is accepted wherever `filter[term]` filters rows, and an unknown value is a `400` |
 | Engine | `engine` | `filter[engine]` | Recommendation engine (`cost`, `performance`) |
 | GPU presence | `has_gpu` | `filter[has_gpu]` | GPU presence (`true` / `false`) |
 | GPU model | `gpu_model` | `filter[gpu_model]` | GPU model substring match — literal (`%` and `_` are not wildcards), same rule on the summary, list, grouped, detail and history surfaces |

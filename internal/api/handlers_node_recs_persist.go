@@ -269,7 +269,10 @@ func buildNodeGPUTimeslicingFilterSQL(
 		argIdx++
 	}
 	if termFilter != "" {
-		filterSQL += " AND lower(t.term) = lower($" + strconv.Itoa(argIdx) + ")"
+		// #959: callers normalise filter[term] to the bare, lower-case
+		// spelling before this builder, so an exact comparison is correct
+		// and no lower() is needed (lower() would also defeat the index).
+		filterSQL += " AND t.term = $" + strconv.Itoa(argIdx)
 		args = append(args, termFilter)
 		argIdx++
 	}

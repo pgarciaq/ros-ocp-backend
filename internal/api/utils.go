@@ -42,6 +42,20 @@ func escapeILIKE(s string) string { return sqlutil.EscapeILIKE(s) }
 // in sqlutil so the engine packages share it (#957).
 func containsPattern(s string) string { return sqlutil.ContainsPattern(s) }
 
+// normalizedTermFilter returns the first filter[term] value in its normalised
+// bare spelling (short, medium, long), or "" when absent or invalid.
+// Request boundaries reject an invalid value with a 400; this helper exists
+// for meta fields such as min_data_days, which must agree with the rows the
+// same value filters — passing the raw value would make an accepted spelling
+// like "SHORT" fall through to the widest window (#959).
+func normalizedTermFilter(c echo.Context) string {
+	terms, err := queryparams.NormalizeTermFilterValues(c)
+	if err != nil || len(terms) == 0 {
+		return ""
+	}
+	return terms[0]
+}
+
 func CollectionResponse[T any](collection []T, req *http.Request, count, limit, offset int) *Collection[T] {
 	var first, previous, next, last string
 	q := req.URL.Query()
@@ -852,28 +866,13 @@ func MapNativeNamespaceQueryParameters(c echo.Context) (map[string]interface{}, 
 		errs = append(errs, err)
 	}
 
-	termVals := queryparams.AllFilterValues(c, "term")
-	if len(termVals) > 0 {
-		var terms []string
-		seen := make(map[string]struct{}, len(termVals))
-		for _, t := range termVals {
-			dbTerm, termErr := queryparams.NormalizeRecommendationTermFilter(t)
-			if termErr != nil {
-				errs = append(errs, termErr)
-				continue
-			}
-			if dbTerm == "" {
-				continue
-			}
-			if _, ok := seen[dbTerm]; ok {
-				continue
-			}
-			seen[dbTerm] = struct{}{}
-			terms = append(terms, dbTerm)
-		}
-		if len(terms) > 0 {
-			queryParams["ns.term IN ?"] = terms
-		}
+	termVals, termErr := queryparams.NormalizeTermFilterValues(c)
+	if termErr != nil {
+		// User input: mark it so the fallback handler surfaces the shared
+		// message instead of the generic parse error (#959).
+		errs = append(errs, namespaceAPIErrf(true, "%v", termErr))
+	} else if len(termVals) > 0 {
+		queryParams["ns.term IN ?"] = termVals
 	}
 
 	// Category filter (includes activity states: zombie, idle)

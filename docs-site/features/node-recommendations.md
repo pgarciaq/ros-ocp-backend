@@ -276,7 +276,7 @@ without access to a cluster or node see an empty list rather than partial rows.
 |-----------|-------------|
 | `filter[cluster]` | Cluster UUID (exact) or alias (partial, case-insensitive) |
 | `filter[node]` | Node name (exact) |
-| `filter[term]` | `short`, `medium`, `long` |
+| `filter[term]` | `short`, `medium`, `long` (or `short_term` / `medium_term` / `long_term`); case-insensitive, unknown value is a `400` |
 | `filter[engine]` | `cost`, `performance` |
 | `filter[category]` | `idle`, `overcommitted`, `stranded_cpu`, `stranded_memory`, `underutilized`, `optimized` (comma-separated) |
 | `filter[instance_type]` | Exact instance type |

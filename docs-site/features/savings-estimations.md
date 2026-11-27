@@ -56,7 +56,8 @@ Full formulas: [Cost Integration](../architecture/cost-integration.md).
 | **GPU MIG/idle** | `estimated_monthly_gpu_savings` on container `gpu` block | Ingestion (+ container recalc) | Excluded (`by_plugin.gpu` = 0) | Persisted in `estimated_gpu_savings_cents`; see [GPU savings](#gpu-savings) |
 | **GPU time-slicing** | `estimated_monthly_timeslicing_savings` | API read | Excluded | Fleet-level candidate selection; see [GPU savings](#gpu-savings) |
 
-`savings-summary` honors `?term=` (`short` / `medium` / `long`) and `?engine=`
+`savings-summary` honors `?term=` (`short` / `medium` / `long`, or `short_term` /
+`medium_term` / `long_term`; case-insensitive) and `?engine=`
 (`cost` / `performance`). PVC uses `term` only; snapshot totals are
 term-independent.
 
@@ -148,7 +149,7 @@ net figure.
 | Query param | Default | Description |
 |-------------|---------|-------------|
 | `engine` | `cost` | `cost` or `performance` — affects container and node totals |
-| `term` | `medium` | `short`, `medium`, or `long` — recommendation horizon |
+| `term` | `medium` | `short`, `medium`, or `long` (or the `_term` spellings) — recommendation horizon; unknown value is a `400` |
 
 `has_cost_data` per cluster is `false` when all recommendations lack cost model
 rates (notification code **25**). Show "Cost model not configured" instead of

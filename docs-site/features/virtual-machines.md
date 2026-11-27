@@ -476,7 +476,7 @@ GET /api/cost-management/v1/recommendations/openshift/vm
 | `filter[namespace]` / `filter[project]` | Namespace (project is a Koku-aligned alias) |
 | `filter[vm_name]` | VM name |
 | `format` | `csv` or `Accept: text/csv` for bulk export |
-| `filter[term]` | `short_term`, `medium_term`, `long_term` |
+| `filter[term]` | `short_term`, `medium_term`, `long_term` (or `short` / `medium` / `long`); case-insensitive, unknown value is a `400` |
 | `filter[engine]` | `cost` or `performance` |
 | `filter[confidence]` | `high`, `moderate`, `low` |
 | `filter[is_idle]` / `filter[is_abandoned]` / `filter[is_oversized]` | Boolean |

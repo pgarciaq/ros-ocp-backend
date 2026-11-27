@@ -125,7 +125,9 @@ func TestGetSavingsSummary_InvalidTerm_Returns400(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	var body map[string]interface{}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	assert.Contains(t, body["message"], "invalid term")
+	// #959: one shared term message on every surface, both spellings accepted.
+	assert.Equal(t, "error", body["status"])
+	assert.Contains(t, body["message"], `invalid filter[term] value: "invalid"`)
 }
 
 func TestGetSavingsSummary_InvalidEngine_Returns400(t *testing.T) {

@@ -33,6 +33,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   matching the documented contract, so `/nodes?filter[node]=node-ros-a` and
   `/nodes/node-ros-a` agree with `/gpu/timeslicing`. Node names are
   lower-case DNS labels, so no functional index or migration is involved.
+- **`filter[term]` accepts the same vocabulary everywhere, and an unknown
+  value is a 400 ([#959](https://github.com/pgarciaq/ros-ocp-backend/issues/959)):**
+  `/vm` bound the raw value against a column storing `short_term` /
+  `medium_term` / `long_term` while every other surface normalised
+  `short` / `medium` / `long`. `/vm?filter[term]=short` — the spelling its
+  siblings accept and the one `/gpu/timeslicing` emits — returned an empty
+  page, and `filter[term]=fortnight` returned `200` with `count: 0` instead
+  of a `400`. Every term surface now accepts both spellings in any case,
+  `/vm` translates at the bind (no migration, no storage change), and an
+  unknown value is a `400` with one shared message. That covers every term
+  surface, including the ones that had drifted on their own: `/fleet-heatmap`
+  accepted only the bare spelling, the VM detail and history routes bound the
+  raw value, `/savings-summary` accepted only the bare spelling, and the
+  namespace history route passed the raw value straight into SQL. The
+  namespace list's `400` now carries the term message instead of the generic
+  parse error.
 - **Cluster filters now mean what they say — aliases match literally, UUIDs
   are case-insensitive ([#956](https://github.com/pgarciaq/ros-ocp-backend/issues/956),
   [#951](https://github.com/pgarciaq/ros-ocp-backend/issues/951)):**
@@ -195,6 +211,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   required` — waiting for more observation days does not change that
   outcome. The container (processor-path) reasons were already day-gated
   and are unchanged.
+
 ### Changed
 
 - **Multi-value tags now match every value Koku reports ([#814](https://github.com/pgarciaq/ros-ocp-backend/issues/814)):**
