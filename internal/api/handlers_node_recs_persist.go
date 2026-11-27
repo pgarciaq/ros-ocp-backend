@@ -171,10 +171,10 @@ func respondNodeGPURecommendationsFromTable(
 		tagUserCurrency := resolveUserCurrency(ctx, orgIDStr, "")
 		convertNodeGPURecsToUserCurrency(ctx, orgIDStr, paged, tagUserCurrency)
 		nodeCurrency := nodeGPURecsDisplayCurrency(ctx, pool, orgIDStr, clusterFilter, paged, tagUserCurrency)
-		totalSavings := sumNodeGPUSavings(paged, nodeCurrency)
+		totalSavings, sumWarnings := sumNodeGPUSavings(paged, nodeCurrency)
 		return respondNodeGPURecommendations(c, listoptions.ListOptions{
 			Limit: pageLimit, Offset: opts.Offset, OrderBy: opts.OrderBy, OrderHow: opts.OrderHow, Format: opts.Format,
-		}, totalCount, paged, totalSavings, nil, nodeCurrency, hasNext, nextCursor, persistMinDataDays)
+		}, totalCount, paged, totalSavings, sumWarnings, nodeCurrency, hasNext, nextCursor, persistMinDataDays)
 	}
 
 	countQuery := `SELECT COUNT(*) FROM node_gpu_timeslicing_recommendations t WHERE t.org_id = $1` + filterSQL
@@ -218,10 +218,10 @@ func respondNodeGPURecommendationsFromTable(
 	persistUserCurrency := resolveUserCurrency(ctx, orgIDStr, "")
 	convertNodeGPURecsToUserCurrency(ctx, orgIDStr, paged, persistUserCurrency)
 	nodeCurrency := nodeGPURecsDisplayCurrency(ctx, pool, orgIDStr, clusterFilter, paged, persistUserCurrency)
-	totalSavings := sumNodeGPUSavings(paged, nodeCurrency)
+	totalSavings, sumWarnings := sumNodeGPUSavings(paged, nodeCurrency)
 	return respondNodeGPURecommendations(c, listoptions.ListOptions{
 		Limit: pageLimit, Offset: opts.Offset, OrderBy: opts.OrderBy, OrderHow: opts.OrderHow, Format: opts.Format,
-	}, totalCount, paged, totalSavings, nil, nodeCurrency, hasNext, nextCursor, persistMinDataDays)
+	}, totalCount, paged, totalSavings, sumWarnings, nodeCurrency, hasNext, nextCursor, persistMinDataDays)
 }
 
 func buildNodeGPUTimeslicingFilterSQL(
@@ -482,13 +482,21 @@ func nodeGPUTimeslicingOrderNulls(orderCol, orderDir string) string {
 }
 
 // nodeGPURecsDisplayCurrency picks the page-level display currency from the
-// cluster filter (resolved: an alias must reach the currency layer as its
-// UUID, #798 — the raw value fails the Koku lookup and falls back to USD),
-// falling back to the first row's cluster when no filter is set.
+// first row's cluster, so the total and meta.currency describe the rows
+// actually shown. Preferring a reference cluster that is not on the page would
+// make every visible row look foreign once currency is per-cluster (#954b:
+// only rows matching the page currency may contribute to the total).
+//
+// An empty page falls back to the resolved cluster filter (#798: an alias must
+// reach the currency layer as its UUID — the raw value fails the Koku lookup
+// and falls back to USD), and then to the user's currency.
 func nodeGPURecsDisplayCurrency(ctx context.Context, pool *pgxpool.Pool, orgID, clusterFilter string, recs []model.NodeGPURecommendation, userCurrency string) string {
-	refCluster := resolveClusterFilterUUID(ctx, pool, orgID, clusterFilter)
-	if refCluster == "" && len(recs) > 0 && recs[0].ClusterUUID != "" {
+	refCluster := ""
+	if len(recs) > 0 {
 		refCluster = recs[0].ClusterUUID
+	}
+	if refCluster == "" {
+		refCluster = resolveClusterFilterUUID(ctx, pool, orgID, clusterFilter)
 	}
 	if refCluster == "" {
 		return userCurrency

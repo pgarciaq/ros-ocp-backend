@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -236,7 +237,6 @@ func respondNodeGPURecommendationsTripleSQL(
 	const tripleBatchSize = 50
 	var allRecs []model.NodeGPURecommendation
 	var gpuClusterErrors []error
-	var firstTripleCluster string
 	tripleOffset := 0
 	var seek *engine.NodeGPUTripleSeek
 	if hasCursor {
@@ -255,9 +255,6 @@ func respondNodeGPURecommendationsTripleSQL(
 		}
 		if len(triples) == 0 {
 			break
-		}
-		if firstTripleCluster == "" {
-			firstTripleCluster = triples[0].ClusterUUID
 		}
 		batchRecs, batchErrs := expandNodeGPURecsFromTriples(ctx, pool, orgIDStr, terms, triples, start, now)
 		allRecs = append(allRecs, batchRecs...)
@@ -312,21 +309,12 @@ func respondNodeGPURecommendationsTripleSQL(
 
 	userCurrency := resolveUserCurrency(ctx, orgIDStr, "")
 	convertNodeGPURecsToUserCurrency(ctx, orgIDStr, paged, userCurrency)
-	// #798: resolve the filter (alias → UUID) before the currency layer —
-	// the raw value fails the Koku lookup and silently falls back to USD.
-	refCluster := resolveClusterFilterUUID(ctx, pool, orgIDStr, clusterFilter)
-	if refCluster == "" {
-		refCluster = firstTripleCluster
-	}
-	displayCurrency := userCurrency
-	if refCluster != "" {
-		sc := fetchClusterCurrency(ctx, orgIDStr, refCluster)
-		r := fetchExchangeRate(ctx, orgIDStr, sc, userCurrency)
-		if r == costdata.PPBIdentity && sc != userCurrency {
-			displayCurrency = sc
-		}
-	}
-	totalSavings := sumNodeGPUSavings(paged, displayCurrency)
+	// #954(b): the page currency follows the page's first row (falling back to
+	// the resolved filter for an empty page), so a page that starts after the
+	// stream's first cluster does not label every row foreign.
+	displayCurrency := nodeGPURecsDisplayCurrency(ctx, pool, orgIDStr, clusterFilter, paged, userCurrency)
+	totalSavings, currencyWarnings := sumNodeGPUSavings(paged, displayCurrency)
+	warnings = append(warnings, currencyWarnings...)
 	return respondNodeGPURecommendations(c, listoptions.ListOptions{
 		Limit:    pageLimit,
 		Offset:   opts.Offset,
@@ -678,21 +666,66 @@ func savingsObjectUSDValue(s *money.MoneyAmount) float64 {
 	return v
 }
 
-func sumNodeGPUSavings(recs []model.NodeGPURecommendation, currency string) *money.MoneyAmount {
+// sumNodeGPUSavings totals EstimatedMonthlySavings across the page, for rows
+// denominated in currency only (#954b). A row keeps its stored currency when no
+// exchange rate to the user's currency exists, and pages can span clusters with
+// different cost-model currencies, so the page can hold more than one
+// denomination. Adding those values and formatting the sum as the page currency
+// would present foreign amounts as if they were converted; they are excluded
+// instead and named in the returned warning.
+func sumNodeGPUSavings(recs []model.NodeGPURecommendation, currency string) (*money.MoneyAmount, []string) {
 	var sum float64
 	hasSavings := false
+	excluded := map[string]int{}
 	for _, r := range recs {
-		v := savingsObjectUSDValue(r.EstimatedMonthlySavings)
-		if v > 0 || r.EstimatedMonthlySavings != nil {
-			sum += v
-			hasSavings = true
+		if r.EstimatedMonthlySavings == nil {
+			continue
 		}
+		if r.EstimatedMonthlySavings.Units != currency {
+			excluded[r.EstimatedMonthlySavings.Units]++
+			continue
+		}
+		sum += savingsObjectUSDValue(r.EstimatedMonthlySavings)
+		hasSavings = true
+	}
+	var warnings []string
+	if len(excluded) > 0 {
+		warnings = append(warnings, excludedSavingsWarning(excluded, currency))
 	}
 	if !hasSavings {
-		return nil
+		return nil, warnings
 	}
 	cents := money.USDToCents(sum)
-	return money.FormatCentsToAmountPtr(&cents, currency)
+	return money.FormatCentsToAmountPtr(&cents, currency), warnings
+}
+
+// excludedSavingsWarning names the denominations a page total left out. It
+// states what is true — those rows are not in the page currency — without
+// claiming which exchange-rate pair was missing: the conversion targets the
+// user's currency, which is not always the page currency.
+func excludedSavingsWarning(excluded map[string]int, pageCurrency string) string {
+	curs := make([]string, 0, len(excluded))
+	total := 0
+	for cur, n := range excluded {
+		curs = append(curs, cur)
+		total += n
+	}
+	sort.Strings(curs)
+	parts := make([]string, 0, len(curs))
+	for _, cur := range curs {
+		label := cur
+		if label == "" {
+			label = "an unset currency"
+		}
+		parts = append(parts, fmt.Sprintf("%d in %s", excluded[cur], label))
+	}
+	rowWord := "recommendations"
+	if total == 1 {
+		rowWord = "recommendation"
+	}
+	return fmt.Sprintf(
+		"estimated monthly savings total excludes %d %s not in %s (%s)",
+		total, rowWord, pageCurrency, strings.Join(parts, ", "))
 }
 
 // dominantClassification picks the most common classification from candidate containers.

@@ -21,8 +21,7 @@ type EnrichmentCache struct {
 
 	mu            sync.Mutex
 	costRates     map[string]*costdata.ClusterCostData
-	currency      string
-	currencySet   bool
+	currencies    map[string]string
 	gpuThresholds *engine.GPUThresholdSettings
 	gpuThreshSet  bool
 }
@@ -33,8 +32,9 @@ func WithEnrichmentCache(ctx context.Context, orgID string) context.Context {
 		return ctx
 	}
 	return context.WithValue(ctx, enrichmentCacheKey{}, &EnrichmentCache{
-		orgID:     orgID,
-		costRates: make(map[string]*costdata.ClusterCostData),
+		orgID:      orgID,
+		costRates:  make(map[string]*costdata.ClusterCostData),
+		currencies: make(map[string]string),
 	})
 }
 
@@ -79,13 +79,18 @@ func GetCachedCostRates(ctx context.Context, orgID, clusterUUID string, start, e
 	return cd
 }
 
-// GetCachedCurrency resolves org-level currency once per request.
+// GetCachedCurrency resolves a cluster's stored currency once per request.
+//
+// The currency is the cost model's (koku's effective_rates.currency comes from
+// the provider's own rate rows), so it is per cluster, not per org: two
+// clusters in one org can answer "USD" and "EUR". #954(b): this used to
+// memoize a single scalar for the whole request, which silently relabelled
+// every other cluster's amounts with the first cluster's currency.
 func GetCachedCurrency(ctx context.Context, orgID, sampleClusterUUID string) string {
 	cache := enrichmentCacheFromContext(ctx)
 	if cache != nil {
 		cache.mu.Lock()
-		if cache.currencySet {
-			cur := cache.currency
+		if cur, ok := cache.currencies[sampleClusterUUID]; ok {
 			cache.mu.Unlock()
 			return cur
 		}
@@ -103,8 +108,7 @@ func GetCachedCurrency(ctx context.Context, orgID, sampleClusterUUID string) str
 
 	if cache != nil {
 		cache.mu.Lock()
-		cache.currency = currency
-		cache.currencySet = true
+		cache.currencies[sampleClusterUUID] = currency
 		cache.mu.Unlock()
 	}
 	return currency
