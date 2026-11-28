@@ -77,9 +77,11 @@ Options:
   -h, --help   Show this help
 
 Environment:
-  DOCS_PDF_CHROME   Path to Chrome/Chromium for mmdc (auto-detected if unset)
-  DOCS_PDF_MAX_MB   Per-book size cap for the #383 guard (default 15)
-  SKIP_GENERATE     If 1, skip ./scripts/generate-docs.sh
+  DOCS_PDF_CHROME              Path to Chrome/Chromium for mmdc (auto-detected if unset)
+  DOCS_PDF_MAX_MB              Per-book size cap for the #383 guard (default 15)
+  DOCS_PDF_MERMAID_TIMEOUT_MS  Per-attempt puppeteer protocolTimeout (default 120000)
+  DOCS_PDF_MERMAID_ATTEMPTS    Attempts per Mermaid page on a screenshot timeout (default 3)
+  SKIP_GENERATE                If 1, skip ./scripts/generate-docs.sh
 EOF
 }
 
@@ -132,15 +134,25 @@ render_mermaid_file() {
   echo "  mmdc  $(basename "$md")"
   (
     cd "$dir"
-    mmdc \
-      -i "$(basename "$md")" \
-      -o "$(basename "$tmp")" \
-      -e png \
-      -w 900 \
-      -H 1200 \
-      -b white \
-      -p "$puppeteer_cfg" \
-      -q
+    # #960: a screenshot timeout is a hang, not slowness — the same page renders
+    # in 3-23 s when it succeeds, then stops at the cap. Retry only that
+    # signature, with a short per-attempt cap so a deadlock costs a retry
+    # instead of ten minutes. Logs land under $WORK_DIR/mmdc-logs and are
+    # uploaded by docs-pdf.yml when the job fails.
+    "$PDF_SUPPORT_DIR/retry_command.sh" \
+      --attempts "${DOCS_PDF_MERMAID_ATTEMPTS:-3}" \
+      --log-dir "$WORK_DIR/mmdc-logs" \
+      --label "$base" \
+      --retry-pattern 'ProtocolError: .*timed out' \
+      -- mmdc \
+        -i "$(basename "$md")" \
+        -o "$(basename "$tmp")" \
+        -e png \
+        -w 900 \
+        -H 1200 \
+        -b white \
+        -p "$puppeteer_cfg" \
+        -q
   )
   mv "$tmp" "$md"
 
@@ -171,20 +183,27 @@ PY
 write_puppeteer_config() {
   local out="$1"
   local chrome="${DOCS_PDF_CHROME:-}"
+  local timeout_ms="${DOCS_PDF_MERMAID_TIMEOUT_MS:-120000}"
   [[ -n "$chrome" && -x "$chrome" ]] || chrome=""
-  # One generation, so the two branches cannot drift apart again. The config is
+  if ! [[ "$timeout_ms" =~ ^[1-9][0-9]*$ ]]; then
+    die "DOCS_PDF_MERMAID_TIMEOUT_MS must be a positive integer, got: $timeout_ms"
+  fi
+  # One generation, so the two paths cannot drift apart again. The config is
   # handed to puppeteer by mmdc (-p), and puppeteer's default 180 s
-  # protocolTimeout is not enough for the largest pages on a loaded runner: a
-  # Mermaid screenshot timed out after 189 s in 3 of 10 CI runs (#960).
+  # protocolTimeout was not the problem: raising it to 600 s in #960 moved the
+  # failure from 189 s to 602 s in 2 of 8 runs, so the screenshot call
+  # deadlocks rather than running long (the same page renders in 3-23 s when it
+  # succeeds). The cap is back to 120 s — 5x the slowest observed success — and
+  # render_mermaid_file retries the timeout signature instead.
   # executablePath stays conditional — with no system Chrome, omitting it is
   # what lets mermaid-cli's own puppeteer use the browser it downloaded.
-  python3 - "$out" "$chrome" <<'PY'
+  python3 - "$out" "$chrome" "$timeout_ms" <<'PY'
 import json
 import sys
 
-out, chrome = sys.argv[1], sys.argv[2]
+out, chrome, timeout_ms = sys.argv[1], sys.argv[2], int(sys.argv[3])
 config = {"args": ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
-          "protocolTimeout": 600000}
+          "protocolTimeout": timeout_ms}
 if chrome:
     config["executablePath"] = chrome
 

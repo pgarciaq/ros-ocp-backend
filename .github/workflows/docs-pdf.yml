@@ -138,6 +138,18 @@ jobs:
       - name: Build the ${{ matrix.section }} book
         run: SKIP_GENERATE=1 ./scripts/docs-pdf.sh "${{ matrix.section }}"
 
+      # #960: a screenshot timeout leaves the per-attempt mmdc logs on disk;
+      # without this they die with the runner and the next failure teaches us
+      # nothing about why Chrome's capture call stopped answering.
+      - name: Upload Mermaid render logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmdc-logs-${{ matrix.section }}
+          path: .docs-pdf-work/*/mmdc-logs
+          if-no-files-found: ignore
+          retention-days: 7
+
       - uses: actions/upload-artifact@v4
         with:
           name: pdf-${{ matrix.section }}
